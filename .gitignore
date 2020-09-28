@@ -1,0 +1,7 @@
+# Julia Manifest.toml file (automatically generated)
+Manifest.toml
+
+# Miscellaneous data files from PARADIGM
+*.tab
+*.list
+*.json
