@@ -1,0 +1,110 @@
+import os
+from glob import glob
+
+########################################
+# Global Variables
+########################################
+
+configfile: "config.yaml"
+RESULTS_DIR = config["results_dir"]
+SCRIPTS_DIR = config["scripts_dir"]
+
+
+# PARADIGM Pathway preprocessing
+PARADIGM_PWYS_DIR = config["paradigm_pathways_dir"]
+PATHWAY_NAMES_FILE = os.path.join(PARADIGM_PWYS_DIR,"names.tab")
+PATHWAY_FILES = glob(os.path.join(PARADIGM_PWYS_DIR,"pid_*_pathway.tab"))
+PREPPED_PWYS_DIR = os.path.join(RESULTS_DIR, "pathways")
+TCGA_PWYS_JSON = os.path.join(PREPPED_PWYS_DIR, "TCGA.json")
+
+
+# Simulation study
+SIM_STUDY_DIR = os.path.join(RESULTS_DIR, "simulation_study")
+SIM_DATA_DIR = os.path.join(SIM_STUDY_DIR, "data")
+SIM_OBS_DIR = os.path.join(SIM_STUDY_DIR, "observations")
+SIM_PRED_DIR = os.path.join(SIM_STUDY_DIR, "inferences")
+SIM_SCORE_DIR = os.path.join(SIM_STUDY_DIR, "scores")
+SIM_SCORE_SCRIPT = os.path.join(SCRIPTS_DIR, "sim_scoring.py")
+SIM_OBS_SCRIPT = os.path.join(SCRIPTS_DIR, "sim_obs.py")
+SIM_PARAMS = config["simulation_study"]
+SIM_REPLICATES = range(SIM_PARAMS["sim_replicates"])
+SIMULATORS = SIM_PARAMS["simulators"]
+SIM_OBSERVATIONS = SIM_PARAMS["obervations"]
+SIM_METHODS = SIM_PARAMS["methods"]
+SIM_SCORES = SIM_PARAMS["scores"]
+PATHWAYS = [TCGA_PATHWAYS_JSON]
+
+# Experimental evaluation
+EXPERIMENT_DIR = os.path.join(RESULTS_DIR, "experimental_eval")
+
+
+#########################################
+# Rules
+#########################################
+rule all:
+    input:
+        # Scores from the simulation study
+        expand(os.path.join(SIM_SCORE_DIR, 
+		            "pwys={pwys}__sim={sim}__infer={infer}__rep={rep}__obs={obs}__score={score}.json"),
+               pwys=PATHWAYS, sim=SIMULATORS, infer=SIM_METHODS, 
+	       obs=SIM_OBSERVATIONS, rep=SIM_REPLICATES, 
+	       score=SIM_SCORES)
+
+
+##########################################
+# Simulation study
+
+rule sim_score_inferences:
+    input:
+        true_data=os.path.join(SIM_DATA_DIR, "pwys={pwys}__sim={sim}__infer={infer}__rep={rep}__obs={obs}.json"),
+        inferences=os.path.join(SIM_PRED_DIR, "pwys={pwys}__sim={sim}__infer={infer}__rep={rep}__obs={obs}.json")
+    output:
+        "pwys={pwys}__sim={sim}__infer={infer}__rep={rep}__obs={obs}__score={score}.json"
+    shell:
+        "python {SIM_SCORE_SCRIPT} {wildcards.score} {input.true_data} {input.inferences} {output}"
+
+
+rule sim_make_inferences:
+    input:
+        data=os.path.join(SIM_DATA_DIR, "pwys={pwy}__sim={sim}__infer={infer}__rep={rep}__obs={obs}.json"),
+	pwys=os.path.join(PREPPED_PWYS_DIR, "{pwy}.json"),
+	obs=os.path.join(
+    output:
+        inferences=os.path.join(SIM_PRED_DIR, "pwys={pwy}__sim={sim}__infer={infer}__rep={rep}__obs={obs}.json")
+    shell:
+        os.path.join(SCRIPTS_DIR, "{wildcards.infer}") + " "\
+	"{input.data} {input.pwys} {output.inferences}"
+
+
+rule make_obs_indices:
+    input:
+        pwy_file=""
+    output:
+        idx_json=""
+    shell:
+        "python {OBS_SCRIPT}"
+
+
+rule simulate_data:
+    input:
+        pwy_file="",
+	sim_script=""
+    output:
+        sim_data=""
+    shell:
+        ""
+
+
+#########################################
+# PARADIGM pathway preprocessing
+rule pathways_to_json:
+    input:
+        pwy_names=PATHWAY_NAMES_FILE,
+        pwy_files=PATHWAY_FILES
+    output:
+        TCGA_PATHWAYS_JSON 
+    shell:
+        "python scripts/pathway_to_json.py {input.pwy_names} {input.pwy_files} {output}"
+
+
+

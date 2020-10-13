@@ -1,0 +1,16 @@
+
+# Some directories
+results_dir: "temp/"
+scripts_dir: "scripts/"
+paradigm_pathways_dir: "data/paradigm-scripts-master/pathways/pathways_v1/"
+
+# Parameters for the simulation study
+simulation_study:
+    sim_replicates: 10
+    pathways: ["TCGA"]
+    simulators: ["random_junk_sim"]
+    observations: ["TCGA", 0.0, 0.2, 0.4, 0.6, 0.8]
+    methods: ["random_junk_infer"]
+    scores: ["spearman"]
+
+# Parameters for the experimental evaluation
