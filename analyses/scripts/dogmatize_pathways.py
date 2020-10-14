@@ -69,13 +69,45 @@ def dogmatize_edges(pathway):
     return pathway
 
 
+def names_to_idx(edges, all_entities):
+
+    encoder = {v:i for i, v in enumerate(all_entities)}
+
+    idx_edges = []
+    for edge in edges:
+        idx_edges.append([encoder[edge[0]], encoder[edge[1]], edge[2]])
+
+    return idx_edges
+
+
 def dogmatize_all_pathways(pathway_data):
 
-    result = {}
-    for k, pwy in pathway_data.items():
+    # Get the list of all pathway names
+    pwy_names = sorted(list(pathway_data.keys()))
+
+    # "dogmatize" the pathways
+    dogmatized = []
+    for k in pwy_names:
+        pwy = pathway_data[k]
         pwy = dogmatize_entities(pwy)
         pwy = dogmatize_edges(pwy)
-        result[k] = pwy
+        dogmatized.append(pwy)
+    
+    # Get the list of all pathway entities
+    all_entities = set([])
+    for pwy in dogmatized:
+        all_entities |= set(pwy["entities"])
+    all_entities = sorted(list(all_entities))
+   
+    # Convert the edges from strings to ints
+    int_edges = []
+    for pwy in dogmatized:
+        int_edges.append(names_to_idx(pwy["edges"], all_entities))
+ 
+    result = {"entity_names": all_entities,
+              "pathway_names": pwy_names,
+              "pathways": int_edges
+             }
 
     return result
 

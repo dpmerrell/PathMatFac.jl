@@ -198,7 +198,7 @@ NEDD4	VEGFR2 homodimer/VEGFA homodimer	component>
 MAP2K3	MAPK11	-a>
 PIK3CA	PI3K/GAB1	component>
 PIK3CA	PI3K	component>
-VHL	VEGFA homodimer	-t|
+VHL	VEGFA homodimer	-a|
 KDR	VEGFR2/3 heterodimer/VEGFC homodimer	component>
 KDR	VEGFR2/3 heterodimer	component>
 KDR	VEGFR2 homodimer/VEGFA homodimer/alphaV beta3 Integrin	component>
@@ -321,7 +321,7 @@ PI3K	MAPK11	-a|
 PI3K	MAPK1	-a|
 PI3K	MAPK3	-a|
 HRAS/GTP	MAPKKK cascade	-ap>
-HIF1A/ARNT	VEGFA homodimer	-t>
+HIF1A/ARNT	VEGFA homodimer	-a>
 FAK1/Vinculin	cell migration	-ap>
 FAK1/Paxillin	cell migration	-ap>
 CaM/Ca2+	NOS3	-a>

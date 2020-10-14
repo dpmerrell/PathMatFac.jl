@@ -1,0 +1,16 @@
+2020-10
+David Merrell
+
+Some notes as I work with these pathway files:
+
+* the original file pid_123_pathway.tab contained the edge
+  PER1-2 / CRY1-2  BMAL1/CLOCK  -t>
+  This seems nonsensical. Both entities are complexes, and hence
+  the -t> flag (transcriptional promotion) doesn't seem applicable.
+  I've deleted this edge (there was already the equivalent -a> edge,
+  which I have left in place).
+* the original file pid_2_pathway.tab contained the edges
+  VHL  VEGFA homodimer  -t|
+  HIF1A/ARNT  VEGFA homodimer  -t|
+  Which are similarly nonsensical. I replaced them with
+  corresponding -a| edges.
