@@ -5,3 +5,4 @@ Manifest.toml
 *.tab
 *.list
 *.json
+analyses/data/paradigm-scripts-master/*
