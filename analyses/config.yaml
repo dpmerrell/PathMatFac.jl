@@ -3,14 +3,19 @@
 results_dir: "temp/"
 scripts_dir: "scripts/"
 paradigm_pathways_dir: "data/paradigm-scripts-master/pathways/pathways_v1/"
+cnv_data_file: "data/cnv/cnv_data.csv"
+gene_expr_data_file: "data/gene_expr/gene_expr_data.csv"
 
 # Parameters for the simulation study
 simulation_study:
     sim_replicates: 10
+    n_patients: [60]
     pathways: ["TCGA"]
     simulators: ["random_junk_sim"]
-    observations: ["TCGA", 0.0, 0.2, 0.4, 0.6, 0.8]
-    methods: ["random_junk_infer"]
+    observation_patterns: 
+        random: [0.0, 0.2, 0.4, 0.6, 0.8]
+        other: ["TCGA"]
+    methods: ["junk"]
     scores: ["spearman"]
 
 # Parameters for the experimental evaluation

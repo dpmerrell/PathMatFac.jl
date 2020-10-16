@@ -13,7 +13,7 @@ def random_junk_sim(args):
     n_entities = len(pathways["entity_names"])
     n_pathways = len(pathways["pathway_names"])
 
-    activations = np.random.randn(n_pathways)
+    activations = np.random.randn(args.n_samples, n_pathways)
     data = np.random.randn(args.n_samples, n_entities)
 
     result = {"activations": activations.tolist(),
