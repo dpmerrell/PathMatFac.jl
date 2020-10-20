@@ -38,9 +38,9 @@ def dogmatize_edge(edge):
         raise ValueError
 
     if tag[-1] == ">":
-        edge.append("+")
+        edge.append(1)
     elif tag[-1] == "|":
-        edge.append("-")
+        edge.append(-1)
 
     return edge
 
@@ -55,9 +55,9 @@ def dogmatize_edges(pathway):
         name = name_level[0] 
         level = name_level[-1]
         if level == "PROT":
-            dogmatized += [[name+"::DNA", name+"::MRNA", "+"],
-                           [name+"::MRNA", name+"::PROT", "+"],
-                           [name+"::PROT", name+"::ACT", "+"]
+            dogmatized += [[name+"::DNA", name+"::MRNA", 1],
+                           [name+"::MRNA", name+"::PROT", 1],
+                           [name+"::PROT", name+"::ACT", 1]
                           ]
 
     # Add the other edges
