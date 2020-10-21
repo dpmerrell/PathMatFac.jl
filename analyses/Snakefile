@@ -52,11 +52,11 @@ rule all:
     input:
         # Scores from the simulation study
         expand(os.path.join(SIM_SCORE_DIR, 
-		            "pwys={pwys}__sim={sim}__infer={infer}__npats={npats}__rep={rep}__obs={obs}.json"),
-               pwys=PATHWAYS, sim=SIMULATORS, infer=SIM_METHODS, 
-	       npats=SIM_N_PATIENTS, obs=RANDOM_OBS, rep=SIM_REPLICATES),
-        expand(os.path.join(SIM_SCORE_DIR, 
-		            "pwys={pwys}__sim={sim}__infer={infer}__npats={npats}__rep={rep}__obs={obs}.json"),
+		            "pwys={pwys}__sim={sim}__infer={infer}__npats={npats}__obs={obs}__rep={rep}.json"),
+               pwys=PATHWAYS, sim=SIMULATORS, infer=SIM_METHODS,                            
+	       npats=SIM_N_PATIENTS, obs=RANDOM_OBS, rep=SIM_REPLICATES),                   
+        expand(os.path.join(SIM_SCORE_DIR,                                                  
+		            "pwys={pwys}__sim={sim}__infer={infer}__npats={npats}__obs={obs}__rep={rep}.json"),
                pwys=PATHWAYS, sim=SIMULATORS, infer=SIM_METHODS, 
 	       npats=SIM_N_PATIENTS, obs=OTHER_OBS, rep=SIM_REPLICATES)
 
@@ -66,21 +66,22 @@ rule all:
 
 rule sim_score_inferences:
     input:
-        true_data=os.path.join(SIM_DATA_DIR, "pwys={pwys}__sim={sim}__npats={npats}__rep={rep}__obs={obs}.json"),
-        inferences=os.path.join(SIM_PRED_DIR, "pwys={pwys}__sim={sim}__infer={infer}__npats={npats}__rep={rep}__obs={obs}.json")
+        true_data=os.path.join(SIM_DATA_DIR, "pwys={pwys}__sim={sim}__npats={npats}__obs={obs}__rep={rep}.json"),
+        inferences=os.path.join(SIM_PRED_DIR, "pwys={pwys}__sim={sim}__infer={infer}__npats={npats}__obs={obs}__rep={rep}.json"),
+        obs=os.path.join(SIM_OBS_DIR, "pwys={pwys}__sim={sim}__npats={npats}__obs=other_TCGA__rep={rep}.json")
     output:
-        os.path.join(SIM_SCORE_DIR, "pwys={pwys}__sim={sim}__infer={infer}__npats={npats}__rep={rep}__obs={obs}.json")
+        os.path.join(SIM_SCORE_DIR, "pwys={pwys}__sim={sim}__infer={infer}__npats={npats}__obs={obs}__rep={rep}.json")
     shell:
-        "python {SIM_SCORE_SCRIPT} {input.inferences} {input.true_data} {output}"
+        "python {SIM_SCORE_SCRIPT} {input.inferences} {input.true_data} {input.obs} {output}"
 
 
 rule sim_junk_inferences:
     input:
-        data=os.path.join(SIM_DATA_DIR, "pwys={pwy}__sim={sim}__npats={npats}__rep={rep}__obs={obs}.json"),
+        data=os.path.join(SIM_DATA_DIR, "pwys={pwy}__sim={sim}__npats={npats}__obs={obs}__rep={rep}.json"),
 	pwys=os.path.join(PREPPED_PWYS_DIR, "{pwy}.json"),
-	obs=os.path.join(SIM_OBS_DIR, "pwys={pwy}__sim={sim}__npats={npats}__rep={rep}__obs={obs}.json")
+	obs=os.path.join(SIM_OBS_DIR, "pwys={pwy}__sim={sim}__npats={npats}__obs={obs}__rep={rep}.json")
     output:
-        inferences=os.path.join(SIM_PRED_DIR, "pwys={pwy}__sim={sim}__infer=junk__npats={npats}__rep={rep}__obs={obs}.json")
+        inferences=os.path.join(SIM_PRED_DIR, "pwys={pwy}__sim={sim}__infer=junk__npats={npats}__obs={obs}__rep={rep}.json")
     shell:
         "python " + os.path.join(SCRIPTS_DIR, "junk_infer.py") + " "\
 	"{input.data} {input.obs} {input.pwys} {output.inferences}"
@@ -90,7 +91,7 @@ rule make_tcga_obs_indices:
     input:
         pwy_file=os.path.join(PREPPED_PWYS_DIR, "{pwy}.json"),
     output:
-        idx_json=os.path.join(SIM_OBS_DIR, "pwys={pwy}__sim={sim}__npats={npats}__rep={rep}__obs=other_TCGA.json")
+        idx_json=os.path.join(SIM_OBS_DIR, "pwys={pwy}__sim={sim}__npats={npats}__obs=other_TCGA__rep={rep}.json")
     shell:
         "python {SIM_OBS_SCRIPT} TCGA {input.pwy_file} {output.idx_json} "+\
 	"--tcga-csv-file {CNV_DATA_FILE}"
@@ -100,7 +101,7 @@ rule make_random_obs_indices:
     input:
         pwy_file=os.path.join(PREPPED_PWYS_DIR, "{pwy}.json"),
     output:
-        idx_json=os.path.join(SIM_OBS_DIR, "pwys={pwy}__sim={sim}__npats={npats}__rep={rep}__obs=random_{obs}.json")
+        idx_json=os.path.join(SIM_OBS_DIR, "pwys={pwy}__sim={sim}__npats={npats}__obs=random_{obs}__rep={rep}.json")
     shell:
         "python {SIM_OBS_SCRIPT} random {input.pwy_file} {output.idx_json} "+\
 	"--obs-frac {wildcards.obs}"
@@ -112,7 +113,7 @@ rule simulate_junk_data:
         pwy_file=os.path.join(PREPPED_PWYS_DIR, "{pwy}.json"),
 	sim_script=os.path.join(SCRIPTS_DIR, "simulate_data.py")
     output:
-        sim_data=os.path.join(SIM_DATA_DIR, "pwys={pwy}__sim=random_junk_sim__npats={npats}__rep={rep}__obs={obs}.json"),
+        sim_data=os.path.join(SIM_DATA_DIR, "pwys={pwy}__sim=random_junk_sim__npats={npats}__obs={obs}__rep={rep}.json"),
     shell:
         "python {input.sim_script} random_junk {input.pwy_file} {wildcards.npats} {output.sim_data}"
 

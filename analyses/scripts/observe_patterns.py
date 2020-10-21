@@ -46,15 +46,24 @@ def create_random_idx(args):
 
 def create_obs_idx(args):
 
-    idx = []
-
+    # Determine which variables are measured
     if args.method == "TCGA":
-        idx = create_tcga_idx(args)
+        measured_idx = create_tcga_idx(args)
     elif args.method == "random":
-        idx = create_random_idx(args)
-    
+        measured_idx = create_random_idx(args)
+
+    # Create a random train/test split of the measured variables
+    n_test = round(len(measured_idx) * args.test_frac)
+    test_idx = np.random.choice(measured_idx, n_test, replace=False).tolist()
+    test_set = set(test_idx)
+    train_idx = [idx for idx in measured_idx if idx not in test_set]
+
+    result = {"measured_train": train_idx,
+              "measured_test": test_idx
+              }
+
     with open(args.output_file, "w") as f:
-        json.dump(idx, f)
+        json.dump(result, f)
 
     return
 
@@ -72,6 +81,8 @@ if __name__=="__main__":
                          help="Path to a CSV file of TCGA data. Required iff method=TCGA")
     parser.add_argument("--obs-frac", type=float, required=False,
                          help="fraction of columns to observe. Must take a value in [0, 1]. Required iff method=random")
+    parser.add_argument("--test-frac", type=float, required=False, default=0.0,
+                         help="fraction of *observed* columns to hold out as a test set.")
 
     args = parser.parse_args()
     create_obs_idx(args)
