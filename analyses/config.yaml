@@ -15,8 +15,9 @@ simulation_study:
     observation_patterns: 
         random: [0.0, 0.2, 0.4, 0.6, 0.8]
         other: ["TCGA"]
-    test_split: [0.0, 0.1]
+    test_frac: [0.0, 0.1]
     methods: ["junk"]
-    scores: ["spearman"]
 
 # Parameters for the experimental evaluation
+experimental_eval:
+    test_frac: [0.1]
