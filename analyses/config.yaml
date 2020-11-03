@@ -21,3 +21,5 @@ simulation_study:
 # Parameters for the experimental evaluation
 experimental_eval:
     test_frac: [0.1]
+    test_replicates: 10
+    methods: ["junk"]

@@ -10,10 +10,15 @@ def score_activations(args):
     with open(args.inferred) as f:
         inferred = json.load(f)
 
-    with open(args.simulated) as f:
-        simulated = json.load(f)
+    with open(args.truth) as f:
+        truth = json.load(f)
 
-    true_acts = simulated["activations"]
+    # Experimental data doesn't have pathway activation
+    # values, so we don't score the inferred activities.
+    if "activations" not in truth.keys():
+       return {}
+
+    true_acts = truth["activations"]
     inferred_means = inferred["activations"]["means"]
     n_patients = len(true_acts)    
 
@@ -36,13 +41,13 @@ def score_test_pred(args):
     with open(args.inferred) as f:
         inferred = json.load(f)
 
-    with open(args.simulated) as f:
-        simulated = json.load(f)
+    with open(args.truth) as f:
+        truth = json.load(f)
 
-    true_measurements = np.array(simulated["data"])
+    true_measurements = np.array(truth["data"])
     true_test = true_measurements[:,test_idx]
 
-    inferred_means = np.array(inferred["activations"]["means"])
+    inferred_means = np.array(inferred["measured_test"]["means"])
 
     score = r2_score(true_test, inferred_means, multioutput="variance_weighted")
     result = {"r2": score}
@@ -54,7 +59,7 @@ if __name__=="__main__":
 
     parser = argparse.ArgumentParser(description="Scores inferred pathway activations against true (simulated) ones")
     parser.add_argument("inferred")
-    parser.add_argument("simulated")
+    parser.add_argument("truth")
     parser.add_argument("obs_pattern")
     parser.add_argument("out_file")
 

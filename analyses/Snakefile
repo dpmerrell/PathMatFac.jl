@@ -47,22 +47,32 @@ EXPERIMENT_DATA_DIR = os.path.join(EXPERIMENT_DIR, "data")
 EXPERIMENT_OBS_DIR = os.path.join(EXPERIMENT_DIR, "observations")
 EXPERIMENT_PRED_DIR = os.path.join(EXPERIMENT_DIR, "inferences")
 EXPERIMENT_SCORE_DIR = os.path.join(EXPERIMENT_DIR, "scores")
-EXPERIMENT_TEST_FRACS = SIM_PARAMS["test_frac"]
+EXPERIMENT_PARAMS = config["experimental_eval"]
+EXPERIMENT_TEST_FRACS = EXPERIMENT_PARAMS["test_frac"]
+EXPERIMENT_METHODS = EXPERIMENT_PARAMS["methods"]
+EXPERIMENT_REPLICATES = range(EXPERIMENT_PARAMS["test_replicates"])
 
 #########################################
 # Rules
 #########################################
 rule all:
     input:
-        # Scores from the simulation study
-        expand(os.path.join(SIM_SCORE_DIR, 
-		            "pwys={pwys}__sim={sim}__infer={infer}__npats={npats}__obs={obs}__rep={rep}.json"),
-               pwys=PATHWAYS, sim=SIMULATORS, infer=SIM_METHODS,                            
-	       npats=SIM_N_PATIENTS, obs=SIM_RANDOM_OBS, rep=SIM_REPLICATES),                   
-        expand(os.path.join(SIM_SCORE_DIR,                                                  
-		            "pwys={pwys}__sim={sim}__infer={infer}__npats={npats}__obs={obs}__rep={rep}.json"),
-               pwys=PATHWAYS, sim=SIMULATORS, infer=SIM_METHODS, 
-	       npats=SIM_N_PATIENTS, obs=SIM_OTHER_OBS, rep=SIM_REPLICATES)
+        ######################################
+        ## Scores from the simulation study
+        #expand(os.path.join(SIM_SCORE_DIR, 
+        #	            "pwys={pwys}__sim={sim}__infer={infer}__npats={npats}__obs={obs}__rep={rep}.json"),
+        #       pwys=PATHWAYS, sim=SIMULATORS, infer=SIM_METHODS,                            
+        #       npats=SIM_N_PATIENTS, obs=SIM_RANDOM_OBS, rep=SIM_REPLICATES),                   
+        #expand(os.path.join(SIM_SCORE_DIR,                                                  
+        #	            "pwys={pwys}__sim={sim}__infer={infer}__npats={npats}__obs={obs}__rep={rep}.json"),
+        #       pwys=PATHWAYS, sim=SIMULATORS, infer=SIM_METHODS, 
+        #       npats=SIM_N_PATIENTS, obs=SIM_OTHER_OBS, rep=SIM_REPLICATES),
+	#####################################
+	# Scores from experimental evaluation
+        expand(os.path.join(EXPERIMENT_SCORE_DIR,
+                            "pwys=TCGA__infer={infer}__test={test}__rep={rep}.json"),
+                            infer=EXPERIMENT_METHODS, test=EXPERIMENT_TEST_FRACS,
+                            rep=EXPERIMENT_REPLICATES)
 
 
 ##########################################
@@ -124,14 +134,25 @@ rule simulate_junk_data:
 #########################################
 # Experimental evaluation
 
+rule experiment_score_random_holdout:
+    input:
+        data=os.path.join(EXPERIMENT_DATA_DIR, "{pwy}.json"),
+	obs=os.path.join(EXPERIMENT_OBS_DIR, "pwys={pwy}__test={test}__rep={rep}.json"),
+	preds=os.path.join(EXPERIMENT_PRED_DIR, "pwys={pwy}__infer={infer}__test={test}__rep={rep}.json")
+    output:
+        scores=os.path.join(EXPERIMENT_SCORE_DIR, "pwys={pwy}__infer={infer}__test={test}__rep={rep}.json")
+    shell:
+        "python {SIM_SCORE_SCRIPT} {input.preds} {input.data} {input.obs} {output}"
+
+
 # predict values of held-out variables
 rule experiment_junk_inferences:
     input:
-        data=os.path.join(EXPERIMENT_DATA_DIR, "tcga_cnv_mrna.json"),
+        data=os.path.join(EXPERIMENT_DATA_DIR, "{pwy}.json"),
 	pwys=os.path.join(PREPPED_PWYS_DIR, "{pwy}.json"),
-	obs=os.path.join(EXPERIMENT_OBS_DIR, "pwys={pwy}__obs={obs}.json")
+	obs=os.path.join(EXPERIMENT_OBS_DIR, "pwys={pwy}__test={test}__rep={rep}.json")
     output:
-        inferences=os.path.join(SIM_PRED_DIR, "pwys={pwy}__infer=junk__obs={obs}.json")
+        inferences=os.path.join(EXPERIMENT_PRED_DIR, "pwys={pwy}__infer=junk__test={test}__rep={rep}.json")
     shell:
         "python " + os.path.join(SCRIPTS_DIR, "junk_infer.py") + " "\
 	"{input.data} {input.obs} {input.pwys} {output.inferences}"
@@ -141,11 +162,11 @@ rule experiment_observations:
     input:
         pwy_file=os.path.join(PREPPED_PWYS_DIR, "{pwy}.json"),
     output:
-        idx_json=os.path.join(EXPERIMENT_OBS_DIR, "pwys={pwy}__obs=TCGA_{test_frac}_{rep}.json")
+        idx_json=os.path.join(EXPERIMENT_OBS_DIR, "pwys={pwy}__test={test}__rep={rep}.json")
     shell:
-        "python {SIM_OBS_SCRIPT} TCGA {input.pwy_file} {output.idx_json} "+\
+        "python {SIM_OBS_SCRIPT} {wildcards.pwy} {input.pwy_file} {output.idx_json} "+\
 	"--tcga-csv-file {CNV_DATA_FILE} "+\
-	"--test-frac {wildcards.test_frac}"
+	"--test-frac {wildcards.test}"
 
 
 #########################################
@@ -153,11 +174,11 @@ rule experiment_observations:
 
 rule tcga_csvs_to_json:
     input:
-        pwy=TCGA_PWYS_JSON,
+        pwy=PREPPED_TCGA_JSON,
         cnv=CNV_DATA_FILE,
         mrna=GENE_EXPR_DATA_FILE
     output:
-        os.path.join(EXPERIMENT_DATA_DIR, "tcga_cnv_mrna.json")
+        os.path.join(EXPERIMENT_DATA_DIR, "TCGA.json")
     shell:
         "python "+os.path.join(SCRIPTS_DIR, "prep_tcga_data.py")+\
         " {input.pwy} {input.cnv} {input.mrna} {output}"
