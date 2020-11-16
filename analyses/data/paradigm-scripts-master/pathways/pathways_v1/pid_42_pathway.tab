@@ -81,7 +81,7 @@ complex	GRAP2/SLP76
 complex	CSK/PAG1
 complex	COT/AKT1
 complex	CD8 heterodimer
-complex	CD28
+complex	CD28_complex
 complex	B7 family/CD28
 chemical	mol:PI-3-4-5-P3
 chemical	mol:IP3
@@ -174,7 +174,7 @@ CD8B	TCR/CD3/MHC I/CD8/LCK	component>
 CD8B	TCR/CD3/MHC I/CD8/Fyn	component>
 CD8B	TCR/CD3/MHC I/CD8	component>
 CD8B	CD8 heterodimer	component>
-CD28	CD28	component>
+CD28	CD28_complex	component>
 CD28	B7 family/CD28	component>
 CD3G	TCR/CD3/MHC I/CD8/LCK/ZAP-70/CBL/ubiquitin	component>
 CD3G	TCR/CD3/MHC I/CD8/LCK/ZAP-70	component>
