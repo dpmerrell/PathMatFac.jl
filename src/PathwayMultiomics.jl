@@ -1,5 +1,8 @@
+
 module PathwayMultiomics
 
-greet() = print("Hello World!")
+export load_pathways, pathways_to_matrices, hierarchy_to_matrix 
 
-end # module
+include("preprocess.jl")
+
+end
