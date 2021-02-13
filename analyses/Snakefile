@@ -1,10 +1,25 @@
 
+from glob import glob
+from os import path
+
 configfile: "config.yaml"
 
+SCRIPT_DIR = "scripts"
+NCI_PID_DIR = path.join("data","nci_pid")
+NCI_PWY_IDS = [ fname.split(path.sep)[-1].split(".")[0] for fname in glob(path.join(NCI_PID_DIR, "pid_*.tab"))]
 
-all:
+print(NCI_PWY_IDS)
+
+rule all:
     input:
-        foo
+        expand(path.join("temp","pathway_sifs","nci_pid_full","{pid_pwy_id}.sif"), pid_pwy_id=NCI_PWY_IDS) 
 
 
-
+rule nci_pid_to_sif:
+    input:
+        src=path.join(SCRIPT_DIR, "pid_to_sif.py"),
+        tab=path.join(NCI_PID_DIR, "{pid_pwy_id}.tab")
+    output:
+        path.join("temp","pathway_sifs","nci_pid_full","{pid_pwy_id}.sif")
+    shell:
+        "python {input.src} {input.tab} {output}"

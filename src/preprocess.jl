@@ -3,6 +3,8 @@ using CSV
 using DataFrames
 using SparseArrays
 
+export load_pathways, pathways_to_matrices, hierarchy_to_matrix 
+
 ##########################
 # PATIENT PREPROCESSING
 ##########################
@@ -287,6 +289,29 @@ function convert_ugraphs_to_matrices(ugraphs)
 end
 
 
+function ugraphs_to_regularizers(ugraphs)
+
+    matrices, all_nodes = convert_ugraphs_to_matrices(ugraphs)
+
+    pwy_names = sort(collect(keys(matrices)))
+
+    regs = RowReg[ RowReg(zeros(k), 
+                   Vector{Tuple{Int64,Int64,Float64}}(), 1.0) 
+                   for node in all_nodes]
+
+    for (k, pwy_name) in enumerate(pwy_names)
+        mat = matrices[pwy_name]
+        I, J, V = findnz(mat)
+        for (idx, i) in enumerate(I)
+            push!(regs[i].neighbors, (J[idx], k, V[i])) 
+        end
+    end
+
+    return regs, pwy_names
+
+end
+
+
 
 """
     Given a dictionary of pathways and a populated featuremap,
@@ -317,6 +342,7 @@ function pathways_to_matrices(pathway_dict, featuremap;
  
     return (matrices, idx_decoder)
 end
+
 
 
 

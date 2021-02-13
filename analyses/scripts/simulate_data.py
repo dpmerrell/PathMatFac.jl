@@ -1,56 +1,63 @@
 
 import argparse
-import sys
+from scipy import sparse 
 import numpy as np
 import json
+import h5py
+
+# Get the set of all vertices from all pathways.
+# Make sure they're in a canonical order.
 
 
-def random_junk_sim(args):
-
-    with open(args.pathway_file) as f:
-        pathways = json.load(f)
-    
-    n_entities = len(pathways["entity_names"])
-    n_pathways = len(pathways["pathway_names"])
-
-    activations = np.random.randn(args.n_samples, n_pathways)
-    data = np.random.randn(args.n_samples, n_entities)
-
-    result = {"activations": activations.tolist(),
-              "data": data.tolist()
-              }
-    
-    with open(args.output_file, "w") as f:
-        json.dump(result, f)
-
-    return
+# translate each pathway into a precision matrix
 
 
+# translate the patient hierarchy into a precision matrix
+# (i.e., graph Laplacian)
 
-def simulate_data(args):
 
-    if args.method == "random_junk":
-        random_junk_sim(args)
+# Simulate the data!
 
-    return
+    # Sample a feature profile for each pathway
+    # precision matrices == pathway precision matrices
 
+    # Sample K patient profiles (1 for each pathway)
+    # precision matrix == patient precision matrix
+
+    # matrix multiplication + Gaussian noise
+
+    # return the data *and* the linear factors.
+
+
+# save to an HDF file
+    # Tables for the data, rownames, column names, 
+    # *and* for the linear factors.
 
 
 if __name__=="__main__":
 
 
-    parser = argparse.ArgumentParser(description="wrapper around data simulation scripts")
-    parser.add_argument("method", type=str,
-                         choices=["random_junk"], 
-                         help="the method used to simulate data")
-    parser.add_argument("pathway_file", type=str,
-                         help="path to a JSON file containing preprocessed pathway information")
-    parser.add_argument("n_samples", type=int,
-                         help="number of samples (rows) in the generated data")
-    parser.add_argument("output_file", type=str,
-                         help="path for the output JSON file") 
-    args = parser.parse_args()
-    print(args.output_file)
-    simulate_data(args)
+    parser = argparse.ArgumentParser("Simulate a dataset, parameterized by a set of pathways and a patient hierarchy")
+    parser.add_argument("pathway_json", help="JSON file containing our pathways")
+    parser.add_argument("patient_hierarchy_json", help="JSON file containing a hierarchy of patients")
 
+    args = parser.parse_arguments()
 
+    # read a pathway file
+    with open(args.pathway_json, "r") as f_pathways:
+        pathways = json.load(f_pathways)
+
+    # read a patient hierarchy file
+    with open(args.patient_hierarchy_json, "r") as f_patients:
+        patients = json.load(f_patients)
+
+    # get the full set of features
+    feature_list = sorted(pathways["all_entities"])
+
+    # Sample feature profiles (MxK) 
+
+    # Sample patient profiles (KxN)
+
+    # simulate the data
+
+    # write to file
