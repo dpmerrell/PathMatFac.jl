@@ -3,7 +3,7 @@ using CSV
 using DataFrames
 using SparseArrays
 
-export load_pathways, pathways_to_matrices, hierarchy_to_matrix 
+export load_pathways, pathways_to_regularizers, hierarchy_to_regularizers
 
 ##########################
 # PATIENT PREPROCESSING
@@ -47,6 +47,18 @@ function hierarchy_to_matrix(patient_hierarchy)
 
     return (matrix, all_nodes)
 
+end
+
+
+function hierarchy_to_regularizers(patient_hierarchy, k)
+
+    matrix, patient_vec = hierarchy_to_matrix(patient_hierarchy)
+
+    matrices = Dict(string("pwy_",i) => matrix for i=1:k)
+
+    regularizers, _ = matrices_to_regularizers(matrices, patient_vec)
+
+    return regularizers, patient_vec
 end
 
 
@@ -289,11 +301,11 @@ function convert_ugraphs_to_matrices(ugraphs)
 end
 
 
-function ugraphs_to_regularizers(ugraphs)
-
-    matrices, all_nodes = convert_ugraphs_to_matrices(ugraphs)
+function matrices_to_regularizers(matrices, all_nodes)
 
     pwy_names = sort(collect(keys(matrices)))
+
+    k = length(pwy_names)
 
     regs = RowReg[ RowReg(zeros(k), 
                    Vector{Tuple{Int64,Int64,Float64}}(), 1.0) 
@@ -303,7 +315,9 @@ function ugraphs_to_regularizers(ugraphs)
         mat = matrices[pwy_name]
         I, J, V = findnz(mat)
         for (idx, i) in enumerate(I)
-            push!(regs[i].neighbors, (J[idx], k, V[i])) 
+            if i != J[idx]
+                push!(regs[i].neighbors, (J[idx], k, V[i]))
+            end 
         end
     end
 
@@ -344,6 +358,23 @@ function pathways_to_matrices(pathway_dict, featuremap;
 end
 
 
+function pathways_to_regularizers(pathway_dict, featuremap;
+                                  data_types=DEFAULT_DATA_TYPES, 
+                                  data_type_map=DEFAULT_DATA_TYPE_MAP,
+                                  pwy_data_augmentation="sparse_latent",
+                                  pwy_to_ugraph="symmetrize")
+
+    matrices, idx_vec = pathways_to_matrices(pathway_dict, featuremap;
+                                             data_types=data_types,
+                                             data_type_map=data_type_map,
+                                             pwy_data_augmentation=pwy_data_augmentation,
+                                             pwy_to_ugraph=pwy_to_ugraph)
+
+    rowregs, pwy_names = matrices_to_regularizers(matrices, idx_vec)
+
+    return rowregs, idx_vec, pwy_names
+
+end
 
 
 function get_all_proteins(pathways_dict)

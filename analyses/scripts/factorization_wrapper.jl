@@ -228,15 +228,14 @@ function main(args)
     # of the TCGA data
     filled_featuremap = populate_featuremap_tcga(empty_featuremap, omic_features) 
 
-    # Tie the available data to the pathway graphs,
-    # and then generate the corresponding graph laplacians
-    pwy_matrices, feature_vec = pathways_to_matrices(pwys, filled_featuremap)
+    # Convert the pathways into a set of graph regularizers
+    ry, feature_vec = pathways_to_regularizers(pwys, filled_featuremap)
 
     # Inspect the TCGA HDF file to get a hierarchy
     # of cancer types and cancer patients
     patient_hierarchy = get_tcga_patient_hierarchy(omic_hdf, cancer_types)
-    # translate this hierarchy (tree) into a graph laplacian
-    patient_matrix, patient_vec = hierarchy_to_matrix(patient_hierarchy)
+    # translate this hierarchy (tree) into a set of graph regularizers 
+    rx, patient_vec = hierarchy_to_regularizers(patient_hierarchy, length(pwys))
 
     # We are now ready to assemble the full matrix for our
     # factorization problem!
@@ -256,8 +255,8 @@ function main(args)
     obs = findall(!isnan, transpose(A))
 
     # Construct the GLRM problem instance
-    rx = RowReg[ RowReg(zeros(length(pwys)), Vector{Tuple{Int64,Int64,Float64}}(), 1.0) for p in patient_vec ]
-    ry = RowReg[ RowReg(zeros(length(pwys)), Vector{Tuple{Int64,Int64,Float64}}(), 1.0) for feat in feature_vec ]
+    #rx = RowReg[ RowReg(zeros(length(pwys)), Vector{Tuple{Int64,Int64,Float64}}(), 1.0) for p in patient_vec ]
+    #ry = RowReg[ RowReg(zeros(length(pwys)), Vector{Tuple{Int64,Int64,Float64}}(), 1.0) for feat in feature_vec ]
     rrglrm = RowRegGLRM(transpose(A), feature_losses, rx, ry, 2; obs=obs)
 
     # Solve it!

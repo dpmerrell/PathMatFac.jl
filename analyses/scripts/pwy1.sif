@@ -1,0 +1,122 @@
+prophase	abstract_promote_protein_act	SGOL1
+prophase	abstract_promote_protein_act	CDC25C
+prophase	abstract_promote_complex_act	PLK1/PBIP1
+mol:GTP	chemical_promote_complex_act	RhoA/GTP
+mol:GTP	chemical_promote_complex_act	GRASP65/GM130/RAB1/GTP/PLK1
+mol:GTP	chemical_promote_complex_act	GRASP65/GM130/RAB1/GTP
+mitotic prometaphase	abstract_promote_protein_act	NUDC
+mitotic prometaphase	abstract_promote_protein_act	BUB1B
+mitotic prometaphase	abstract_promote_complex_act	Cohesin/SA2
+mitosis	abstract_promote_protein_act	NLP
+mitosis	abstract_promote_protein_act	TPX2
+mitosis	abstract_promote_protein_act	FBXO5
+mitosis	abstract_promote_protein_act	SGOL1
+mitosis	abstract_promote_protein_act	PLK1S1
+mitosis	abstract_promote_protein_act	PLK1
+mitosis	abstract_promote_protein_act	TUBG1
+mitosis	abstract_promote_protein_act	TPT1
+mitosis	abstract_promote_protein_act	AURKA
+mitosis	abstract_promote_complex_act	GRASP65/GM130/RAB1/GTP
+metaphase	abstract_promote_protein_act	MLF1IP
+metaphase	abstract_promote_protein_act	PLK1
+interphase	abstract_promote_protein_act	PLK1
+NLP	protein_promote_complex_act	NLP/gamma Tubulin
+BTRC	protein_promote_abstract_act	proteasomal ubiquitin-dependent protein catabolic process
+NUDC	protein_promote_abstract_act	metaphase plate congression
+NUDC	protein_promote_protein_act	PLK1
+FZR1	protein_promote_complex_act	APC/C/HCDH1
+FBXW11	protein_promote_abstract_act	proteasomal ubiquitin-dependent protein catabolic process
+INCENP	protein_promote_protein_act	BUB1
+GORASP1	protein_promote_complex_act	GRASP65/GM130/RAB1/GTP/PLK1
+GORASP1	protein_promote_complex_act	GRASP65/GM130/RAB1/GTP
+SPC24	protein_promote_complex_act	Hec1/SPC24
+STAG2	protein_promote_complex_act	Cohesin/SA2
+MLF1IP	protein_promote_complex_act	PLK1/PBIP1
+C13orf34	protein_promote_complex_act	Aurora A/BORA
+SGOL1	protein_suppress_abstract_act	regulation of centriole-centriole cohesion
+ODF2	protein_promote_protein_act	PLK1
+ERCC6L	protein_promote_complex_act	PICH/PLK1
+PLK1S1	protein_promote_abstract_act	spindle stabilization
+PAK1	protein_promote_protein_act	PLK1
+CDC20	protein_promote_complex_act	APC/C/CDC20
+GOLGA2	protein_promote_complex_act	GRASP65/GM130/RAB1/GTP/PLK1
+GOLGA2	protein_promote_complex_act	GRASP65/GM130/RAB1/GTP
+PPP2CA	protein_promote_complex_act	PP2A-alpha B56
+RAB1A	protein_promote_complex_act	GRASP65/GM130/RAB1/GTP/PLK1
+RAB1A	protein_promote_complex_act	GRASP65/GM130/RAB1/GTP
+PPP1CB	protein_promote_complex_act	PPP1CB/MYPT1
+RHOA	protein_promote_complex_act	RhoA/GTP
+PLK1	protein_promote_abstract_act	spindle elongation
+PLK1	protein_promote_abstract_act	spindle assembly
+PLK1	protein_promote_abstract_act	regulation of mitotic centrosome separation
+PLK1	protein_promote_protein_act	NLP
+PLK1	protein_promote_protein_act	NUDC
+PLK1	protein_promote_protein_act	TPX2
+PLK1	protein_promote_protein_act	FBXO5
+PLK1	protein_promote_protein_act	CLSPN
+PLK1	protein_promote_protein_act	ECT2
+PLK1	protein_promote_protein_act	C13orf34
+PLK1	protein_promote_protein_act	SGOL1
+PLK1	protein_promote_protein_act	SGOL1
+PLK1	protein_promote_protein_act	PLK1S1
+PLK1	protein_promote_protein_act	CENPE
+PLK1	protein_promote_protein_act	CDC25C
+PLK1	protein_promote_protein_act	WEE1
+PLK1	protein_promote_protein_act	TUBG1
+PLK1	protein_promote_protein_act	TPT1
+PLK1	protein_promote_protein_act	ROCK2
+PLK1	protein_promote_protein_act	BUB1B
+PLK1	protein_promote_protein_act	AURKA
+PLK1	protein_promote_protein_act	KIF2A
+PLK1	protein_promote_complex_act	PLK1/PRC1-2
+PLK1	protein_promote_complex_act	PLK1/PBIP1
+PLK1	protein_promote_complex_act	PICH/PLK1
+PLK1	protein_promote_complex_act	MKLP2/PLK1
+PLK1	protein_promote_complex_act	Hec1/SPC24
+PLK1	protein_promote_abstract_act	Golgi organization
+PLK1	protein_promote_complex_act	GRASP65/GM130/RAB1/GTP/PLK1
+PLK1	protein_promote_complex_act	Cohesin/SA2
+PLK1	protein_promote_complex_act	APC/C/CDC20
+CDC25B	protein_promote_complex_act	CCNB1/CDK1
+WEE1	protein_promote_complex_act	CCNB1/CDK1
+PPP2R1A	protein_promote_complex_act	PP2A-alpha B56
+TUBG1	protein_promote_abstract_act	spindle assembly
+TUBG1	protein_promote_complex_act	NLP/gamma Tubulin
+CCNB1	protein_promote_complex_act	CCNB1/CDK1
+TPT1	protein_promote_abstract_act	microtubule cytoskeleton organization
+CDC2	protein_promote_complex_act	CCNB1/CDK1
+KIF20A	protein_promote_complex_act	PLK1/PRC1-2
+KIF20A	protein_promote_complex_act	MKLP2/PLK1
+ROCK2	protein_promote_abstract_act	cytokinesis
+CDC14B	protein_promote_complex_act	APC/C/HCDH1
+BUB1B	protein_promote_abstract_act	regulation of attachment of spindle microtubules to kinetochore
+BUB1	protein_promote_protein_act	PLK1
+BUB1	protein_promote_complex_act	PP2A-alpha B56
+PRC1	protein_promote_complex_act	PLK1/PRC1-2
+PPP1R12A	protein_promote_complex_act	PPP1CB/MYPT1
+AURKA	protein_promote_protein_act	PLK1
+AURKA	protein_promote_complex_act	Aurora A/BORA
+NDC80	protein_promote_complex_act	Hec1/SPC24
+KIF2A	protein_promote_abstract_act	positive regulation of microtubule depolymerization
+RhoA/GTP	complex_promote_protein_act	ROCK2
+PPP1CB/MYPT1	complex_promote_protein_act	PLK1
+PP2A-alpha B56	complex_suppress_protein_act	SGOL1
+PLK1/PRC1-2	complex_promote_abstract_act	cytokinesis
+PLK1/PBIP1	complex_promote_abstract_act	chromosome segregation
+MKLP2/PLK1	complex_promote_abstract_act	microtubule-based process
+MKLP2/PLK1	complex_promote_abstract_act	cytokinesis
+GRASP65/GM130/RAB1/GTP/PLK1	complex_suppress_abstract_act	G2/M transition of mitotic cell cycle
+G2/M transition DNA damage checkpoint	abstract_promote_protein_act	CLSPN
+G2/M transition DNA damage checkpoint	abstract_promote_protein_act	PLK1
+G2 phase of mitotic cell cycle	abstract_promote_protein_act	PLK1
+G2 phase of mitotic cell cycle	abstract_promote_protein_act	CDC14B
+CCNB1/CDK1	complex_promote_protein_act	FBXO5
+CCNB1/CDK1	complex_promote_protein_act	ERCC6L
+CCNB1/CDK1	complex_promote_protein_act	WEE1
+CCNB1/CDK1	complex_promote_protein_act	BUB1B
+CCNB1/CDK1	complex_promote_protein_act	BUB1
+CCNB1/CDK1	complex_promote_complex_act	GRASP65/GM130/RAB1/GTP
+CCNB1/CDK1	complex_promote_abstract_act	G2/M transition of mitotic cell cycle
+Aurora A/BORA	complex_promote_protein_act	PLK1
+APC/C/HCDH1	complex_promote_abstract_act	proteasomal ubiquitin-dependent protein catabolic process
+APC/C/CDC20	complex_promote_abstract_act	proteasomal ubiquitin-dependent protein catabolic process

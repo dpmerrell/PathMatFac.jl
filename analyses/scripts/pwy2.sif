@@ -1,0 +1,84 @@
+mol:GTP	chemical_promote_complex_act	Rac1/GTP
+mol:GDP	chemical_promote_complex_act	Rac1/GDP
+cell-cell signaling	abstract_promote_complex_act	Ephrin B2/EPHB4
+cell-cell signaling	abstract_promote_complex_act	Ephrin B2/EPHB1-2
+cell-cell signaling	abstract_promote_complex_act	Ephrin B1/EPHB1-2
+alphaIIb/beta3 Integrin	complex_promote_abstract_act	cell adhesion
+TIAM1	protein_promote_complex_act	Ephrin B1/EPHB1-2/Tiam1
+PTPN13	protein_promote_protein_act	BLK
+PTPN13	protein_promote_protein_act	SRC
+PTPN13	protein_promote_protein_act	FGR
+PTPN13	protein_promote_protein_act	HCK
+PTPN13	protein_promote_protein_act	LYN
+PTPN13	protein_promote_protein_act	YES1
+PTPN13	protein_promote_protein_act	FYN
+PTPN13	protein_promote_protein_act	LCK
+PTPN13	protein_promote_complex_act	Ephrin B1/EPHB1-2
+DNM1	protein_promote_protein_act	EFNB1
+EFNB1	protein_promote_complex_act	Ephrin B1/EPHB1-2/Tiam1
+EFNB1	protein_promote_complex_act	Ephrin B1/EPHB1-2/Src Family Kinases
+EFNB1	protein_promote_complex_act	Ephrin B1/EPHB1-2/RGS3
+EFNB1	protein_promote_complex_act	Ephrin B1/EPHB1-2/NCK2
+EFNB1	protein_promote_complex_act	Ephrin B1/EPHB1-2
+RAC1	protein_promote_complex_act	Rac1/GTP
+RAC1	protein_promote_complex_act	Rac1/GDP
+EPHB1	protein_promote_complex_act	Ephrin B2/EPHB1-2
+EPHB1	protein_promote_complex_act	Ephrin B1/EPHB1-2/Tiam1
+EPHB1	protein_promote_complex_act	Ephrin B1/EPHB1-2/Src Family Kinases
+EPHB1	protein_promote_complex_act	Ephrin B1/EPHB1-2/RGS3
+EPHB1	protein_promote_complex_act	Ephrin B1/EPHB1-2/NCK2
+EPHB1	protein_promote_complex_act	Ephrin B1/EPHB1-2
+EPHB4	protein_promote_complex_act	Ephrin B2/EPHB4
+EFNB2	protein_promote_complex_act	Ephrin B2/EPHB4
+EFNB2	protein_promote_complex_act	Ephrin B2/EPHB1-2
+BLK	protein_promote_complex_act	Ephrin B1/EPHB1-2/Src Family Kinases
+BLK	protein_promote_complex_act	Ephrin B1/EPHB1-2
+RGS3	protein_promote_complex_act	Ephrin B1/EPHB1-2/RGS3
+MAP2K4	protein_promote_protein_act	MAPK8
+PIK3CA	protein_promote_complex_act	PI3K
+EPHB2	protein_promote_complex_act	Ephrin B2/EPHB1-2
+EPHB2	protein_promote_complex_act	Ephrin B1/EPHB1-2/Tiam1
+EPHB2	protein_promote_complex_act	Ephrin B1/EPHB1-2/Src Family Kinases
+EPHB2	protein_promote_complex_act	Ephrin B1/EPHB1-2/RGS3
+EPHB2	protein_promote_complex_act	Ephrin B1/EPHB1-2/NCK2
+EPHB2	protein_promote_complex_act	Ephrin B1/EPHB1-2
+PIK3R1	protein_promote_complex_act	PI3K
+SRC	protein_promote_complex_act	Ephrin B1/EPHB1-2/Src Family Kinases
+SRC	protein_promote_complex_act	Ephrin B1/EPHB1-2
+FGR	protein_promote_complex_act	Ephrin B1/EPHB1-2/Src Family Kinases
+FGR	protein_promote_complex_act	Ephrin B1/EPHB1-2
+HCK	protein_promote_complex_act	Ephrin B1/EPHB1-2/Src Family Kinases
+HCK	protein_promote_complex_act	Ephrin B1/EPHB1-2
+ITGA2B	protein_promote_complex_act	alphaIIb/beta3 Integrin
+LYN	protein_promote_complex_act	Ephrin B1/EPHB1-2/Src Family Kinases
+LYN	protein_promote_complex_act	Ephrin B1/EPHB1-2
+YES1	protein_promote_complex_act	Ephrin B1/EPHB1-2/Src Family Kinases
+YES1	protein_promote_complex_act	Ephrin B1/EPHB1-2
+FYN	protein_promote_complex_act	Ephrin B1/EPHB1-2/Src Family Kinases
+FYN	protein_promote_complex_act	Ephrin B1/EPHB1-2
+LCK	protein_promote_complex_act	Ephrin B1/EPHB1-2/Src Family Kinases
+LCK	protein_promote_complex_act	Ephrin B1/EPHB1-2
+ITGB3	protein_promote_complex_act	alphaIIb/beta3 Integrin
+NCK2	protein_promote_complex_act	Ephrin B1/EPHB1-2/NCK2
+MAP3K7	protein_promote_protein_act	MAP2K4
+Rac1/GTP	complex_promote_abstract_act	neuron projection morphogenesis
+PI3K	complex_promote_abstract_act	cell adhesion
+Ephrin B2/EPHB4	complex_promote_abstract_act	endothelial cell proliferation
+Ephrin B2/EPHB4	complex_promote_abstract_act	endothelial cell migration
+Ephrin B1/EPHB1-2/Tiam1	complex_promote_chemical_act	mol:GDP
+Ephrin B1/EPHB1-2/Tiam1	complex_promote_complex_act	Rac1/GTP
+Ephrin B1/EPHB1-2/RGS3	complex_suppress_abstract_act	chemotaxis
+Ephrin B1/EPHB1-2/NCK2	complex_suppress_abstract_act	regulation of stress fiber formation
+Ephrin B1/EPHB1-2/NCK2	complex_suppress_abstract_act	regulation of focal adhesion formation
+Ephrin B1/EPHB1-2	complex_promote_abstract_act	endothelial cell migration
+Ephrin B1/EPHB1-2	complex_promote_abstract_act	angiogenesis
+Ephrin B1/EPHB1-2	complex_promote_protein_act	BLK
+Ephrin B1/EPHB1-2	complex_promote_protein_act	SRC
+Ephrin B1/EPHB1-2	complex_promote_protein_act	FGR
+Ephrin B1/EPHB1-2	complex_promote_protein_act	HCK
+Ephrin B1/EPHB1-2	complex_promote_protein_act	LYN
+Ephrin B1/EPHB1-2	complex_promote_protein_act	YES1
+Ephrin B1/EPHB1-2	complex_promote_protein_act	FYN
+Ephrin B1/EPHB1-2	complex_promote_protein_act	LCK
+Ephrin B1/EPHB1-2	complex_promote_protein_act	MAP3K7
+Ephrin B1/EPHB1-2	complex_promote_complex_act	PI3K
