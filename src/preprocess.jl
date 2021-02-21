@@ -3,7 +3,8 @@ using CSV
 using DataFrames
 using SparseArrays
 
-export load_pathways, pathways_to_regularizers, hierarchy_to_regularizers
+export load_pathways, pathways_to_regularizers, hierarchy_to_regularizers,
+       DEFAULT_DATA_TYPES, DEFAULT_DATA_TYPE_MAP
 
 ##########################
 # PATIENT PREPROCESSING
@@ -241,9 +242,9 @@ function ugraph_to_matrix(ugraph, N, node_to_idx,
         epsilon = 1.0 / sqrt(N)
     end
 
-    I = []
-    J = []
-    V = []
+    I = Int64[]
+    J = Int64[]
+    V = Float64[]
     diag_entries = fill(epsilon, N)
 
     for edge in ugraph
@@ -380,8 +381,8 @@ end
 function get_all_proteins(pathways_dict)
 
     proteins = Set{String}()
-    for pair in pathways_dict
-        for edge in pair.second
+    for (name, graph) in pathways_dict
+        for edge in graph
             tok = split(edge[1],"_")
             if tok[2] == "protein"
                 push!(proteins, tok[1])

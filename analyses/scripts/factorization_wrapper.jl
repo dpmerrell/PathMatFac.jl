@@ -2,15 +2,10 @@
 using HDF5
 using PathwayMultiomics
 using Statistics
-#using LowRankModels
 using JSON
 
-tcga_name_map = Dict( "METH" => "methylation",
-                      "CNV" => "cna",
-                      "MAF" => "mutation",
-                      "MRNA" => "mrnaseq",
-                      "PROT" => "rppa"
-                     )
+tcga_omic_types = DEFAULT_DATA_TYPES 
+                  #["methylation", "cna", "mutation", "mrnaseq", "rppa"]
 
 log_transformed_data_types = ["methylation","mrnaseq"]
 standardized_data_types = ["methylation", "cna", "mrnaseq", "rppa"]
@@ -28,16 +23,7 @@ function populate_featuremap_tcga(featuremap, features)
         # extract the protein names
         prot_names = split(tok[1], " ")
         
-        # extract & translate the data type name
-        # (this is sloppy... but it isn't part of
-        # the package, so I don't feel too bad
-        omic_datatype = ""
-        for (k,v) in tcga_name_map
-            if k in tok
-                omic_datatype = v
-                break
-            end
-        end
+        omic_datatype = tok[end]
  
         # for each protein name
         for protein in prot_names
@@ -224,9 +210,13 @@ function main(args)
     # ways we can map omic data on to the pathways. 
     pwys, empty_featuremap = load_pathways(pathway_sifs, data_types)
 
+    println("FEATURE MAP: ", empty_featuremap)
+
     # Populate the map, using our knowledge
     # of the TCGA data
     filled_featuremap = populate_featuremap_tcga(empty_featuremap, omic_features) 
+
+    println("FEATURE MAP: ", filled_featuremap)
 
     # Convert the pathways into a set of graph regularizers
     ry, feature_vec = pathways_to_regularizers(pwys, filled_featuremap)
@@ -255,8 +245,6 @@ function main(args)
     obs = findall(!isnan, transpose(A))
 
     # Construct the GLRM problem instance
-    #rx = RowReg[ RowReg(zeros(length(pwys)), Vector{Tuple{Int64,Int64,Float64}}(), 1.0) for p in patient_vec ]
-    #ry = RowReg[ RowReg(zeros(length(pwys)), Vector{Tuple{Int64,Int64,Float64}}(), 1.0) for feat in feature_vec ]
     rrglrm = RowRegGLRM(transpose(A), feature_losses, rx, ry, 2; obs=obs)
 
     # Solve it!
@@ -281,3 +269,19 @@ end
 main(ARGS)
 
 
+#cancer_types = ["ACC", "CESC", "HNSC", 
+#               "KIRC", "LGG", "LUSC", "PAAD", "READ", "STAD", 
+#               "THCA", "UCS", "BLCA", "CHOL", "DLBC", "GBM", 
+#               "KICH", "KIRP", "LIHC", "MESO", "PCPG", "SARC", 
+#               "THYM", "UVM", "BRCA", "COAD", "ESCA", 
+#               "LAML", "LUAD", "OV", "PRAD", 
+#               "SKCM", "TGCT", "UCEC"]
+#
+#tcga_hdf = ARGS[1]
+#output_json = ARGS[2]
+#
+#d = get_tcga_patient_hierarchy(tcga_hdf, cancer_types)
+#
+#open(output_json, "w") do f
+#    JSON.print(f, d)
+#end
