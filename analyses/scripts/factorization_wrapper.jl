@@ -5,7 +5,6 @@ using Statistics
 using JSON
 
 tcga_omic_types = DEFAULT_DATA_TYPES 
-                  #["methylation", "cna", "mutation", "mrnaseq", "rppa"]
 
 log_transformed_data_types = ["methylation","mrnaseq"]
 standardized_data_types = ["methylation", "cna", "mrnaseq", "rppa"]
@@ -44,13 +43,14 @@ function get_tcga_patient_hierarchy(omic_hdf, cancer_types)
     h5open(omic_hdf, "r") do f
 
         if size(cancer_types,1) == 0
-            cancer_types = keys(f)
+            cancer_types = unique(f["cancer_types"][:])
         end
+        
+        ctype_vec = f["cancer_types"][:]
+        patients = f["columns"][:]
 
         for ctype in cancer_types
-            if ctype != "index"
-                hierarchy[ctype] = f[ctype]["columns"][:]
-            end
+            hierarchy[ctype] = patients[ctype_vec .== ctype]
         end
     end
     return hierarchy
@@ -84,30 +84,31 @@ function assemble_matrix(omic_hdf, feature_vec, patient_vec)
         end
     end
 
-    # Map the patients to the columns 
-    # of the output matrix
-    patient_to_idx = Dict(p => idx for (idx, p) in enumerate(patient_vec))
-
     # Initialize the matrix!
     result = fill(NaN, size(feature_vec,1), size(patient_vec,1))
 
-    # Keep track of which group (cancer type) each sample belongs to
-    #group_v = fill("", size(patient_vec,1))
-
-    # Now populate it with data
-    println("POPULATING MATRIX")
     h5open(omic_hdf, "r") do f
-        for ctype in keys(f)
-            if ctype != "index"
-                println("\t", ctype)
-                dataset = f[ctype]["data"][:,:]
-                for (i,pat) in enumerate(f[ctype]["columns"][:])
-                    if pat in keys(patient_to_idx)
-                        result[matrix_rows,patient_to_idx[pat]] = dataset[i,hdf_rows]
-                    end
-                end
-            end
-        end
+
+        # Ignore the "artificial" patients: 
+        # i.e., the fictitious hidden nodes
+        # in the patient tree.
+        hdf_patients = f["columns"][:]
+        real_patients = intersect(Set(patient_vec), Set(hdf_patients))
+        real_patient_vec = String[pat for pat in patient_vec if pat in real_patients]
+
+        # Map the patients to the columns 
+        # of the output matrix
+        patient_to_matcol = Dict(p => idx for (idx, p) in enumerate(real_patient_vec))
+        matrix_cols = Int64[patient_to_matcol[pat] for pat in real_patient_vec]
+
+        # Map the patients to the columns
+        # of the HDF file
+        patient_to_hdfcol = Dict(p => idx for (idx, p) in enumerate(hdf_patients))
+        hdf_cols = Int64[patient_to_hdfcol[pat] for pat in real_patient_vec]
+
+        # Finally: load the data!    
+        hdf_dataset = f["data"][:,:]
+        result[matrix_rows, matrix_cols] = transpose(hdf_dataset[hdf_cols, hdf_rows])
     end
 
     return result
@@ -201,7 +202,7 @@ function main(args)
     cancer_types = arg_dict["cancer_types"]
     output_hdf = arg_dict["output_hdf"]
     
-    data_types = values(tcga_name_map)
+    data_types = tcga_omic_types 
     
     # Get the full list of omic features from the TCGA HDF file 
     omic_features = get_omic_feature_names(omic_hdf)
@@ -265,23 +266,5 @@ function main(args)
     println("Saved output to ", output_hdf)
 end
 
-
 main(ARGS)
 
-
-#cancer_types = ["ACC", "CESC", "HNSC", 
-#               "KIRC", "LGG", "LUSC", "PAAD", "READ", "STAD", 
-#               "THCA", "UCS", "BLCA", "CHOL", "DLBC", "GBM", 
-#               "KICH", "KIRP", "LIHC", "MESO", "PCPG", "SARC", 
-#               "THYM", "UVM", "BRCA", "COAD", "ESCA", 
-#               "LAML", "LUAD", "OV", "PRAD", 
-#               "SKCM", "TGCT", "UCEC"]
-#
-#tcga_hdf = ARGS[1]
-#output_json = ARGS[2]
-#
-#d = get_tcga_patient_hierarchy(tcga_hdf, cancer_types)
-#
-#open(output_json, "w") do f
-#    JSON.print(f, d)
-#end

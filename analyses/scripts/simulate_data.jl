@@ -7,7 +7,6 @@ import PathwayMultiomics: get_all_proteins, pathways_to_matrices, hierarchy_to_m
 import Base: isdigit
 
 sim_omic_types = DEFAULT_DATA_TYPES
-                 #["methylation", "cna", "mutation", "mrnaseq", "rppa"]
 
 
 function get_all_omic_features(pwy_dict)
@@ -162,13 +161,8 @@ end
 
 function save_results(output_hdf, A, X, Y, feature_vec, patient_vec, patient_hierarchy)
 
-    # Some useful bookkeeping 
-    pat_to_ctype = Dict(pat => ctype for (ctype, patients) in patient_hierarchy for pat in patients)
-    idx_to_ctype = Dict(idx => pat_to_ctype[pat] for (idx, pat) in enumerate(patient_vec))
-    ctype_to_idx = Dict(ct => Int64[] for ct in keys(patient_hierarchy))
-    for (idx, pat) in enumerate(patient_vec)
-        push!(ctype_to_idx[pat_to_ctype[pat]], idx)
-    end
+    patient_to_ctype = Dict(pat => ctype for (ctype, pat_vec) in patient_hierarchy for pat in pat_vec)
+    ctype_vec = String[patient_to_ctype[pat] for pat in patient_vec]
 
     # Write to the HDF file
     h5open(output_hdf, "w") do file
@@ -176,15 +170,9 @@ function save_results(output_hdf, A, X, Y, feature_vec, patient_vec, patient_hie
         write(file, "X", X)
         write(file, "Y", Y)
         write(file, "index", convert(Vector{String}, feature_vec))
-
-        # Write the data, separated into "cancer types"
-        for (ctype, pat_idx_vec) in ctype_to_idx
-            println("CTYPE: ", ctype)
-            println("PAT INDEX VEC: ", pat_idx_vec)
-            write(file, string(ctype,"/data") , A[pat_idx_vec,:])
-            write(file, string(ctype,"/columns") , convert(Vector{String}, patient_vec[pat_idx_vec]))
-        end 
-
+        write(file, "columns", convert(Vector{String}, patient_vec)) 
+        write(file, "cancer_types", convert(Vector{String}, ctype_vec))
+        write(file, "data", A)
     end
 end
 
