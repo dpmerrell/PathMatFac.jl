@@ -33,7 +33,7 @@ function hierarchy_to_matrix(patient_hierarchy)
                 push!(all_nodes, child_name)
             end
         elseif typeof(children) <: Dict
-            for child_name in keys(children)
+            for child_name in sort(collect(keys(children)))
                 push!(edges, [parent_name, child_name, 1.0])
                 push!(edges, [child_name, parent_name, 1.0])
                 rec_h2m(child_name, children[child_name])

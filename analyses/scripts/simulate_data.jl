@@ -142,10 +142,31 @@ function assign_distributions(feature_names)
 end
 
 
-function generate_data_matrix(X, Y, sample_funcs)
+function assign_biases(feature_names)
 
-    # Multiply the factors
-    mu = X * transpose(Y)
+    biases = zeros(size(feature_names, 1))
+    # TODO get rid of this hard-coded laziness
+    #      (chosen s.t. probability is <.001)
+    v = -6.0
+
+    for (i, feat) in enumerate(feature_names)
+        omic_type = split(feat, "_")[end-1]
+        if omic_type == "mutation"
+            biases[i] = v
+        end 
+    end
+    return biases
+end
+
+
+function generate_data_matrix(X, Y, sample_funcs, biases)
+
+    K = size(X, 2)
+
+    # Multiply the factors. We rescale
+    # each factor by 1/sqrt(K) in order to
+    # control the variance of the entries of XY^T. 
+    mu = (X * transpose(Y) ./ K) .+ biases
 
     # Sample data as prescribed by the 
     # sampling functions, informed by the matrix
@@ -199,8 +220,11 @@ function main(args)
     # (i.e., consistent with probabilistic assumptions)
     sample_funcs = assign_distributions(kept_features)
 
+    # Assign biases to features
+    biases = assign_biases(kept_features)
+
     # Generate the data matrix (m x n)
-    A = generate_data_matrix(X, Y, sample_funcs)
+    A = generate_data_matrix(X, Y, sample_funcs, biases)
 
     println("X:")
     println(typeof(X))
