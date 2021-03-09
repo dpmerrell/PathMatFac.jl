@@ -3,7 +3,7 @@ import LowRankModels: objective, get_yidxs, evaluate, calc_penalty, gemm!
 
 export objective
 
-function objective(glrm::RowRegGLRM, X::Array{Float64,2}, Y::Array{Float64,2},
+function objective(glrm::RRGLRM, X::Array{Float64,2}, Y::Array{Float64,2},
                    XY::Array{Float64,2};
                    yidxs = get_yidxs(glrm.losses), # mapping from columns of A to columns of Y; by default, the identity
                    include_regularization=true)
@@ -24,7 +24,7 @@ function objective(glrm::RowRegGLRM, X::Array{Float64,2}, Y::Array{Float64,2},
     return err
 end
 
-function objective(glrm::RowRegGLRM, X::Array{Float64,2}, Y::Array{Float64,2};
+function objective(glrm::RRGLRM, X::Array{Float64,2}, Y::Array{Float64,2};
                    sparse=false, include_regularization=true,
                    yidxs = get_yidxs(glrm.losses), kwargs...)
     @assert(size(Y)==(glrm.k,yidxs[end][end]))
@@ -51,6 +51,6 @@ function objective(glrm::RowRegGLRM, X::Array{Float64,2}, Y::Array{Float64,2};
 end
 
 
-objective(glrm::RowRegGLRM; kwargs...) = objective(glrm, glrm.X, glrm.Y; kwargs...)
+objective(glrm::RRGLRM; kwargs...) = objective(glrm, glrm.X, glrm.Y; kwargs...)
 
 

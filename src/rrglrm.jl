@@ -1,24 +1,31 @@
 
 
-export RowRegGLRM, scale_regularizer, 
+export RRGLRM, scale_regularizer, 
        Loss, QuadLoss, LogisticLoss,
-       Regularizer, ObsArray
+       Regularizer, ObsArray,
+       fixed_latent_features
+
 
 import LowRankModels: AbstractGLRM, Loss, QuadLoss, LogisticLoss, 
                       Regularizer, ObsArray, embedding_dim, 
                       equilibrate_variance!, add_offset!,
-                      sort_observations
+                      sort_observations,
+                      fixed_latent_features
 
-mutable struct RowRegGLRM <: AbstractGLRM
+
+mutable struct RRGLRM <: AbstractGLRM
     A                            # The data table
     losses::Array{Loss,1}        # array of loss functions
-    rx::Array{Regularizer,1}               # Array of regularizers to be applied to each ROW of X
-    ry::Array{Regularizer,1}     # Array of regularizers to be applied to each ROW of Y
+    rx::Array{Regularizer,1}     # Array of regularizers to be applied to each column of X
+    ry::Array{Regularizer,1}     # Array of regularizers to be applied to each column of Y
     k::Int                       # Desired rank
     observed_features::ObsArray  # for each example, an array telling which features were observed
     observed_examples::ObsArray  # for each feature, an array telling in which examples the feature was observed
     X::AbstractArray{Float64,2}  # Representation of data in low-rank space. A ≈ X'Y
     Y::AbstractArray{Float64,2}  # Representation of features in low-rank space. A ≈ X'Y
+    feature_ids::Vector
+    feature_graphs::Vector{ElUgraph}
+    instance_ids::Vector
 end
 
 
@@ -26,7 +33,7 @@ end
 # * providing argument `obs` overwrites arguments `observed_features` and `observed_examples`
 # * offset and scale are *false* by default to avoid unexpected behavior
 # * convenience methods for calling are defined in utilities/conveniencemethods.jl
-function RowRegGLRM(A, losses::Array, rx::Array, ry::Array, k::Int;
+function RRGLRM(A, losses::Array, rx::Array, ry::Array, k::Int;
 # the following tighter definition fails when you form an array of a tighter subtype than the abstract type, eg Array{QuadLoss,1}
 # function GLRM(A::AbstractArray, losses::Array{Loss,1}, rx::Array{Regularizer,1}, ry::Array{Regularizer,1}, k::Int;
               X = randn(k,size(A,1)), Y = randn(k,embedding_dim(losses)),
@@ -34,8 +41,9 @@ function RowRegGLRM(A, losses::Array, rx::Array, ry::Array, k::Int;
               observed_features = fill(1:size(A,2), size(A,1)), # [1:n, 1:n, ... 1:n] m times
               observed_examples = fill(1:size(A,1), size(A,2)), # [1:m, 1:m, ... 1:m] n times
               offset = false, scale = false,
-              checknan = true, sparse_na = true)
-    println("CALLING RowRegGLRM FUNCTION")
+              checknan = true, sparse_na = true,
+              feature_ids=nothing, feature_graphs=nothing, 
+              instance_ids=nothing) 
     # Check dimensions of the arguments
     m,n = size(A)
     if length(losses)!=n error("There must be as many losses as there are columns in the data matrix") end
@@ -49,16 +57,15 @@ function RowRegGLRM(A, losses::Array, rx::Array, ry::Array, k::Int;
         obs = findall(!iszero, A) # observed indices (list of CartesianIndices)
     end
     if obs==nothing # if no specified array of tuples, use what was explicitly passed in or the defaults (all)
-        # println("no obs given, using observed_features and observed_examples")
-        glrm = RowRegGLRM(A,losses,rx,ry,k, observed_features, observed_examples, X,Y)
+        glrm = RRGLRM(A,losses,rx,ry,k, observed_features, observed_examples, X,Y, 
+                      feature_ids, feature_graphs, instance_ids)
     else # otherwise unpack the tuple list into arrays
-        # println("unpacking obs into array")
-        glrm = RowRegGLRM(A,losses,rx,ry,k, sort_observations(obs,size(A)...)..., X,Y)
+        glrm = RRGLRM(A,losses,rx,ry,k, sort_observations(obs,size(A)...)..., X,Y,
+                      feature_ids, feature_graphs, instance_ids)
     end
 
     # check to make sure X is properly oriented
     if size(glrm.X) != (k, size(A,1))
-        # println("transposing X")
         glrm.X = glrm.X'
     end
     # check none of the observations are NaN
@@ -81,12 +88,73 @@ function RowRegGLRM(A, losses::Array, rx::Array, ry::Array, k::Int;
     return glrm
 end
 
-parameter_estimate(glrm::RowRegGLRM) = (glrm.X, glrm.Y)
+
+function RRGLRM(A, feature_losses::Vector{Loss},
+                   feature_ids::Vector, 
+                   feature_graphs::Vector{ElUgraph},
+                   instance_ids::Vector,
+                   instance_groups::Vector)
+
+    k = length(feature_graphs)
+
+    # Convert the feature graphs into 
+    #  (a) a set of graph regularizers and
+    #  (b) an extended set of features (observed and latent)
+    ry, extended_feature_ids = ugraphs_to_regularizers(feature_graphs)
+    extended_losses = extend_losses(feature_losses,
+                                    feature_ids,
+                                    extended_feature_ids)
+
+    # Convert the instance group hierarchy into  
+    #  (a) a set of graph regularizers and
+    #  (b) an extended set of instances (observed and latent)
+    instance_hierarchy = get_instance_hierarchy(instance_ids, instance_groups)
+    rx, extended_instance_ids = hierarchy_to_regularizers(instance_hierarchy, k)
+
+    # We are now ready to assemble the matrix for our
+    # factorization problem!
+    extended_A = assemble_matrix(A, feature_ids, extended_feature_ids, 
+                                    instance_ids, extended_instance_ids)
+     
+    # Get the observed indices
+    obs = findall(!isnan, extended_A)
+
+    rrglrm = RRGLRM(extended_A, extended_losses, rx, ry, k;
+                    feature_ids=extended_feature_ids, feature_graphs=feature_graphs, 
+                    instance_ids=extended_instance_ids, obs=obs)
+
+    return rrglrm
+end
 
 
-function scale_regularizer!(glrm::RowRegGLRM, newscale::Number)
-    mul!(glrm.rx, newscale)
-    mul!(glrm.ry, newscale)
-    return glrm
+# Reconstruct a model from its factors.
+# Sufficient for transforming new instances.
+function frozen_RRGLRM(feature_factor::Matrix, instance_factor::Matrix, 
+                       feature_ids::Vector, feature_losses::Vector, 
+                       instance_ids::Vector)
+
+    # The idea is to hold the factors constant and 
+    instance_reg = Regularizer[FixedLatentFeaturesConstraint(instance_factor[:,i]) for i=1:size(instance_factor, 2)]
+    feature_reg = Regularizer[FixedLatentFeaturesConstraint(feature_factor[:,i]) for i=1:size(feature_factor,2)]
+
+    k = size(feature_factor, 1)    
+
+    rrglrm = RRGLRM(nothing, feature_losses, instance_reg, feature_reg, k;
+                    X=instance_factor, Y=feature_factor,
+                    feature_ids=feature_ids, feature_graphs=nothing,
+                    instance_ids=instance_ids)
+
+
+    return rrglrm
+
+end
+
+parameter_estimate(rrglrm::RRGLRM) = (rrglrm.X, rrglrm.Y)
+
+
+function scale_regularizer!(rrglrm::RRGLRM, newscale::Number)
+    mul!(rrglrm.rx, newscale)
+    mul!(rrglrm.ry, newscale)
+    return rrglrm
 end
 

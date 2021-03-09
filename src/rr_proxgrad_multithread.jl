@@ -13,7 +13,7 @@ function reg_to_lil(reg_vec)
             push!(lil[i], j)
         end
     end
-    return [collect(s) for s in lil]
+    return LilUgraph([collect(s) for s in lil])
 end
 
 

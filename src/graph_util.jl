@@ -1,17 +1,46 @@
 
-# In each of these functions we assume `lil` 
-# represents an undirected graph, and that
-# the list of lists is "symmetrized": node j
-# is in node i's neighbors iff node i is in
-# node j's neighbors.
+
+# ElUgraph represents a weighted "edge list"
+# undirected graph. The edge list is symmetrized:
+# (i, j, w) is in the edge list iff (j, i, w) is in the 
+# edge list.
+mutable struct ElUgraph
+    edges::Vector
+end
+
+# Construct an ElUgraph from a (not necessarily
+# symmetric) edge list
+function construct_elugraph(edge_list)
+
+    edge_dict = Dict()
+    for edge in edge_list
+        edge_dict[sort(edge[1:2])] = edge[3]
+    end
+    edges = []
+    for (e, w) in edge_dict
+        push!(edges, [e[1],e[2],w])
+        push!(edges, [e[2],e[1],w])
+    end
+
+    return ElUgraph(edges) 
+end
+
+
+# LilUgraph represents a "list of lists" 
+# undirected graph. The list of lists is 
+# "symmetrized": node j is in node i's 
+# neighbors iff node i is in node j's neighbors.
+mutable struct LilUgraph
+    lil::Vector{Vector{Int}}
+end
 
 
 # Returns a DFS ordering on the graph
 # defined by `lil` (a list of lists)
-function dfs_ordering(lil::Vector; start=1)
+function dfs_ordering(graph::LilUgraph; start=1)
 
     # Number of nodes
-    N = length(lil)
+    N = length(graph.lil)
 
     println("\tN: ", N)
 
@@ -32,7 +61,7 @@ function dfs_ordering(lil::Vector; start=1)
             ordering[counter] = cur_node
             counter += 1
 
-            for neighbor in lil[cur_node]
+            for neighbor in graph.lil[cur_node]
                 if neighbor in untouched
                     push!(stack, neighbor)
                     delete!(untouched, neighbor)
@@ -55,13 +84,13 @@ end
 # greedily assigns a "color" (integer label) to each
 # node of a graph, using the given ordering on the 
 # graph nodes.
-function greedy_coloring(lil, ordering)
+function greedy_coloring(graph::LilUgraph, ordering)
 
-    N = length(lil)
+    N = length(graph.lil)
     coloring = fill(-1, N)
 
     for node in ordering
-        neighbor_colors = Set( coloring[j] for j in lil[node] )
+        neighbor_colors = Set( coloring[j] for j in graph.lil[node] )
         color = 1
         while color in neighbor_colors
             color += 1

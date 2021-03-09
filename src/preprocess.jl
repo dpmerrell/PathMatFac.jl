@@ -3,12 +3,76 @@ using CSV
 using DataFrames
 using SparseArrays
 
-export load_pathways, pathways_to_regularizers, hierarchy_to_regularizers,
-       DEFAULT_DATA_TYPES, DEFAULT_DATA_TYPE_MAP
+export load_pathways, pathways_to_ugraphs, hierarchy_to_regularizers,
+       get_instance_hierarchy, DEFAULT_DATA_TYPES, DEFAULT_DATA_TYPE_MAP
+
+
+###################################
+# Model assembly
+###################################
+
+function assemble_matrix(data, features, extended_features,
+                               instances, extended_instances)
+
+    # Map the rows of the dataset
+    # to the rows of the output matrix
+    matrix_cols = Vector{Int}() 
+    data_cols = Vector{Int}()
+
+    feature_set = Set(features)
+    feat_to_data_idx = Dict( feat => idx for (idx, feat) in enumerate(features) )
+
+    for (i, ext_feat) in enumerate(extended_features)
+        if ext_feat in feature_set 
+            idx = feat_to_data_idx[ext_feat]
+            push!(matrix_cols, i)
+            push!(data_cols, idx)
+        end
+    end
+
+    # Initialize the matrix!
+    result = fill(NaN, size(extended_instances,1),
+                       size(extended_features,1))
+
+    # Ignore the "artificial" instances: 
+    # i.e., the fictitious hidden nodes
+    # in the instance tree.
+    real_instances = intersect(Set(extended_instances), Set(instances))
+    real_instance_vec = String[inst for inst in extended_instances if inst in real_instances]
+
+    # Map the instances to the rows 
+    # of the output matrix
+    instance_to_matrow = Dict(inst => idx for (idx, inst) in enumerate(real_instance_vec))
+    matrix_rows = Int64[instance_to_matrow[inst] for inst in real_instance_vec]
+
+    # Map the instances to the columns
+    # of the HDF file
+    instance_to_datarow = Dict(inst => idx for (idx, inst) in enumerate(instances))
+    data_rows = Int64[instance_to_datarow[pat] for pat in real_instance_vec]
+
+    # Finally: load the data!    
+    result[matrix_rows, matrix_cols] = data[data_rows, data_cols]
+
+    return result
+end
+
 
 ##########################
-# PATIENT PREPROCESSING
+# INSTANCE PREPROCESSING
 ##########################
+
+function get_instance_hierarchy(instance_ids::Vector{String}, 
+                                instance_groups::Vector{String})
+
+    hierarchy = Dict(gp => String[] for gp in unique(instance_groups))
+
+    for (i, inst) in enumerate(instance_ids)
+        push!(hierarchy[instance_groups[i]], inst)
+    end
+
+    return hierarchy
+
+end
 
 
 """
@@ -22,44 +86,44 @@ function hierarchy_to_matrix(patient_hierarchy)
     edges = []
     all_nodes = []
 
-    # Recursively build an undirected graph 
+    # Recursively build an edge list 
     # from the dictionary
     function rec_h2m(parent_name, children)
         push!(all_nodes, parent_name)
         if typeof(children) <: Vector
             for child_name in children
                 push!(edges, [parent_name, child_name, 1.0])
-                push!(edges, [child_name, parent_name, 1.0])
                 push!(all_nodes, child_name)
             end
         elseif typeof(children) <: Dict
             for child_name in sort(collect(keys(children)))
                 push!(edges, [parent_name, child_name, 1.0])
-                push!(edges, [child_name, parent_name, 1.0])
                 rec_h2m(child_name, children[child_name])
             end
         end
     end
-    rec_h2m("root", patient_hierarchy) 
+    rec_h2m("", patient_hierarchy) 
+    graph = construct_elugraph(edges)
 
     node_to_idx = Dict(v => idx for (idx,v) in enumerate(all_nodes))
 
-    matrix = ugraph_to_matrix(edges, size(all_nodes,1), node_to_idx) 
+    matrix = ugraph_to_matrix(graph, node_to_idx) 
 
     return (matrix, all_nodes)
 
 end
 
 
-function hierarchy_to_regularizers(patient_hierarchy, k)
+function hierarchy_to_regularizers(instance_hierarchy, k; fixed_instances=[])
 
-    matrix, patient_vec = hierarchy_to_matrix(patient_hierarchy)
+    matrix, ext_instances = hierarchy_to_matrix(instance_hierarchy)
 
-    matrices = Dict(string("pwy_",i) => matrix for i=1:k)
+    matrices = fill(matrix, k)
 
-    regularizers, _ = matrices_to_regularizers(matrices, patient_vec)
-
-    return regularizers, patient_vec
+    regularizers = matrices_to_regularizers(matrices, ext_instances; 
+                                            fixed_instances=fixed_instances)
+    
+    return regularizers, ext_instances
 end
 
 
@@ -108,7 +172,7 @@ end
     Dictionary of vectors of vectors
 """
 function read_all_sif_files(sif_files::Vector{String})
-    return Dict(sp => read_sif_file(sp) for sp in sif_files)
+    return [read_sif_file(sp) for sp in sif_files]
 end
 
 
@@ -196,7 +260,7 @@ function add_data_nodes_sparse_latent(pathway,
     for protein in proteins
         for dt in data_types
             for idx in feature_map[string(protein, "_", dt)]
-                data_node = string(protein, "_", dt, "_", idx)
+                data_node = string(protein, "_", dt) #, "_", idx)
                 v = data_node_map[dt]            
                 push!(pathway, [string(protein, "_", v[1]), data_node, v[2]])
             end
@@ -221,22 +285,38 @@ function add_data_nodes_to_pathway(pathway, featuremap, data_types, data_type_ma
 end
 
 
-function convert_pwy_to_ugraph(pathway; strategy="symmetrize")
+function extend_losses(losses, features, ext_features)
 
-    if strategy == "symmetrize"
-        reversed = [ [edge[2], edge[1], edge[3]] for edge in pathway ]
-        ugraph = [pathway ; reversed] 
-    else
-        throw(DomainError(strategy, "not a valid option for `strategy`")) 
+    ext_losses = fill(QuadLoss(), size(ext_features,1))
+
+    feat_to_loss = Dict(feat => loss for (feat, loss) in zip(features, losses))
+
+    for (i, feat) in enumerate(ext_features)
+        if feat in keys(feat_to_loss)
+            ext_losses[i] = feat_to_loss[feat]
+        end
     end
 
-    return ugraph
+    return ext_losses
 end
 
+#function convert_pwy_to_ugraph(pathway; strategy="symmetrize")
+#
+#    if strategy == "symmetrize"
+#        reversed = [ [edge[2], edge[1], edge[3]] for edge in pathway ]
+#        ugraph = [pathway ; reversed] 
+#    else
+#        throw(DomainError(strategy, "not a valid option for `strategy`")) 
+#    end
+#
+#    return ugraph
+#end
 
-function ugraph_to_matrix(ugraph, N, node_to_idx, 
+
+function ugraph_to_matrix(graph::ElUgraph, node_to_idx, 
                           epsilon=nothing, 
                           standardize=true)
+    N = length(node_to_idx)
 
     if epsilon == nothing
         epsilon = 1.0 / sqrt(N)
@@ -247,7 +327,7 @@ function ugraph_to_matrix(ugraph, N, node_to_idx,
     V = Float64[]
     diag_entries = fill(epsilon, N)
 
-    for edge in ugraph
+    for edge in graph.edges
         # Append off-diagonal entries
         push!(I, node_to_idx[edge[1]])
         push!(J, node_to_idx[edge[2]])
@@ -279,15 +359,16 @@ function ugraph_to_matrix(ugraph, N, node_to_idx,
 end
 
 
-function convert_ugraphs_to_matrices(ugraphs)
+function convert_ugraphs_to_matrices(ugraphs::Vector{ElUgraph})
 
     # Get all of the nodes from all of the graphs
     all_nodes = Set{String}()
-    for (name,u) in ugraphs
-        for edge in u
+    for graph in ugraphs
+        for edge in graph.edges
             push!(all_nodes, edge[1])
         end
     end
+
     # in lexicographic order
     all_nodes = sort(collect(all_nodes))
     N = size(all_nodes,1)
@@ -296,93 +377,101 @@ function convert_ugraphs_to_matrices(ugraphs)
     node_to_idx = Dict(v => i for (i, v) in enumerate(all_nodes))
 
     # now translate the ugraphs to sparse matrices
-    matrices = Dict(name => ugraph_to_matrix(u, N, node_to_idx) for (name,u) in ugraphs)
+    matrices = [ugraph_to_matrix(u, node_to_idx) for u in ugraphs]
 
     return matrices, all_nodes
 end
 
 
-function matrices_to_regularizers(matrices, all_nodes)
+function matrices_to_regularizers(matrices, all_nodes; fixed_nodes=[])
 
-    pwy_names = sort(collect(keys(matrices)))
+    k = length(matrices)
 
-    k = length(pwy_names)
+    fixed_node_set = Set(fixed_nodes)
 
-    regs = RowReg[ RowReg(zeros(k), 
-                   Vector{Tuple{Int64,Int64,Float64}}(), 1.0) 
-                   for node in all_nodes]
+    regs = Regularizer[]
+    for (idx, node) in enumerate(all_nodes)
+        if node in fixed_node_set
+            push!(regs, FixedColReg(zeros(k), idx))
+        else
+            push!(regs, RowReg(zeros(k), Vector{Tuple{Int64,Int64,Float64}}(), 1.0)) 
+        end
+    end
 
-    for (k, pwy_name) in enumerate(pwy_names)
-        mat = matrices[pwy_name]
+    for mat in matrices
         I, J, V = findnz(mat)
         for (idx, i) in enumerate(I)
-            if i != J[idx]
-                push!(regs[i].neighbors, (J[idx], k, V[i]))
+            j = J[idx]
+            if (all_nodes[i] not in fixed_node_set) & (i != j)
+                push!(regs[i].neighbors, (j, k, V[i]))
             end 
         end
     end
 
-    return regs, pwy_names
+    return regs
 
 end
 
 
-
 """
-    Given a dictionary of pathways and a populated featuremap,
+    Given a vector of pathways and a populated featuremap,
     return a corresponding dictionary of sparse matrices
     and an array that maps indices to pathway nodes
 """
-function pathways_to_matrices(pathway_dict, featuremap;
-                              data_types=DEFAULT_DATA_TYPES, 
-                              data_type_map=DEFAULT_DATA_TYPE_MAP,
-                              pwy_data_augmentation="sparse_latent",
-                              pwy_to_ugraph="symmetrize")
+function pathways_to_ugraphs(pathways, featuremap;
+                             data_types=DEFAULT_DATA_TYPES, 
+                             data_type_map=DEFAULT_DATA_TYPE_MAP,
+                             pwy_data_augmentation="sparse_latent",
+                             pwy_to_ugraph="symmetrize")
 
     # Augment the pathways with additional nodes
     # to represent the data    
-    for (name,pwy) in pathway_dict
-        pathway_dict[name] = add_data_nodes_to_pathway(pwy, featuremap, data_types, data_type_map; 
-                                                       strategy=pwy_data_augmentation)
-    end
+    ext_pathways = [add_data_nodes_to_pathway(pwy, featuremap, data_types, data_type_map;
+                                              strategy=pwy_data_augmentation)
+                                              for pwy in pathways]
 
     # Pathways are currently interpreted as
     # directed graphs. Convert to undirected graphs
-    for (name, pwy) in pathway_dict
-        pathway_dict[name] = convert_pwy_to_ugraph(pwy; strategy=pwy_to_ugraph)
-    end
+    ugraphs = ElUgraph[construct_elugraph(pwy) for pwy in ext_pathways]
 
-    # Translate the undirected graphs into sparse matrices
-    matrices, idx_decoder = convert_ugraphs_to_matrices(pathway_dict)
- 
-    return (matrices, idx_decoder)
+    return ugraphs 
+end
+
+
+function ugraphs_to_regularizers(ugraphs::Vector{ElUgraph})
+
+    matrices, ext_features = convert_ugraphs_to_matrices(ugraphs)
+
+    regularizers = matrices_to_regularizers(matrices, ext_features)
+
+    return regularizers, ext_features
 end
 
 
 function pathways_to_regularizers(pathway_dict, featuremap;
                                   data_types=DEFAULT_DATA_TYPES, 
                                   data_type_map=DEFAULT_DATA_TYPE_MAP,
-                                  pwy_data_augmentation="sparse_latent",
-                                  pwy_to_ugraph="symmetrize")
+                                  pwy_data_augmentation="sparse_latent")
+                                  #pwy_to_ugraph="symmetrize")
 
-    matrices, idx_vec = pathways_to_matrices(pathway_dict, featuremap;
+    matrices, ext_features = pathways_to_matrices(pathway_dict, featuremap;
                                              data_types=data_types,
                                              data_type_map=data_type_map,
-                                             pwy_data_augmentation=pwy_data_augmentation,
-                                             pwy_to_ugraph=pwy_to_ugraph)
+                                             pwy_data_augmentation=pwy_data_augmentation)
+                                             #pwy_to_ugraph=pwy_to_ugraph)
 
-    rowregs, pwy_names = matrices_to_regularizers(matrices, idx_vec)
+    rowregs = matrices_to_regularizers(matrices, ext_features)
 
-    return rowregs, idx_vec, pwy_names
+    return rowregs, ext_features, pwy_names
 
 end
 
 
-function get_all_proteins(pathways_dict)
+function get_all_proteins(pathways)
 
     proteins = Set{String}()
-    for (name, graph) in pathways_dict
-        for edge in graph
+    for edge_list in pathways
+        for edge in edge_list
             tok = split(edge[1],"_")
             if tok[2] == "protein"
                 push!(proteins, tok[1])
@@ -399,10 +488,7 @@ function load_pathways(sif_filenames, data_kinds)
 
     pathways = read_all_sif_files(sif_filenames)
    
-    extended_pwys = Dict() 
-    for (name, pwy) in pathways
-        extended_pwys[name] = extend_pathway(pwy)
-    end
+    extended_pwys = [extend_pathway(pwy) for pwy in pathways] 
     
     all_proteins = get_all_proteins(extended_pwys)
 
