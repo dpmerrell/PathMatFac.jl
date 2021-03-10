@@ -1,17 +1,18 @@
 
-using JSON
-using HDF5
+include("factorize.jl")
+
 using LinearAlgebra
-using PathwayMultiomics
-import PathwayMultiomics: get_all_proteins, pathways_to_matrices, hierarchy_to_matrix
+import PathwayMultiomics: get_all_proteins, pathways_to_ugraphs, 
+                          ugraphs_to_matrices, hierarchy_to_matrix
+
 import Base: isdigit
 
 sim_omic_types = DEFAULT_DATA_TYPES
 
 
-function get_all_omic_features(pwy_dict)
+function get_all_omic_features(pwy_vec)
 
-    all_proteins = sort(collect(get_all_proteins(pwy_dict))) 
+    all_proteins = sort(collect(get_all_proteins(pwy_vec))) 
     
     all_omic_features = String[string(prot, "_", omic) for prot in all_proteins for omic in sim_omic_types]
 
@@ -19,14 +20,14 @@ function get_all_omic_features(pwy_dict)
 end
 
 
-function populate_featuremap_sim!(featuremap, features)
-
-    for (idx, feat) in enumerate(features)
-        push!(featuremap[feat], idx)
-    end
-
-    return featuremap
-end
+#function populate_featuremap_sim!(featuremap, features)
+#
+#    for (idx, feat) in enumerate(features)
+#        push!(featuremap[feat], idx)
+#    end
+#
+#    return featuremap
+#end
 
 
 function generate_factor(prec_mats)
@@ -61,28 +62,26 @@ function generate_patient_factor(hierarchy, k)
 end
 
 
-
 function generate_feature_factor(pwy_sifs)
 
-    pwy_dict, empty_featuremap = load_pathways(pwy_sifs, sim_omic_types)
+    pwy_vec, featuremap = load_pathways(pwy_sifs, sim_omic_types)
 
-    omic_feature_vec = get_all_omic_features(pwy_dict) 
+    #println("generate_feature_factor\tPWY_VEC: ", pwy_vec)
+   
+    omic_feature_vec = get_all_omic_features(pwy_vec) 
+    #println("generate_feature_factor\tOMIC_FEATURE_VEC: ", omic_feature_vec)
 
-    populate_featuremap_sim!(empty_featuremap, omic_feature_vec)
+    #populate_featuremap_sim!(featuremap, omic_feature_vec)
+    featuremap = populate_featuremap_tcga(featuremap, omic_feature_vec)
+    #println("generate_feature_factor\tFEATUREMAP: ", featuremap)
 
-    matrices, all_features = pathways_to_matrices(pwy_dict, empty_featuremap)
-  
-    pwy_names = sort(collect(keys(matrices)))
+    ugraphs = pathways_to_ugraphs(pwy_vec, featuremap)
+    matrices, all_features = ugraphs_to_matrices(ugraphs)
 
-    mat_vec = [mat for (name, mat) in matrices]
-
-    X = generate_factor(mat_vec)
+    X = generate_factor(matrices)
  
-    return X, all_features, pwy_names 
+    return X, all_features  
 end
-
-
-isdigit(s::AbstractString) = reduce((&), map(isdigit, collect(s)))
 
 
 function filter_hidden_features(X, all_features)
@@ -92,7 +91,7 @@ function filter_hidden_features(X, all_features)
     
     for (i, feat) in enumerate(all_features)
         suffix = split(feat, "_")[end]
-        if isdigit(suffix)
+        if in(suffix, omic_type_set)
             push!(kept_idx, i)
         end 
     end
@@ -180,7 +179,7 @@ function generate_data_matrix(X, Y, sample_funcs, biases)
 end
 
 
-function save_results(output_hdf, A, X, Y, feature_vec, patient_vec, patient_hierarchy)
+function save_results(output_hdf, A, X, Y, feature_vec, patient_vec, patient_hierarchy, pwy_sifs)
 
     patient_to_ctype = Dict(pat => ctype for (ctype, pat_vec) in patient_hierarchy for pat in pat_vec)
     ctype_vec = String[patient_to_ctype[pat] for pat in patient_vec]
@@ -188,12 +187,13 @@ function save_results(output_hdf, A, X, Y, feature_vec, patient_vec, patient_hie
     # Write to the HDF file
     h5open(output_hdf, "w") do file
         # Write factors and feature list
-        write(file, "X", X)
-        write(file, "Y", Y)
+        write(file, "feature_factor", X)
+        write(file, "instance_factor", Y)
         write(file, "index", convert(Vector{String}, feature_vec))
         write(file, "columns", convert(Vector{String}, patient_vec)) 
         write(file, "cancer_types", convert(Vector{String}, ctype_vec))
         write(file, "data", A)
+        write(file, "pathways", convert(Vector{String}, pwy_sifs))
     end
 end
 
@@ -205,7 +205,8 @@ function main(args)
     output_hdf = args[end]
 
     # Generate the "feature" factor (m x k)
-    X, all_features, pwy_names = generate_feature_factor(pwy_sifs)
+    X, all_features = generate_feature_factor(pwy_sifs)
+    println("main\tFEATURE FACTOR: ", size(X))
 
     # Generate the "patient" factor (n x k)
     k = length(pwy_sifs)
@@ -226,15 +227,8 @@ function main(args)
     # Generate the data matrix (m x n)
     A = generate_data_matrix(X, Y, sample_funcs, biases)
 
-    println("X:")
-    println(typeof(X))
-    println(size(X))
-    
-    println("Y:")
-    println(typeof(Y))
-    println(size(Y))
     # Write to HDF
-    save_results(output_hdf, permutedims(A), permutedims(X), permutedims(Y), kept_features, kept_patients, patient_hierarchy)
+    save_results(output_hdf, A, X, Y, kept_features, kept_patients, patient_hierarchy, pwy_sifs)
 
 end
 

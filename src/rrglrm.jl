@@ -24,7 +24,7 @@ mutable struct RRGLRM <: AbstractGLRM
     X::AbstractArray{Float64,2}  # Representation of data in low-rank space. A ≈ X'Y
     Y::AbstractArray{Float64,2}  # Representation of features in low-rank space. A ≈ X'Y
     feature_ids::Vector
-    feature_graphs::Vector{ElUgraph}
+    feature_graphs #::Vector{ElUgraph}
     instance_ids::Vector
 end
 
@@ -93,7 +93,8 @@ function RRGLRM(A, feature_losses::Vector{Loss},
                    feature_ids::Vector, 
                    feature_graphs::Vector{ElUgraph},
                    instance_ids::Vector,
-                   instance_groups::Vector)
+                   instance_groups::Vector;
+                   offset=false, scale=false)
 
     k = length(feature_graphs)
 
@@ -121,7 +122,8 @@ function RRGLRM(A, feature_losses::Vector{Loss},
 
     rrglrm = RRGLRM(extended_A, extended_losses, rx, ry, k;
                     feature_ids=extended_feature_ids, feature_graphs=feature_graphs, 
-                    instance_ids=extended_instance_ids, obs=obs)
+                    instance_ids=extended_instance_ids, obs=obs,
+                    offset=offset, scale=scale)
 
     return rrglrm
 end
@@ -129,21 +131,27 @@ end
 
 # Reconstruct a model from its factors.
 # Sufficient for transforming new instances.
-function frozen_RRGLRM(feature_factor::Matrix, instance_factor::Matrix, 
-                       feature_ids::Vector, feature_losses::Vector, 
-                       instance_ids::Vector)
-
-    # The idea is to hold the factors constant and 
-    instance_reg = Regularizer[FixedLatentFeaturesConstraint(instance_factor[:,i]) for i=1:size(instance_factor, 2)]
-    feature_reg = Regularizer[FixedLatentFeaturesConstraint(feature_factor[:,i]) for i=1:size(feature_factor,2)]
+function RRGLRM(feature_factor::Matrix, instance_factor::Matrix, 
+                feature_ids::Vector, feature_losses::Vector, 
+                instance_ids::Vector)
 
     k = size(feature_factor, 1)    
+    m = size(instance_factor, 2)
+    n = size(feature_factor, 2)
 
-    rrglrm = RRGLRM(nothing, feature_losses, instance_reg, feature_reg, k;
+    A = DummyArray([m,n])
+    instance_reg = fill(ZeroReg(), m)
+    feature_reg = fill(ZeroReg(), n)
+
+    println("A: ", size(A))
+    println("feature_losses: ", size(feature_losses))
+    println("feature_ids: ", size(feature_ids))
+    println("instance_ids: ", size(instance_ids))
+
+    rrglrm = RRGLRM(A, feature_losses, instance_reg, feature_reg, k;
                     X=instance_factor, Y=feature_factor,
                     feature_ids=feature_ids, feature_graphs=nothing,
                     instance_ids=instance_ids)
-
 
     return rrglrm
 

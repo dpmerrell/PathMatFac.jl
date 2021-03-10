@@ -123,7 +123,7 @@ function fit!(glrm::RowRegGLRM, params::ProxGradParams;
             Threads.@threads for e in x_gp # for every example x_e == ve[e]
             # for e=1:m # for every example x_e == ve[e]
 
-                update_b!(rx[e], ve)
+                update_reg!(rx[e], ve)
 
                 g[Threads.threadid()] .= 0 # reset gradient to 0
                 # compute gradient of L with respect to Xᵢ as follows:
@@ -172,7 +172,7 @@ function fit!(glrm::RowRegGLRM, params::ProxGradParams;
         for y_gp in y_groups
             Threads.@threads for f in y_gp
 
-                update_b!(ry[f], vf) 
+                update_reg!(ry[f], vf) 
 
                 # compute gradient of L with respect to Yⱼ as follows:
                 # ∇{Yⱼ}L = Σⱼ dLⱼ(XᵢYⱼ)/dYⱼ

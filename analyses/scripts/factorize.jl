@@ -105,7 +105,7 @@ function get_transformations(feature_vec)
 end
 
 
-function save_results(feature_factor, patient_factor, ext_features, ext_patients, parents, output_hdf)
+function save_results(feature_factor, patient_factor, ext_features, ext_patients, output_hdf)
 
     h5open(output_hdf, "w") do file
 
@@ -114,7 +114,6 @@ function save_results(feature_factor, patient_factor, ext_features, ext_patients
 
         write(file, "features", convert(Vector{String}, ext_features))
         write(file, "patients", convert(Vector{String}, ext_patients))
-        write(file, "parents", convert(Vector{String}, parents))
 
     end
 
@@ -127,8 +126,9 @@ function construct_glrm(A, feature_ids, feature_ugraphs, patient_ids, patient_ct
     feature_losses = Loss[feature_to_loss(feat) for feat in feature_ids]
 
     # Construct the GLRM problem instance
-    rrglrm = RRGLRM(transpose(A), feature_losses, feature_ids, feature_ugraphs, 
-                                  patient_ids, patient_ctypes)
+    rrglrm = RRGLRM(transpose(A), feature_losses, feature_ids, 
+                                  feature_ugraphs, patient_ids, patient_ctypes)#;
+                                  #offset=true, scale=true)
 
 end
 
@@ -156,7 +156,7 @@ function factorize_data(omic_data, data_features, data_patients,
     # Solve it!
     fit!(rrglrm)
 
-    return rrglrm.Y, rrglrm.X, rrglrm.feature_ids, rrglrm.instance_ids, rrglrm.instance_parents
+    return rrglrm.Y, rrglrm.X, rrglrm.feature_ids, rrglrm.instance_ids
 
 end
 

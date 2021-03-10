@@ -3,6 +3,8 @@ module PathwayMultiomics
 
 println("LOADING PATHWAYMULTIOMICS PACKAGE")
 
+include("group_standardizer.jl")
+include("dummy_array.jl")
 include("graph_util.jl")
 include("preprocess.jl")
 include("rrglrm.jl")

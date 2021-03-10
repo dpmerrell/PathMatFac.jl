@@ -1,9 +1,9 @@
 
-import LowRankModels: evaluate, prox, prox!
+import LowRankModels: evaluate, prox, prox!, ZeroReg
 
 import LinearAlgebra: dot
 
-export RowReg, FixedColReg
+export RowReg, FixedColReg, ZeroReg
 
 ####################
 # Row Regularizer
@@ -46,9 +46,12 @@ end
 ############################
 
 mutable struct FixedColReg <: Regularizer
+    scale::Float64
     b::Vector{Float64}
     col_idx::Int
 end
+
+FixedColReg(b::Vector{Float64}, col_idx::Int) = FixedColReg(1.0, b, col_idx)
 
 function prox(r::FixedColReg, u::AbstractArray, alpha::Number)
     return r.b 

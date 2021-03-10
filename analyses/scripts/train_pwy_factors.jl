@@ -2,39 +2,6 @@
 include("factorize.jl")
 
 
-nanmean(x) = mean(filter(!isnan, x))
-nanmean(x, dims) = mapslices(nanmean, x; dims=dims)
-
-nanstd(x) = std(filter(!isnan, x))
-nanstd(x, dims) = mapslices(nanstd, x; dims=dims)
-
-
-function group_standardize(A, std_features, patient_vec, ctype_vec)
-
-    println("group-standardizing data")
-
-    patient_to_idx = Dict( p => i for (i, p) in enumerate(patient_vec) )
-
-    std_params = Dict()
-
-    patient_hierarchy = get_instance_hierarchy(patient_vec, ctype_vec)
-
-    for (ctype, p_vec) in patient_hierarchy
-
-        patient_idx = Int[patient_to_idx[pat] for pat in p_vec]
-        
-        group_mus = nanmean(A[std_features, patient_idx], 2)
-        group_sigmas = nanstd(A[std_features, patient_idx], 2)
-
-        A[std_features,patient_idx] = (A[std_features,patient_idx] .- group_mus) ./ group_sigmas
-
-        std_params[ctype] = Dict( "sigma" => group_sigmas,
-                                  "mu" => group_mus)
-    end
-
-    return (A, std_params)
-end
-
 
 function run_factorization(args)
 
@@ -66,14 +33,19 @@ function run_factorization(args)
 
     omic_data = get_omic_data(omic_hdf)
     omic_data = omic_data[used_feat_idx, train_idx]
-
     
     # Before fitting the model: transform 
     # the features as necessary
     log_features, std_features = get_transformations(data_features)
-    omic_data[log_features,:] = log.(omic_data[log_features,:] .- minimum(omic_data[log_features,:]) .+ 1.0) 
-    omic_data, std_params = group_standardize(omic_data, std_features, data_patients, data_ctypes) 
-    
+    #omic_data[log_features,:] = log.(omic_data[log_features,:] .- minimum(omic_data[log_features,:]) .+ 1.0) 
+    omic_data[log_features,:] = log.(omic_data[log_features,:] .+ 10.0) 
+
+    #omic_data, std_params = group_standardize(omic_data, std_features, data_patients, data_ctypes)
+    #gs = GroupStandardizer() 
+    #omic_data[std_features,:] = transpose(fit_transform!(gs, transpose(omic_data[std_features,:]),
+    #                                                     data_ctypes[std_features]; scale=false
+    #                                                    )
+    #                                      )
 
     # Load the pathway SIF file paths 
     pathway_sifs = JSON.Parser.parsefile(pwy_sifs_json)
@@ -82,18 +54,17 @@ function run_factorization(args)
     # Factorize the data! 
     feat_factor, pat_factor, 
     extended_features, 
-    extended_patients, parents = factorize_data(omic_data, 
-                                                data_features, 
-                                                data_patients,
-                                                data_ctypes, 
-                                                pathway_sifs)
+    extended_patients = factorize_data(omic_data, 
+                                       data_features, 
+                                       data_patients,
+                                       data_ctypes, 
+                                       pathway_sifs)
  
     feat_factor = permutedims(feat_factor)
     pat_factor = permutedims(pat_factor)
 
     # Write the results to an HDF file
-    save_results(feat_factor, pat_factor, extended_features, extended_patients, 
-                 parents, output_hdf)
+    save_results(feat_factor, pat_factor, extended_features, extended_patients, output_hdf)
 
     println("Saved output to ", output_hdf)
 end

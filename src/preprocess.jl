@@ -121,7 +121,7 @@ function hierarchy_to_regularizers(instance_hierarchy, k; fixed_instances=[])
     matrices = fill(matrix, k)
 
     regularizers = matrices_to_regularizers(matrices, ext_instances; 
-                                            fixed_instances=fixed_instances)
+                                            fixed_nodes=fixed_instances)
     
     return regularizers, ext_instances
 end
@@ -300,18 +300,6 @@ function extend_losses(losses, features, ext_features)
     return ext_losses
 end
 
-#function convert_pwy_to_ugraph(pathway; strategy="symmetrize")
-#
-#    if strategy == "symmetrize"
-#        reversed = [ [edge[2], edge[1], edge[3]] for edge in pathway ]
-#        ugraph = [pathway ; reversed] 
-#    else
-#        throw(DomainError(strategy, "not a valid option for `strategy`")) 
-#    end
-#
-#    return ugraph
-#end
-
 
 function ugraph_to_matrix(graph::ElUgraph, node_to_idx, 
                           epsilon=nothing, 
@@ -359,7 +347,7 @@ function ugraph_to_matrix(graph::ElUgraph, node_to_idx,
 end
 
 
-function convert_ugraphs_to_matrices(ugraphs::Vector{ElUgraph})
+function ugraphs_to_matrices(ugraphs::Vector{ElUgraph})
 
     # Get all of the nodes from all of the graphs
     all_nodes = Set{String}()
@@ -402,7 +390,7 @@ function matrices_to_regularizers(matrices, all_nodes; fixed_nodes=[])
         I, J, V = findnz(mat)
         for (idx, i) in enumerate(I)
             j = J[idx]
-            if (all_nodes[i] not in fixed_node_set) & (i != j)
+            if !in(all_nodes[i], fixed_node_set) & (i != j)
                 push!(regs[i].neighbors, (j, k, V[i]))
             end 
         end
@@ -440,7 +428,7 @@ end
 
 function ugraphs_to_regularizers(ugraphs::Vector{ElUgraph})
 
-    matrices, ext_features = convert_ugraphs_to_matrices(ugraphs)
+    matrices, ext_features = ugraphs_to_matrices(ugraphs)
 
     regularizers = matrices_to_regularizers(matrices, ext_features)
 

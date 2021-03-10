@@ -3,7 +3,7 @@ import LowRankModels: ProxGradParams, ConvergenceHistory, fit!,
                       norm, get_yidxs, gemm!, update_ch!, grad,
                       row_objective, col_objective, axpy! 
  
-export fit!
+export fit!, transform
 
 
 function reg_to_lil(reg_vec)
@@ -127,7 +127,7 @@ function fit!(glrm::RRGLRM, params::ProxGradParams;
         for x_gp in x_groups
             for e in x_gp
 
-                update_b!(rx[e], ve)
+                update_reg!(rx[e], ve)
  
                 fill!(g, 0.) # reset gradient to 0
                 # compute gradient of L with respect to Xᵢ as follows:
@@ -176,7 +176,7 @@ function fit!(glrm::RRGLRM, params::ProxGradParams;
         for y_gp in y_groups
             for f in y_gp
 
-                update_b!(ry[f], vf)
+                update_reg!(ry[f], vf)
 
                 # compute gradient of L with respect to Yⱼ as follows:
                 # ∇{Yⱼ}L = Σⱼ dLⱼ(XᵢYⱼ)/dYⱼ
@@ -268,20 +268,35 @@ function transform(glrm::RRGLRM, new_A, new_feature_ids,
 
     A = assemble_matrix(new_A, new_feature_ids, glrm.feature_ids,
                                new_instance_ids, ext_instances)
+    println("TRANSFORM; ASSEMBLED A: ", size(A))
+    glrm.A = A
     m,n = size(A)
+   
+    # Get observed values in this extended A 
+    obs = findall(!isnan, A) 
+    obs_feat, obs_inst = sort_observations(obs,size(A)...)
+    glrm.observed_examples = obs_inst
+    glrm.observed_features = obs_feat
     
-    # randomly initialize the new instance factor 
+
+    #######################################   
+    # Initialize the new instance factor, X
+    
+    # most entries will simply start random
     X = randn(k, m) 
 
-    # Populate the fixed columns of X with 
-    # columns of glrm.X
+    # The fixed columns of X should be populated
+    # by columns of glrm.X
     inst_to_glrm_idx = Dict(inst => idx for (idx, inst) in enumerate(old_instances))
     x_cols = Int64[]
+    new_inst_cols = Int64[]
     glrm_cols = Int64[]
     for (x_idx, inst) in enumerate(ext_instances)
         if inst in keys(inst_to_glrm_idx)
             push!(glrm_cols, inst_to_glrm_idx[inst])
             push!(x_cols, x_idx)
+        else
+            push!(new_inst_cols, x_idx)
         end
     end
     X[:,x_cols] .= glrm.X[:,glrm_cols]
@@ -357,7 +372,7 @@ function transform(glrm::RRGLRM, new_A, new_feature_ids,
         for x_gp in x_groups
             for e in x_gp
 
-                update_b!(rx[e], ve)
+                update_reg!(rx[e], ve)
  
                 fill!(g, 0.) # reset gradient to 0
                 # compute gradient of L with respect to Xᵢ as follows:
@@ -415,7 +430,7 @@ function transform(glrm::RRGLRM, new_A, new_feature_ids,
         end
     end
 
-    return X, ch
+    return X[:,new_inst_cols], ext_instances[new_inst_cols], glrm.feature_ids, ch
 
 end
 
@@ -427,7 +442,5 @@ transform(glrm, new_A,
                                    new_instance_ids,
                                    new_instance_groups, 
                                    ProxGradParams();
-                                   ch::ConvergenceHistory=ConvergenceHistory("ProxGradGLRM"),
-                                   verbose=true,
-                                   kwargs...)
+                                   verbose=true)
 
