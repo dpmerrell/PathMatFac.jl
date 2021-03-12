@@ -3,10 +3,10 @@ module PathwayMultiomics
 
 println("LOADING PATHWAYMULTIOMICS PACKAGE")
 
-include("group_standardizer.jl")
-include("dummy_array.jl")
 include("graph_util.jl")
+include("dummy_array.jl")
 include("preprocess.jl")
+
 include("rrglrm.jl")
 include("rr_regularizers.jl")
 include("rr_objective.jl")
@@ -19,5 +19,7 @@ else
   println("USING SINGLE THREAD VERSION")
   include("rr_proxgrad.jl")
 end
+
+include("group_standardizer.jl")
 
 end # module

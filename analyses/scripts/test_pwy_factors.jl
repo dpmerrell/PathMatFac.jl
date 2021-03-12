@@ -82,9 +82,10 @@ end
 function main(args)
 
     trained_hdf = args[1]
-    omic_hdf = args[2]
-    train_test_json = args[3]
-    output_hdf = args[4]
+    gp_std_json = args[2]
+    omic_hdf = args[3]
+    train_test_json = args[4]
+    output_hdf = args[5]
 
     # Load the results of training
     feature_factor, 
@@ -106,9 +107,14 @@ function main(args)
     println("TEST_PATIENTS", size(test_patients))
     println("TEST_CTYPES", size(test_ctypes))
 
-    # log-transform features, as appropriate
+    # log-transform and standardize features, as appropriate
     log_features, std_features = get_transformations(test_features)
-    test_set[:, log_features] = log.(test_set[:, log_features] .+ 10.0) 
+    test_set[:, log_features] = log.(test_set[:, log_features] .+ 5.0) 
+
+    gs = GroupStandardizer()
+    gs.std_params = JSON.Parser.parsefile(gp_std_json)
+    test_set[:, std_features] = transform(gs, test_set[:,std_features], test_ctypes)
+
 
     # Transform the test set
     transformed_data, 

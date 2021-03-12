@@ -4,8 +4,29 @@ using DataFrames
 using SparseArrays
 
 export load_pathways, pathways_to_ugraphs, hierarchy_to_regularizers,
-       get_instance_hierarchy, DEFAULT_DATA_TYPES, DEFAULT_DATA_TYPE_MAP
+       get_instance_hierarchy, feature_to_loss, 
+       DEFAULT_OMICS, DEFAULT_OMIC_MAP
 
+
+DEFAULT_OMICS = ["cna",
+                 "mutation",
+                 "methylation",
+                 "mrnaseq",
+                 "rppa"]
+
+DEFAULT_OMIC_DTYPES = Dict("cna" => Float64,
+                           "mutation" => Bool,
+                           "methylation" => Float64,
+                           "mrnaseq" => Float64, 
+                           "rppa" => Float64
+                         )
+
+DEFAULT_OMIC_MAP = Dict("cna" => ["dna", 1],
+                             "mutation" => ["dna", -1],
+                             "methylation" => ["mrna", -1],
+                             "mrnaseq" => ["mrna", 1],
+                             "rppa" => ["protein", 1]
+                             )
 
 ###################################
 # Model assembly
@@ -33,6 +54,7 @@ function assemble_matrix(data, features, extended_features,
     # Initialize the matrix!
     result = fill(NaN, size(extended_instances,1),
                        size(extended_features,1))
+    result = convert(Matrix{Number}, result)
 
     # Ignore the "artificial" instances: 
     # i.e., the fictitious hidden nodes
@@ -53,7 +75,32 @@ function assemble_matrix(data, features, extended_features,
     # Finally: load the data!    
     result[matrix_rows, matrix_cols] = data[data_rows, data_cols]
 
+    set_matrix_dtypes!(result, matrix_cols, extended_features)
+
     return result
+end
+
+
+function feature_to_loss(feature_name)
+    omic_type = split(feature_name, "_")[end]
+    if DEFAULT_OMIC_DTYPES[omic_type] <: Bool
+        return LogisticLoss()
+    #elseif DEFAULT_OMIC_DTYPES[omic_type] <: Float64
+    #    return QuadLoss()
+    else
+        return QuadLoss() 
+    end
+end
+
+
+function set_matrix_dtypes!(matrix, col_idx, col_names)
+    for idx in col_idx
+        omic_type = split(col_names[idx], "_")[end]
+        col_type = DEFAULT_OMIC_DTYPES[omic_type] 
+        
+        not_nan = findall(!isnan, matrix[:,idx])
+        matrix[not_nan, idx] = convert(Vector{col_type}, matrix[not_nan, idx])
+    end
 end
 
 
@@ -61,10 +108,10 @@ end
 # INSTANCE PREPROCESSING
 ##########################
 
-function get_instance_hierarchy(instance_ids::Vector{String}, 
-                                instance_groups::Vector{String})
+function get_instance_hierarchy(instance_ids::Vector{T}, 
+                                instance_groups::Vector{String}) where T
 
-    hierarchy = Dict(gp => String[] for gp in unique(instance_groups))
+    hierarchy = Dict(gp => T[] for gp in unique(instance_groups))
 
     for (i, inst) in enumerate(instance_ids)
         push!(hierarchy[instance_groups[i]], inst)
@@ -114,14 +161,15 @@ function hierarchy_to_matrix(patient_hierarchy)
 end
 
 
-function hierarchy_to_regularizers(instance_hierarchy, k; fixed_instances=[])
+function hierarchy_to_regularizers(instance_hierarchy, k; fixed_instances=[], offset=false)
 
     matrix, ext_instances = hierarchy_to_matrix(instance_hierarchy)
 
     matrices = fill(matrix, k)
 
     regularizers = matrices_to_regularizers(matrices, ext_instances; 
-                                            fixed_nodes=fixed_instances)
+                                            fixed_nodes=fixed_instances,
+                                            offset=offset)
     
     return regularizers, ext_instances
 end
@@ -130,16 +178,6 @@ end
 ##########################
 # PATHWAY PREPROCESSING
 ##########################
-DEFAULT_DATA_TYPES = ["cna","mutation",
-                      "methylation","mrnaseq",
-                      "rppa"]
-
-DEFAULT_DATA_TYPE_MAP = Dict("cna" => ["dna", 1],
-                             "mutation" => ["dna", -1],
-                             "methylation" => ["mrna", -1],
-                             "mrnaseq" => ["mrna", 1],
-                             "rppa" => ["protein", 1]
-                             )
 
 """
     Prepare a data structure that will map
@@ -288,6 +326,7 @@ end
 function extend_losses(losses, features, ext_features)
 
     ext_losses = fill(QuadLoss(), size(ext_features,1))
+    ext_losses = convert(Vector{Loss}, ext_losses)
 
     feat_to_loss = Dict(feat => loss for (feat, loss) in zip(features, losses))
 
@@ -371,27 +410,29 @@ function ugraphs_to_matrices(ugraphs::Vector{ElUgraph})
 end
 
 
-function matrices_to_regularizers(matrices, all_nodes; fixed_nodes=[])
+function matrices_to_regularizers(matrices, all_nodes; fixed_nodes=[], offset=false)
 
     k = length(matrices)
+    #latent_dim = offset ? k+1 : k
+    latent_dim = k
 
     fixed_node_set = Set(fixed_nodes)
 
     regs = Regularizer[]
     for (idx, node) in enumerate(all_nodes)
         if node in fixed_node_set
-            push!(regs, FixedColReg(zeros(k), idx))
+            push!(regs, FixedColReg(zeros(latent_dim), idx))
         else
-            push!(regs, RowReg(zeros(k), Vector{Tuple{Int64,Int64,Float64}}(), 1.0)) 
+            push!(regs, RowReg(zeros(latent_dim), Vector{Tuple{Int64,Int64,Float64}}(), 1.0)) 
         end
     end
 
-    for mat in matrices
+    for (mat_idx, mat) in enumerate(matrices)
         I, J, V = findnz(mat)
         for (idx, i) in enumerate(I)
             j = J[idx]
             if !in(all_nodes[i], fixed_node_set) & (i != j)
-                push!(regs[i].neighbors, (j, k, V[i]))
+                push!(regs[i].neighbors, (j, mat_idx, V[i]))
             end 
         end
     end
@@ -407,8 +448,8 @@ end
     and an array that maps indices to pathway nodes
 """
 function pathways_to_ugraphs(pathways, featuremap;
-                             data_types=DEFAULT_DATA_TYPES, 
-                             data_type_map=DEFAULT_DATA_TYPE_MAP,
+                             data_types=DEFAULT_OMICS, 
+                             data_type_map=DEFAULT_OMIC_MAP,
                              pwy_data_augmentation="sparse_latent",
                              pwy_to_ugraph="symmetrize")
 
@@ -426,33 +467,33 @@ function pathways_to_ugraphs(pathways, featuremap;
 end
 
 
-function ugraphs_to_regularizers(ugraphs::Vector{ElUgraph})
+function ugraphs_to_regularizers(ugraphs::Vector{ElUgraph}; offset=false)
 
     matrices, ext_features = ugraphs_to_matrices(ugraphs)
 
-    regularizers = matrices_to_regularizers(matrices, ext_features)
+    regularizers = matrices_to_regularizers(matrices, ext_features; offset=offset)
 
     return regularizers, ext_features
 end
 
 
-function pathways_to_regularizers(pathway_dict, featuremap;
-                                  data_types=DEFAULT_DATA_TYPES, 
-                                  data_type_map=DEFAULT_DATA_TYPE_MAP,
-                                  pwy_data_augmentation="sparse_latent")
-                                  #pwy_to_ugraph="symmetrize")
-
-    matrices, ext_features = pathways_to_matrices(pathway_dict, featuremap;
-                                             data_types=data_types,
-                                             data_type_map=data_type_map,
-                                             pwy_data_augmentation=pwy_data_augmentation)
-                                             #pwy_to_ugraph=pwy_to_ugraph)
-
-    rowregs = matrices_to_regularizers(matrices, ext_features)
-
-    return rowregs, ext_features, pwy_names
-
-end
+#function pathways_to_regularizers(pathway_dict, featuremap;
+#                                  data_types=DEFAULT_OMICS, 
+#                                  data_type_map=DEFAULT_OMIC_MAP,
+#                                  pwy_data_augmentation="sparse_latent")
+#                                  #pwy_to_ugraph="symmetrize")
+#
+#    matrices, ext_features = pathways_to_matrices(pathway_dict, featuremap;
+#                                             data_types=data_types,
+#                                             data_type_map=data_type_map,
+#                                             pwy_data_augmentation=pwy_data_augmentation)
+#                                             #pwy_to_ugraph=pwy_to_ugraph)
+#
+#    rowregs = matrices_to_regularizers(matrices, ext_features)
+#
+#    return rowregs, ext_features, pwy_names
+#
+#end
 
 
 function get_all_proteins(pathways)

@@ -80,9 +80,11 @@ function RRGLRM(A, losses::Array, rx::Array, ry::Array, k::Int;
     end
 
     if scale # scale losses (and regularizers) so they all have equal variance
+        println("EQUILIBRATING VARIANCE")
         equilibrate_variance!(glrm)
     end
     if offset # don't penalize the offset of the columns
+        println("ADDING OFFSET")
         add_offset!(glrm)
     end
     return glrm
@@ -101,7 +103,10 @@ function RRGLRM(A, feature_losses::Vector{Loss},
     # Convert the feature graphs into 
     #  (a) a set of graph regularizers and
     #  (b) an extended set of features (observed and latent)
-    ry, extended_feature_ids = ugraphs_to_regularizers(feature_graphs)
+    println("CONVERTING UGRAPHS TO REGULARIZERS")
+
+    ry, extended_feature_ids = ugraphs_to_regularizers(feature_graphs; offset=offset)
+    println("EXTENDING LOSSES")
     extended_losses = extend_losses(feature_losses,
                                     feature_ids,
                                     extended_feature_ids)
@@ -110,17 +115,23 @@ function RRGLRM(A, feature_losses::Vector{Loss},
     #  (a) a set of graph regularizers and
     #  (b) an extended set of instances (observed and latent)
     instance_hierarchy = get_instance_hierarchy(instance_ids, instance_groups)
-    rx, extended_instance_ids = hierarchy_to_regularizers(instance_hierarchy, k)
+    rx, extended_instance_ids = hierarchy_to_regularizers(instance_hierarchy, k; offset=offset)
 
     # We are now ready to assemble the matrix for our
     # factorization problem!
+    println("ASSEMBLING MATRIX")
+    println("\t(", size(feature_ids,1), ", ", size(instance_ids,1), ")")
+    println("---> (", size(extended_feature_ids,1), ", ", size(extended_instance_ids,1), ")")
     extended_A = assemble_matrix(A, feature_ids, extended_feature_ids, 
                                     instance_ids, extended_instance_ids)
      
     # Get the observed indices
+    println("GETTING ALL OBSERVATIONS")
     obs = findall(!isnan, extended_A)
 
-    rrglrm = RRGLRM(extended_A, extended_losses, rx, ry, k;
+    latent_dim = offset ? k+1 : k
+
+    rrglrm = RRGLRM(extended_A, extended_losses, rx, ry, latent_dim;
                     feature_ids=extended_feature_ids, feature_graphs=feature_graphs, 
                     instance_ids=extended_instance_ids, obs=obs,
                     offset=offset, scale=scale)

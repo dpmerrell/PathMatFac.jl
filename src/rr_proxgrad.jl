@@ -2,7 +2,7 @@
 import LowRankModels: ProxGradParams, ConvergenceHistory, fit!, 
                       norm, get_yidxs, gemm!, update_ch!, grad,
                       row_objective, col_objective, axpy! 
- 
+
 export fit!, transform
 
 
@@ -36,13 +36,15 @@ function fit!(glrm::RRGLRM, params::ProxGradParams;
     rx = glrm.rx
     ry = glrm.ry
     X = glrm.X; Y = glrm.Y
+
     # check that we didn't initialize to zero (otherwise we will never move)
     if norm(Y) == 0
-        Y = .1*randn(k,d)
+      Y = .1*randn(k,d)
     end
     k = glrm.k
     m,n = size(A)
 
+    println("COLORING REGULARIZER GRAPH")
     # Get the regularization graphs for each factor
     x_lil = reg_to_lil(rx)
     y_lil = reg_to_lil(ry)
@@ -230,7 +232,7 @@ function fit!(glrm::RRGLRM, params::ProxGradParams;
         if i>10 && (obj_decrease < scaled_abs_tol || obj_decrease/obj < params.rel_tol)
             break
         end
-        if verbose && i%10==0
+        if verbose #&& i%10==0
             println("Iteration $i: objective value = $(ch.objective[end])")
         end
     end

@@ -1,10 +1,9 @@
 
 using PathwayMultiomics
-using Statistics
 using HDF5
 using JSON
 
-tcga_omic_types = DEFAULT_DATA_TYPES 
+tcga_omic_types = DEFAULT_OMICS 
 
 log_transformed_data_types = ["methylation","mrnaseq"]
 standardized_data_types = ["methylation", "cna", "mrnaseq", "rppa"]
@@ -79,16 +78,6 @@ function get_omic_data(omic_hdf)
 end
 
 
-function feature_to_loss(feature_name)
-    omic_type = split(feature_name, "_")[end]
-    if omic_type == "mutation"
-        return LogisticLoss()
-    else
-        return QuadLoss()
-    end
-end
-
-
 function get_transformations(feature_vec)
     to_log = Int[]
     to_std = Int[]
@@ -105,16 +94,16 @@ function get_transformations(feature_vec)
 end
 
 
-function save_results(feature_factor, patient_factor, ext_features, ext_patients, output_hdf)
+function save_results(feature_factor, patient_factor, ext_features, ext_patients, pwy_sifs, output_hdf)
 
     h5open(output_hdf, "w") do file
 
         write(file, "feature_factor", feature_factor)
-        write(file, "patient_factor", patient_factor)
+        write(file, "instance_factor", patient_factor)
 
         write(file, "features", convert(Vector{String}, ext_features))
-        write(file, "patients", convert(Vector{String}, ext_patients))
-
+        write(file, "instances", convert(Vector{String}, ext_patients))
+        write(file, "pathways", convert(Vector{String}, pwy_sifs))
     end
 
 end
@@ -127,8 +116,8 @@ function construct_glrm(A, feature_ids, feature_ugraphs, patient_ids, patient_ct
 
     # Construct the GLRM problem instance
     rrglrm = RRGLRM(transpose(A), feature_losses, feature_ids, 
-                                  feature_ugraphs, patient_ids, patient_ctypes)#;
-                                  #offset=true, scale=true)
+                                  feature_ugraphs, patient_ids, patient_ctypes;
+                                  offset=true, scale=true)
 
 end
 
@@ -136,10 +125,12 @@ end
 function factorize_data(omic_data, data_features, data_patients,
                         data_ctypes, pathway_sifs)
     
+    println("LOADING PATHWAYS")
     # Read in the pathways; figure out the possible
     # ways we can map omic data on to the pathways. 
     pwys, empty_featuremap = load_pathways(pathway_sifs, tcga_omic_types)
 
+    println("POPULATING FEATURE MAP")
     # Populate the map, using our knowledge
     # of the TCGA data
     filled_featuremap = populate_featuremap_tcga(empty_featuremap, data_features) 
@@ -147,8 +138,10 @@ function factorize_data(omic_data, data_features, data_patients,
     # Translate the pathways into undirected graphs,
     # with data features mapped into the graph at 
     # appropriate locations 
+    println("TRANSLATING PATHWAYS TO UGRAPHS")
     feature_ugraphs = pathways_to_ugraphs(pwys, filled_featuremap)
 
+    println("CONSTRUCTING GLRM")
     # Construct the GLRM problem instance
     rrglrm = construct_glrm(omic_data, data_features, feature_ugraphs,
                                        data_patients, data_ctypes) 

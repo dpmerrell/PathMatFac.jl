@@ -11,6 +11,7 @@ function run_factorization(args)
     data_feature_json = args[3]
     pwy_sifs_json = args[4]
     output_hdf = args[5]
+    gp_std_json = args[6]
 
     # Get the training set patient indices
     train_idx = JSON.Parser.parsefile(patient_split_json)["train"]
@@ -31,21 +32,29 @@ function run_factorization(args)
     data_features = get_omic_feature_names(omic_hdf)
     data_features = data_features[used_feat_idx]
 
+    println("LOADING OMIC DATA")
     omic_data = get_omic_data(omic_hdf)
     omic_data = omic_data[used_feat_idx, train_idx]
-    
+    println("\t",size(omic_data)) 
+
+    println("STANDARDIZING OMIC DATA")
     # Before fitting the model: transform 
     # the features as necessary
     log_features, std_features = get_transformations(data_features)
-    #omic_data[log_features,:] = log.(omic_data[log_features,:] .- minimum(omic_data[log_features,:]) .+ 1.0) 
-    omic_data[log_features,:] = log.(omic_data[log_features,:] .+ 10.0) 
+    omic_data[log_features,:] = log.(omic_data[log_features,:] .+ 6.0) 
 
-    #omic_data, std_params = group_standardize(omic_data, std_features, data_patients, data_ctypes)
-    #gs = GroupStandardizer() 
-    #omic_data[std_features,:] = transpose(fit_transform!(gs, transpose(omic_data[std_features,:]),
-    #                                                     data_ctypes[std_features]; scale=false
-    #                                                    )
-    #                                      )
+    gs = GroupStandardizer()
+    fit!(gs, transpose(omic_data[std_features,:]), data_ctypes) 
+    omic_data[std_features,:] .= transpose(transform(gs, 
+                                                     transpose(omic_data[std_features,:]), 
+                                                     data_ctypes)
+                                           )
+
+    println("SAVING STANDARDIZATION PARAMS: ", gp_std_json)
+    # Save the group standardizer to a JSON file
+    open(gp_std_json, "w") do f
+        JSON.print(f, gs.std_params)
+    end
 
     # Load the pathway SIF file paths 
     pathway_sifs = JSON.Parser.parsefile(pwy_sifs_json)
@@ -63,8 +72,9 @@ function run_factorization(args)
     feat_factor = permutedims(feat_factor)
     pat_factor = permutedims(pat_factor)
 
+    println("SAVING RESULTS")
     # Write the results to an HDF file
-    save_results(feat_factor, pat_factor, extended_features, extended_patients, output_hdf)
+    save_results(feat_factor, pat_factor, extended_features, extended_patients, pathway_sifs, output_hdf)
 
     println("Saved output to ", output_hdf)
 end

@@ -29,7 +29,7 @@ if __name__=="__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("dataset_hdf")
     parser.add_argument("split_json")
-    parser.add_argument("--hold-out-ctypes", nargs="+")
+    parser.add_argument("--hold-out-ctypes", nargs="*")
 
     args = parser.parse_args()
 

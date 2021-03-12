@@ -1,5 +1,5 @@
 
-import LowRankModels: evaluate, prox, prox!, ZeroReg
+import LowRankModels: evaluate, prox, prox!, ZeroReg, lastentry1, lastentry_unpenalized
 
 import LinearAlgebra: dot
 
@@ -25,6 +25,7 @@ end
 
 
 evaluate(r::RowReg,a::AbstractArray) = r.scale*sum(abs2, a) + dot(r.b,a)
+
 
 
 # Update the regularizer's b vector
@@ -69,4 +70,8 @@ function update_reg!(r::FixedColReg, factor_col_views::Vector)
     # reset b to zeros
     r.b .= factor_col_views[r.col_idx]
 end
+
+update_reg!(r::lastentry1, factor_col_views) = update_reg!(r.r,factor_col_views)
+update_reg!(r::lastentry_unpenalized, factor_col_views) = update_reg!(r.r,factor_col_views)
+
 

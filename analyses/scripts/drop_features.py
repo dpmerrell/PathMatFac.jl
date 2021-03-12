@@ -28,7 +28,7 @@ if __name__=="__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("dataset_hdf")
     parser.add_argument("used_idx_json")
-    parser.add_argument("--dropped-omic-types", nargs="+")
+    parser.add_argument("--dropped-omic-types", nargs="*")
 
     args = parser.parse_args()
 

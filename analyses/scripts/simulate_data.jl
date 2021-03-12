@@ -7,7 +7,7 @@ import PathwayMultiomics: get_all_proteins, pathways_to_ugraphs,
 
 import Base: isdigit
 
-sim_omic_types = DEFAULT_DATA_TYPES
+sim_omic_types = DEFAULT_OMICS
 
 
 function get_all_omic_features(pwy_vec)
@@ -18,16 +18,6 @@ function get_all_omic_features(pwy_vec)
 
     return all_omic_features
 end
-
-
-#function populate_featuremap_sim!(featuremap, features)
-#
-#    for (idx, feat) in enumerate(features)
-#        push!(featuremap[feat], idx)
-#    end
-#
-#    return featuremap
-#end
 
 
 function generate_factor(prec_mats)
@@ -66,14 +56,10 @@ function generate_feature_factor(pwy_sifs)
 
     pwy_vec, featuremap = load_pathways(pwy_sifs, sim_omic_types)
 
-    #println("generate_feature_factor\tPWY_VEC: ", pwy_vec)
-   
     omic_feature_vec = get_all_omic_features(pwy_vec) 
-    #println("generate_feature_factor\tOMIC_FEATURE_VEC: ", omic_feature_vec)
 
     #populate_featuremap_sim!(featuremap, omic_feature_vec)
     featuremap = populate_featuremap_tcga(featuremap, omic_feature_vec)
-    #println("generate_feature_factor\tFEATUREMAP: ", featuremap)
 
     ugraphs = pathways_to_ugraphs(pwy_vec, featuremap)
     matrices, all_features = ugraphs_to_matrices(ugraphs)
@@ -130,7 +116,7 @@ function assign_distributions(feature_names)
     samplers = []
 
     for fname in feature_names
-        omic_type = split(fname, "_")[end-1]
+        omic_type = split(fname, "_")[end]
         if omic_type == "mutation"
             push!(samplers, sample_bernoulli)
         else
@@ -149,7 +135,7 @@ function assign_biases(feature_names)
     v = -6.0
 
     for (i, feat) in enumerate(feature_names)
-        omic_type = split(feat, "_")[end-1]
+        omic_type = split(feat, "_")[end]
         if omic_type == "mutation"
             biases[i] = v
         end 
@@ -184,6 +170,8 @@ function save_results(output_hdf, A, X, Y, feature_vec, patient_vec, patient_hie
     patient_to_ctype = Dict(pat => ctype for (ctype, pat_vec) in patient_hierarchy for pat in pat_vec)
     ctype_vec = String[patient_to_ctype[pat] for pat in patient_vec]
 
+    pwy_sifs = String[splitpath(p)[end] for p in pwy_sifs]
+
     # Write to the HDF file
     h5open(output_hdf, "w") do file
         # Write factors and feature list
@@ -192,8 +180,8 @@ function save_results(output_hdf, A, X, Y, feature_vec, patient_vec, patient_hie
         write(file, "index", convert(Vector{String}, feature_vec))
         write(file, "columns", convert(Vector{String}, patient_vec)) 
         write(file, "cancer_types", convert(Vector{String}, ctype_vec))
+        write(file, "pathways", pwy_sifs)
         write(file, "data", A)
-        write(file, "pathways", convert(Vector{String}, pwy_sifs))
     end
 end
 
@@ -206,7 +194,6 @@ function main(args)
 
     # Generate the "feature" factor (m x k)
     X, all_features = generate_feature_factor(pwy_sifs)
-    println("main\tFEATURE FACTOR: ", size(X))
 
     # Generate the "patient" factor (n x k)
     k = length(pwy_sifs)
@@ -228,7 +215,7 @@ function main(args)
     A = generate_data_matrix(X, Y, sample_funcs, biases)
 
     # Write to HDF
-    save_results(output_hdf, A, X, Y, kept_features, kept_patients, patient_hierarchy, pwy_sifs)
+    save_results(output_hdf, permutedims(A), X, Y, kept_features, kept_patients, patient_hierarchy, pwy_sifs)
 
 end
 
