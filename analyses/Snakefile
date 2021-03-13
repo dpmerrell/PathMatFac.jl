@@ -26,10 +26,25 @@ SIM_SPLIT_DIR = path.join(SIM_DIR, "train_test_splits")
 
 SIM_MASK_DIR = path.join(SIM_DIR, "missing_data_masks")
 
+SIM_SCORE_DIR = path.join(SIM_DIR, "scores")
+
 
 rule all:
     input:
-        path.join(SIM_INFER_DIR, "heldout_BRCA_ACC_OV_COAD", "dropomics_cna", "pwys_nci_pid", "droppwys_", "tcga_full_pid_full_0.05.hdf")
+        path.join(SIM_SCORE_DIR, "impute", "heldout_BRCA_ACC_OV_COAD", "dropomics_cna", "pwys_nci_pid", "droppwys_", "tcga_full_pid_full_0.05.json")
+
+
+rule sim_score_imputation:
+    input:
+        src=path.join(SCRIPT_DIR, "score_imputation.py"),
+        inf=path.join(SIM_INFER_DIR, "{path}", "{dataset,[_a-z]+}_{mask_frac,[.0-9]+}.hdf"),
+        truth=path.join(SIM_DATA_DIR, "{dataset}.hdf"),
+        mask=path.join(SIM_MASK_DIR, "{dataset}_{mask_frac}.json")
+    output:
+        path.join(SIM_SCORE_DIR, "impute", "{path}","{dataset,[_a-z]+}_{mask_frac,[.0-9]+}.json")
+    shell:
+        "python {input.src} {input.inf} {input.truth} {input.mask} {output}"
+
 
 rule sim_run_factorize:
     input:
