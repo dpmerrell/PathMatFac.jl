@@ -9,6 +9,11 @@ log_transformed_data_types = ["methylation","mrnaseq"]
 standardized_data_types = ["methylation", "cna", "mrnaseq", "rppa"]
 
 
+function value_to_idx(values)
+    return Dict(v => idx for (idx, v) in enumerate(values))
+end
+
+
 """
     Given an empty featuremap, populate it from the array 
     of features. 
@@ -75,6 +80,19 @@ function get_omic_data(omic_hdf)
     # Julia reads arrays from HDF files
     # in the (weird) FORTRAN order
     return permutedims(dataset)
+end
+
+
+function apply_mask!(dataset, instances, features, mask)
+
+    inst_to_idx = value_to_idx(instances)
+    feat_to_idx = value_to_idx(features)
+
+    for coord in mask
+        inst_idx = inst_to_idx[coord[1]]
+        feat_idx = feat_to_idx[coord[2]]
+        dataset[feat_idx, inst_idx] = NaN
+    end 
 end
 
 

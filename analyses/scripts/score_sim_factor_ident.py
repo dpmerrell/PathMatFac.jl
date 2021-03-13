@@ -6,28 +6,6 @@ import h5py
 import json
 
 
-def load_factor_hdf(factor_hdf, feat_key="index", inst_key="columns"):
-
-    with h5py.File(factor_hdf, "r") as f:
-        feat_factor = f["feature_factor"][:,:]
-        inst_factor = f["instance_factor"][:,:]
-        features = f[feat_key][:].astype(str)
-        instances = f[inst_key][:].astype(str)
-        pathways = f["pathways"][:].astype(str)
-
-    pathways = np.array([pwy.split("/")[-1] for pwy in pathways])
-
-    print("SHAPES:")
-    print("\tfeat_factor:", feat_factor.shape)
-    print("\tinst_factor:", inst_factor.shape)
-    print("\tfeatures:", features.shape)
-    print("\tinstances:", instances.shape)
-    print("\tpathways:", pathways.shape)
-
-    return feat_factor, inst_factor, features, instances, pathways
-
-
-
 def score_inferred_factors(true_feat_factor, true_inst_factor,
                            true_features, true_instances, true_pwys,
                            pred_feat_factor, pred_inst_factor,
@@ -65,10 +43,10 @@ if __name__=="__main__":
     args = parser.parse_args()
 
     true_feat_factor, true_inst_factor,\
-    true_features, true_instances, true_pwys = load_factor_hdf(args.truth_hdf)
+    true_features, true_instances, true_pwys = su.load_factor_hdf(args.truth_hdf)
 
     pred_feat_factor, pred_inst_factor,\
-    pred_features, pred_instances, pred_pwys = load_factor_hdf(args.inferred_hdf,
+    pred_features, pred_instances, pred_pwys = su.load_factor_hdf(args.inferred_hdf,
                                                     inst_key="instances",
                                                     feat_key="features")
 

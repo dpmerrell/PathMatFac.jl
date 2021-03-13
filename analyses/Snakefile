@@ -24,9 +24,12 @@ SIM_INFER_DIR = path.join(SIM_DIR, "inferred")
 SIM_USED_FEATURE_DIR = path.join(SIM_DIR, "used_features")
 SIM_SPLIT_DIR = path.join(SIM_DIR, "train_test_splits")
 
+SIM_MASK_DIR = path.join(SIM_DIR, "missing_data_masks")
+
+
 rule all:
     input:
-        path.join(SIM_INFER_DIR, "heldout_BRCA_ACC_OV_COAD", "dropomics_cna", "pwys_nci_pid", "droppwys_", "tcga_full_pid_full.hdf")
+        path.join(SIM_INFER_DIR, "heldout_BRCA_ACC_OV_COAD", "dropomics_cna", "pwys_nci_pid", "droppwys_", "tcga_full_pid_full_0.05.hdf")
 
 rule sim_run_factorize:
     input:
@@ -35,19 +38,20 @@ rule sim_run_factorize:
         split=path.join(SIM_SPLIT_DIR, "heldout_{ctypes}.json"),
 	features=path.join(SIM_USED_FEATURE_DIR, "dropomics_{omics}.json"),
         pwys=path.join(PWY_JSON_DIR, "{collection}", "droppwys_{pwys}.json"),
+        mask=path.join(SIM_MASK_DIR, "{dataset}_{mask_frac}.json")
     output:
         factors=path.join(SIM_INFER_DIR,"heldout_{ctypes,[_A-Z]*}", 
 			                "dropomics_{omics,[_a-z]*}",
 					"pwys_{collection,[_a-z]*}",
 					"droppwys_{pwys,[_0-9]*}",
-				        "{dataset,[_a-z]+}.hdf"),
+				        "{dataset,[_a-z]+}_{mask_frac,[.0-9]+}.hdf"),
         gp_std=path.join(SIM_INFER_DIR,"heldout_{ctypes,[_A-Z]*}", 
 			                "dropomics_{omics,[_a-z]*}",
 					"pwys_{collection,[_a-z]*}",
 					"droppwys_{pwys,[_0-9]*}",
-				        "{dataset,[_a-z]+}_gp_std.json"),
+				        "{dataset,[_a-z]+}_{mask_frac,[.0-9]+}_gp_std.json"),
     shell:
-        "julia --project=.. {input.src} {input.dataset} {input.split} {input.features} {input.pwys} {output.factors} {output.gp_std}"
+        "julia --project=.. {input.src} {input.dataset} {input.mask} {input.split} {input.features} {input.pwys} {output.factors} {output.gp_std}"
 
 
 def get_dropped_pwys(wc):
@@ -68,6 +72,16 @@ rule choose_pathways:
         dropped=get_dropped_pwys
     shell:
         "python {input.src} {output} --all-pathways {input.pwys} --dropped-pathways {params.dropped}"
+
+
+rule sim_mask_data:
+    input:
+        src=path.join(SCRIPT_DIR, "mask_data.py"),
+        dataset=path.join(SIM_DATA_DIR, "{dataset}.hdf")
+    output:
+        path.join(SIM_MASK_DIR, "{dataset}_{frac,[.0-9]+}.json")
+    shell:
+        "python {input.src} {input.dataset} {output} --mask-fraction {wildcards.frac}"
 
 
 def get_heldout_ctypes(wc):

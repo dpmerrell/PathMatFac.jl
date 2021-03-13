@@ -1,2 +1,15 @@
 
 temp_dir: "temp"
+
+tcga_dir: "data/tcga"
+
+omic_types: ["cna", "mutation", "methylation", "mrnaseq", "rppa"]
+
+
+cancer_types: ["ACC", "CESC", "HNSC", 
+               "KIRC", "LGG", "LUSC", "PAAD", "READ", "STAD", 
+               "THCA", "UCS", "BLCA", "CHOL", "DLBC", "GBM", 
+               "KICH", "KIRP", "LIHC", "MESO", "PCPG", "SARC", 
+               "THYM", "UVM", "BRCA", "COAD", "ESCA", 
+               "LAML", "LUAD", "OV", "PRAD", 
+               "SKCM", "TGCT", "UCEC"]

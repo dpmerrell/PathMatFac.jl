@@ -1,7 +1,0 @@
-{
-    "omic_hdf": "../data/tcga/tcga_omic.hdf",
-    "pathway_sifs": ["pwy1.sif", "pwy2.sif"],
-    "data_types": ["METH","CNV","MAF","MRNA","PROT"],
-    "output_hdf": "example_output.hdf",
-    "cancer_types": ["HNSC","SKCM"]
-}

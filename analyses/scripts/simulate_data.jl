@@ -1,5 +1,5 @@
 
-include("factorize.jl")
+include("script_util.jl")
 
 using LinearAlgebra
 import PathwayMultiomics: get_all_proteins, pathways_to_ugraphs, 

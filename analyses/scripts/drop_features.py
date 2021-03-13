@@ -1,16 +1,9 @@
 
+import script_util as su
 import numpy as np
 import argparse
 import h5py
 import json
-
-
-def load_features(dataset_hdf):
-    
-    with h5py.File(dataset_hdf, "r") as f:
-        features = f["index"][:]
-    
-    return features.astype(str) 
 
 
 def drop_features(all_features, dropped_omic_types): 
@@ -32,7 +25,7 @@ if __name__=="__main__":
 
     args = parser.parse_args()
 
-    all_features = load_features(args.dataset_hdf)    
+    all_features = su.load_features(args.dataset_hdf)    
 
     used_feature_idx = drop_features(all_features, 
                                      args.dropped_omic_types)

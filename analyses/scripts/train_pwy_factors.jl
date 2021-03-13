@@ -1,5 +1,5 @@
 
-include("factorize.jl")
+include("script_util.jl")
 
 
 
@@ -7,34 +7,39 @@ function run_factorization(args)
 
     # read command line args 
     omic_hdf = args[1]
-    patient_split_json = args[2]
-    data_feature_json = args[3]
-    pwy_sifs_json = args[4]
-    output_hdf = args[5]
-    gp_std_json = args[6]
+    data_mask_json = args[2]
+    patient_split_json = args[3]
+    data_feature_json = args[4]
+    pwy_sifs_json = args[5]
+    output_hdf = args[6]
+    gp_std_json = args[7]
 
     # Get the training set patient indices
     train_idx = JSON.Parser.parsefile(patient_split_json)["train"]
     train_idx = convert(Vector{Int64}, train_idx)
 
+    # Get the mask of missing data
+    data_mask = JSON.Parser.parsefile(data_mask_json)
+
     # Get the indices of used features 
     used_feat_idx = JSON.Parser.parsefile(data_feature_json)
     used_feat_idx = convert(Vector{Int64}, used_feat_idx)
 
-    # Open the data, and restrict it to the 
-    # training set/used features 
+    # Open the data
     data_patients = get_omic_patients(omic_hdf)
-    data_patients = data_patients[train_idx]
-    
     data_ctypes = get_omic_ctypes(omic_hdf)
-    data_ctypes = data_ctypes[train_idx] 
-
     data_features = get_omic_feature_names(omic_hdf)
-    data_features = data_features[used_feat_idx]
 
     println("LOADING OMIC DATA")
     omic_data = get_omic_data(omic_hdf)
+    println("MASKING MISSING VALUES")
+    apply_mask!(omic_data, data_patients, data_features, data_mask)
+    
+    # Restrict the data to the training set/used features 
     omic_data = omic_data[used_feat_idx, train_idx]
+    data_patients = data_patients[train_idx]
+    data_ctypes = data_ctypes[train_idx] 
+    data_features = data_features[used_feat_idx]
     println("\t",size(omic_data)) 
 
     println("STANDARDIZING OMIC DATA")
