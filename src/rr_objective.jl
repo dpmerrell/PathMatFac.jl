@@ -1,7 +1,7 @@
 
-import LowRankModels: objective, get_yidxs, evaluate, calc_penalty, gemm!
+import LowRankModels: objective, get_yidxs, evaluate, calc_penalty, gemm!, impute_missing
 
-export objective
+export objective, impute_missing
 
 function objective(glrm::RRGLRM, X::Array{Float64,2}, Y::Array{Float64,2},
                    XY::Array{Float64,2};

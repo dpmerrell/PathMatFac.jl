@@ -5,7 +5,6 @@ tcga_dir: "data/tcga"
 
 omic_types: ["cna", "mutation", "methylation", "mrnaseq", "rppa"]
 
-
 cancer_types: ["ACC", "CESC", "HNSC", 
                "KIRC", "LGG", "LUSC", "PAAD", "READ", "STAD", 
                "THCA", "UCS", "BLCA", "CHOL", "DLBC", "GBM", 
@@ -13,3 +12,6 @@ cancer_types: ["ACC", "CESC", "HNSC",
                "THYM", "UVM", "BRCA", "COAD", "ESCA", 
                "LAML", "LUAD", "OV", "PRAD", 
                "SKCM", "TGCT", "UCEC"]
+
+sim_params:
+    sim_replicates: 1

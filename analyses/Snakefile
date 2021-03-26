@@ -4,18 +4,23 @@ from os import path
 
 configfile: "config.yaml"
 
+SIM_PARAMS = config["sim_params"]
+SIM_REPLICATES = list(range(SIM_PARAMS["sim_replicates"]))
+
 TCGA_DIR = config["tcga_dir"]
 
 SCRIPT_DIR = "scripts"
-NCI_PID_DIR = path.join("data","nci_pid")
+JULIA_SCRIPT_DIR = path.join(SCRIPT_DIR, "julia_scripts")
+NCI_PID_DIR = path.join("data","ncipid")
 NCI_PWY_IDS = sorted([ fname.split(path.sep)[-1].split(".")[0] for fname in glob(path.join(NCI_PID_DIR, "pid_*.tab"))])
 OMIC_TYPES = config["omic_types"]
 CANCER_TYPES = config["cancer_types"]
 
 TEMP_DIR = config["temp_dir"]
 PWY_DIR = path.join(TEMP_DIR, "pathways")
-PID_SIF_DIR = path.join(PWY_DIR, "nci_pid")
-PWY_JSON_DIR = path.join(PWY_DIR, "pwy_choices")
+SIF_DIR = path.join(PWY_DIR, "sifs")
+PID_SIF_DIR = path.join(SIF_DIR, "ncipid")
+PWY_JSON_DIR = path.join(PWY_DIR, "jsons")
 
 SIM_DIR = path.join(TEMP_DIR, "simulations")
 SIM_DATA_DIR = path.join(SIM_DIR, "datasets")
@@ -23,70 +28,78 @@ SIM_INFER_DIR = path.join(SIM_DIR, "inferred")
 
 SIM_USED_FEATURE_DIR = path.join(SIM_DIR, "used_features")
 SIM_SPLIT_DIR = path.join(SIM_DIR, "train_test_splits")
-
 SIM_MASK_DIR = path.join(SIM_DIR, "missing_data_masks")
-
 SIM_SCORE_DIR = path.join(SIM_DIR, "scores")
+
+test_holdout_ctypes = "_".join(CANCER_TYPES[5:])
+test_holdout_pwys = "_".join(NCI_PWY_IDS[50:])
 
 
 rule all:
     input:
-        path.join(SIM_SCORE_DIR, "impute", "heldout_BRCA_ACC_OV_COAD", "dropomics_cna", "pwys_nci_pid", "droppwys_", "tcga_full_pid_full_0.05.json")
+        path.join(SIM_INFER_DIR,"dataset=tcga_ncipid",
+			        "split=keep:HNSC,BRCA",
+				"features=dropomic:",
+				"mask=droprand:0.05",
+                                "pwys=ncipid",
+                                "factors.hdf")
 
 
 rule sim_score_imputation:
     input:
         src=path.join(SCRIPT_DIR, "score_imputation.py"),
-        inf=path.join(SIM_INFER_DIR, "{path}", "{dataset,[_a-z]+}_{mask_frac,[.0-9]+}.hdf"),
+        imp=path.join(SIM_INFER_DIR, "{path}", "{dataset,[_a-z]+}_{mask_frac,[.0-9]+}_imputed.json"),
         truth=path.join(SIM_DATA_DIR, "{dataset}.hdf"),
-        mask=path.join(SIM_MASK_DIR, "{dataset}_{mask_frac}.json")
+        mask=path.join(SIM_MASK_DIR, "dataset={dataset}", "mask={mask}.json")
     output:
         path.join(SIM_SCORE_DIR, "impute", "{path}","{dataset,[_a-z]+}_{mask_frac,[.0-9]+}.json")
     shell:
-        "python {input.src} {input.inf} {input.truth} {input.mask} {output}"
+        "python {input.src} {input.imp} {input.truth} {input.mask} {output}"
 
 
 rule sim_run_factorize:
     input:
-        src=path.join(SCRIPT_DIR, "train_pwy_factors.jl"),
-        dataset=path.join(SIM_DATA_DIR, "{dataset}.hdf"),
-        split=path.join(SIM_SPLIT_DIR, "heldout_{ctypes}.json"),
-	features=path.join(SIM_USED_FEATURE_DIR, "dropomics_{omics}.json"),
-        pwys=path.join(PWY_JSON_DIR, "{collection}", "droppwys_{pwys}.json"),
-        mask=path.join(SIM_MASK_DIR, "{dataset}_{mask_frac}.json")
+        src=path.join(JULIA_SCRIPT_DIR, "train_pwy_factors.jl"),
+        dataset_hdf=path.join(SIM_DATA_DIR, "{dataset}.hdf"),
+        split_json=path.join(SIM_SPLIT_DIR, "dataset={dataset}", "split={split}.json"),
+	features_json=path.join(SIM_USED_FEATURE_DIR, "dataset={dataset}", "features={features}.json"),
+        mask_json=path.join(SIM_MASK_DIR, "dataset={dataset}", "mask={mask}.json"),
+        pwys_json=path.join(PWY_JSON_DIR, "{pwys}.json")
     output:
-        factors=path.join(SIM_INFER_DIR,"heldout_{ctypes,[_A-Z]*}", 
-			                "dropomics_{omics,[_a-z]*}",
-					"pwys_{collection,[_a-z]*}",
-					"droppwys_{pwys,[_0-9]*}",
-				        "{dataset,[_a-z]+}_{mask_frac,[.0-9]+}.hdf"),
-        gp_std=path.join(SIM_INFER_DIR,"heldout_{ctypes,[_A-Z]*}", 
-			                "dropomics_{omics,[_a-z]*}",
-					"pwys_{collection,[_a-z]*}",
-					"droppwys_{pwys,[_0-9]*}",
-				        "{dataset,[_a-z]+}_{mask_frac,[.0-9]+}_gp_std.json"),
+        factors=path.join(SIM_INFER_DIR,"dataset={dataset}",
+                                        "split={split}",
+                                        "features={features}",
+                                        "mask={mask}",
+                                        "pwys={pwys}",
+                                        "factors.hdf"),
+        imputed=path.join(SIM_INFER_DIR,"dataset={dataset}",
+                                        "split={split}",
+                                        "features={features}",
+                                        "mask={mask}",
+                                        "pwys={pwys}",
+                                        "imputed.json")
     shell:
-        "julia --project=.. {input.src} {input.dataset} {input.mask} {input.split} {input.features} {input.pwys} {output.factors} {output.gp_std}"
+        "julia --project=.. {input.src} {input.dataset_hdf} {input.split_json} {input.features_json} {input.mask_json} {input.pwys_json} {output.factors} {output.imputed}"
 
 
-def get_dropped_pwys(wc):
-    res = wc["pwys"].split("_")
-    if len(res) > 0:
-        return res
-    else:
-        return ""
-
-
-rule choose_pathways:
+rule sim_train_test_split:
     input:
-        src=path.join(SCRIPT_DIR, "choose_pathways.py"),
-        pwys=expand(path.join(PWY_DIR, "{{collection}}", "{pwy}.sif"), pwy=NCI_PWY_IDS) 
+        src=path.join(SCRIPT_DIR, "split_patients.py"),
+        hdf=path.join(SIM_DATA_DIR, "{dataset}.hdf")
     output:
-        path.join(PWY_JSON_DIR, "{collection}", "droppwys_{pwys,[_0-9]*}.json")
-    params:
-        dropped=get_dropped_pwys
+        path.join(SIM_SPLIT_DIR, "dataset={dataset}", "split={split}.json")
     shell:
-        "python {input.src} {output} --all-pathways {input.pwys} --dropped-pathways {params.dropped}"
+        "python {input.src} {input.hdf} {output} --split-str {wildcards.split}"
+
+
+rule sim_get_features:
+    input:
+        src=path.join(SCRIPT_DIR, "choose_features.py"),
+        hdf=path.join(SIM_DATA_DIR, "{dataset}.hdf")
+    output:
+        path.join(SIM_USED_FEATURE_DIR, "dataset={dataset}", "features={features}.json")
+    shell:
+        "python {input.src} {input.hdf} {output} --feature-str {wildcards.features}"
 
 
 rule sim_mask_data:
@@ -94,66 +107,48 @@ rule sim_mask_data:
         src=path.join(SCRIPT_DIR, "mask_data.py"),
         dataset=path.join(SIM_DATA_DIR, "{dataset}.hdf")
     output:
-        path.join(SIM_MASK_DIR, "{dataset}_{frac,[.0-9]+}.json")
+        path.join(SIM_MASK_DIR, "dataset={dataset}", "mask={mask_str}.json")
     shell:
-        "python {input.src} {input.dataset} {output} --mask-fraction {wildcards.frac}"
+        "python {input.src} {input.dataset} {output} --mask-str {wildcards.mask_str}"
 
-
-def get_heldout_ctypes(wc):
-    res = wc["ctypes"].split("_")
-    if len(res) > 0:
-        return res
-    else:
-        return ""
-
-
-rule sim_train_test_split:
-    input:
-        src=path.join(SCRIPT_DIR, "split_patients.py"),
-        hdf=path.join(SIM_DATA_DIR, "tcga_full_pid_full.hdf")
-    output:
-        path.join(SIM_SPLIT_DIR, "heldout_{ctypes,[_A-Z]*}.json")
-    params:
-        heldout=get_heldout_ctypes
-    shell:
-        "python {input.src} {input.hdf} {output} --hold-out-ctypes {params.heldout}"
-
-
-def get_dropped_omic_types(wc):
-    res = wc["dropped_omics"].split("_")
-    if len(res) > 0:
-        return res
-    else:
-        return ""
-
-rule sim_drop_omic:
-    input:
-        src=path.join(SCRIPT_DIR, "drop_features.py"),
-        hdf=path.join(SIM_DATA_DIR, "tcga_full_pid_full.hdf")
-    output:
-        path.join(SIM_USED_FEATURE_DIR, "dropomics_{dropped_omics,[a-z]*}.json")
-    params:
-        drop_omic=get_dropped_omic_types
-    shell:
-        "python {input.src} {input.hdf} {output} --dropped-omic-types {params.drop_omic}"
 
 rule simulate_full_data:
     input:
-        src=path.join(SCRIPT_DIR, "simulate_data.jl"),
-        pwy_sifs=expand(path.join(PID_SIF_DIR,"{pwy}.sif"), pwy=NCI_PWY_IDS),
+        src=path.join(JULIA_SCRIPT_DIR, "simulate_data.jl"),
+        pwy_json=path.join(PWY_JSON_DIR,"{pwys}.json"),
 	pat_tree=path.join(TCGA_DIR, "tcga_patient_hierarchy.json")
     output:
-        path.join(SIM_DATA_DIR, "tcga_full_pid_full.hdf")
+        path.join(SIM_DATA_DIR, "tcga_{pwys}.hdf")
     shell:
-        "julia --project=.. {input.src} {input.pwy_sifs} {input.pat_tree} {output}"
+        "julia --project=.. {input.src} {input.pwy_json} {input.pat_tree} {output}"
 
 
-rule nci_pid_to_sif:
+def get_sifs(wc):
+    print(wc["collection"])
+    if wc["collection"] == "ncipid":
+        ids = NCI_PWY_IDS
+    sifs = sorted([path.join(PID_SIF_DIR, wc["collection"], "{}.sif").format(pwy) for pwy in ids])
+    print(sifs)
+    return sifs
+
+
+rule ncipid_sifs_to_json:
+    input:
+        src=path.join(SCRIPT_DIR, "sifs_to_json.py"),
+	#sifs=get_sifs
+        sifs=expand(path.join(PID_SIF_DIR, "{pwy}.sif"), pwy=NCI_PWY_IDS)
+    output:
+        json=path.join(PWY_JSON_DIR, "ncipid.json")
+    shell:
+        "python {input.src} --sif-files {input.sifs} --out-json {output.json}"
+
+
+rule ncipid_to_sif:
     input:
         src=path.join(SCRIPT_DIR, "pid_to_sif.py"),
         tab=path.join(NCI_PID_DIR, "{pwy}.tab")
     output:
-        path.join(PID_SIF_DIR,"{pwy}.sif")
+        path.join(PID_SIF_DIR, "{pwy}.sif")
     shell:
         "python {input.src} {input.tab} {output}"
 

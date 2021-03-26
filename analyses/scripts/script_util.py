@@ -10,10 +10,10 @@ def load_hdf(dataset_hdf, key, dtype=float):
 
 
 def load_features(dataset_hdf):
-    return load_hdf(dataset_hdf, "index", dtype=str)
+    return load_hdf(dataset_hdf, "features", dtype=str)
 
 def load_instances(dataset_hdf):
-    return load_hdf(dataset_hdf, "columns", dtype=str)    
+    return load_hdf(dataset_hdf, "instances", dtype=str)    
 
 def load_data(dataset_hdf):
     return load_hdf(dataset_hdf, "data")
@@ -81,5 +81,15 @@ def feature_to_loss(feature_id):
 def omic_feature_losses(feature_ids):
     return [feature_to_loss(feat) for feat in feature_ids]
 
+
+def parse_arg_str(arg_str):
+
+    kv_strs = arg_str.split("_")
+    kvs = [kv.split(":") for kv in kv_strs]
+    keys = [kv[0] for kv in kvs]
+    val_lists = [kv[1].split(",") for kv in kvs]
+
+    return dict(zip(keys, val_lists))
+    
 
 

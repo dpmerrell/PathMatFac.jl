@@ -3,9 +3,11 @@ using CSV
 using DataFrames
 using SparseArrays
 
-export load_pathways, pathways_to_ugraphs, hierarchy_to_regularizers,
+export load_pathway_sifs, load_pathways, pathways_to_ugraphs, 
+       hierarchy_to_regularizers,
        get_instance_hierarchy, feature_to_loss, 
        DEFAULT_OMICS, DEFAULT_OMIC_MAP
+
 
 
 DEFAULT_OMICS = ["cna",
@@ -28,6 +30,28 @@ DEFAULT_OMIC_MAP = Dict("cna" => ["dna", 1],
                              "rppa" => ["protein", 1]
                              )
 
+function value_to_idx(values)
+    return Dict(v => idx for (idx, v) in enumerate(values))
+end
+
+function keymatch(l_keys, r_keys)
+
+    rkey_to_idx = value_to_idx(r_keys) 
+
+    l_idx = []
+    r_idx = []
+
+    for (i, lk) in enumerate(l_keys)
+        if lk in keys(rkey_to_idx)
+            push!(l_idx, i)
+            push!(r_idx, rkey_to_idx[lk])
+        end
+    end
+
+    return l_idx, r_idx
+end
+
+
 ###################################
 # Model assembly
 ###################################
@@ -37,40 +61,44 @@ function assemble_matrix(data, features, extended_features,
 
     # Map the rows of the dataset
     # to the rows of the output matrix
-    matrix_cols = Vector{Int}() 
-    data_cols = Vector{Int}()
+    matrix_cols, data_cols = keymatch(extended_features, features)
+    #matrix_cols = Vector{Int}() 
+    #data_cols = Vector{Int}()
 
-    feature_set = Set(features)
-    feat_to_data_idx = Dict( feat => idx for (idx, feat) in enumerate(features) )
+    #feature_set = Set(features)
+    #feat_to_data_idx = Dict( feat => idx for (idx, feat) in enumerate(features) )
 
-    for (i, ext_feat) in enumerate(extended_features)
-        if ext_feat in feature_set 
-            idx = feat_to_data_idx[ext_feat]
-            push!(matrix_cols, i)
-            push!(data_cols, idx)
-        end
-    end
+    #for (i, ext_feat) in enumerate(extended_features)
+    #    if ext_feat in feature_set 
+    #        idx = feat_to_data_idx[ext_feat]
+    #        push!(matrix_cols, i)
+    #        push!(data_cols, idx)
+    #    end
+    #end
 
+    # Ignore the "artificial" instances: 
+    # i.e., the fictitious hidden nodes
+    # in the instance tree.
+    matrix_rows, data_rows = keymatch(extended_instances, instances)
+    #real_instances = intersect(Set(extended_instances), Set(instances))
+    #real_instance_vec = String[inst for inst in extended_instances if inst in real_instances]
+
+    ## Map the instances to the rows 
+    ## of the output matrix
+    #instance_to_matrow = value_to_idx(real_instance_vec) # Dict(inst => idx for (idx, inst) in enumerate(real_instance_vec))
+    #matrix_rows = Int64[instance_to_matrow[inst] for inst in real_instance_vec]
+    #matrix_rows = keymatch()
+
+    ## Map the instances to the columns
+    ## of the HDF file
+    #instance_to_datarow = value_to_idx(instances) # Dict(inst => idx for (idx, inst) in enumerate(instances))
+    #data_rows = Int64[instance_to_datarow[pat] for pat in real_instance_vec]
+    
     # Initialize the matrix!
     result = fill(NaN, size(extended_instances,1),
                        size(extended_features,1))
     result = convert(Matrix{Number}, result)
 
-    # Ignore the "artificial" instances: 
-    # i.e., the fictitious hidden nodes
-    # in the instance tree.
-    real_instances = intersect(Set(extended_instances), Set(instances))
-    real_instance_vec = String[inst for inst in extended_instances if inst in real_instances]
-
-    # Map the instances to the rows 
-    # of the output matrix
-    instance_to_matrow = Dict(inst => idx for (idx, inst) in enumerate(real_instance_vec))
-    matrix_rows = Int64[instance_to_matrow[inst] for inst in real_instance_vec]
-
-    # Map the instances to the columns
-    # of the HDF file
-    instance_to_datarow = Dict(inst => idx for (idx, inst) in enumerate(instances))
-    data_rows = Int64[instance_to_datarow[pat] for pat in real_instance_vec]
 
     # Finally: load the data!    
     result[matrix_rows, matrix_cols] = data[data_rows, data_cols]
@@ -152,7 +180,7 @@ function hierarchy_to_matrix(patient_hierarchy)
     rec_h2m("", patient_hierarchy) 
     graph = construct_elugraph(edges)
 
-    node_to_idx = Dict(v => idx for (idx,v) in enumerate(all_nodes))
+    node_to_idx = value_to_idx(all_nodes) # Dict(v => idx for (idx,v) in enumerate(all_nodes))
 
     matrix = ugraph_to_matrix(graph, node_to_idx) 
 
@@ -207,13 +235,20 @@ end
 
 """
     read many SIF files, returning the result as a 
-    Dictionary of vectors of vectors
+    vector of vectors of vectors
 """
 function read_all_sif_files(sif_files::Vector{String})
     return [read_sif_file(sp) for sp in sif_files]
 end
 
 
+PWY_SIF_CODE = Dict("a" => "activation",
+                    "b" => "abstract",
+                    "c" => "compound",
+                    "h" => "chemical",
+                    "p" => "protein",
+                    "f" => "family"
+               )
 
 """
     For each protein in a pathway (vector of vectors),
@@ -228,11 +263,18 @@ function extend_pathway(pathway)
     # Modify the edges to/from proteins
     for edge in pathway 
         u = edge[1]
+        
+        ent_types = [PWY_SIF_CODE[edge[2][[1]]], 
+                     PWY_SIF_CODE[edge[2][[2]]]
+                    ]
+        target = edge[2][[3]]
+        sgn = edge[2][[4]] 
+        
         v = edge[3]
-        attr = split(edge[2], "_")
-        ent_types = attr[[1,3]]
-        sgn = attr[2]
-        target = attr[4]
+        #attr = edge[2] #split(edge[2], "_")
+        #ent_types = attr[[1,2]]
+        #target = attr[3]
+        #sgn = attr[[end]]
 
         # If u is a protein, replace
         # it with an "activation" node
@@ -258,9 +300,9 @@ function extend_pathway(pathway)
         end
 
         # Extract the promotes/suppresses information
-        if sgn == "promote"
+        if sgn == ">"
             sgn = 1
-        elseif sgn == "suppress"
+        elseif sgn == "|"
             sgn = -1
         end
 
@@ -401,7 +443,7 @@ function ugraphs_to_matrices(ugraphs::Vector{ElUgraph})
     N = size(all_nodes,1)
 
     # create a mapping from node names to indices
-    node_to_idx = Dict(v => i for (i, v) in enumerate(all_nodes))
+    node_to_idx = value_to_idx(all_nodes) # Dict(v => i for (i, v) in enumerate(all_nodes))
 
     # now translate the ugraphs to sparse matrices
     matrices = [ugraph_to_matrix(u, node_to_idx) for u in ugraphs]
@@ -413,7 +455,6 @@ end
 function matrices_to_regularizers(matrices, all_nodes; fixed_nodes=[], offset=false)
 
     k = length(matrices)
-    #latent_dim = offset ? k+1 : k
     latent_dim = k
 
     fixed_node_set = Set(fixed_nodes)
@@ -477,24 +518,6 @@ function ugraphs_to_regularizers(ugraphs::Vector{ElUgraph}; offset=false)
 end
 
 
-#function pathways_to_regularizers(pathway_dict, featuremap;
-#                                  data_types=DEFAULT_OMICS, 
-#                                  data_type_map=DEFAULT_OMIC_MAP,
-#                                  pwy_data_augmentation="sparse_latent")
-#                                  #pwy_to_ugraph="symmetrize")
-#
-#    matrices, ext_features = pathways_to_matrices(pathway_dict, featuremap;
-#                                             data_types=data_types,
-#                                             data_type_map=data_type_map,
-#                                             pwy_data_augmentation=pwy_data_augmentation)
-#                                             #pwy_to_ugraph=pwy_to_ugraph)
-#
-#    rowregs = matrices_to_regularizers(matrices, ext_features)
-#
-#    return rowregs, ext_features, pwy_names
-#
-#end
-
 
 function get_all_proteins(pathways)
 
@@ -512,17 +535,21 @@ function get_all_proteins(pathways)
 end
 
 
+function load_pathways(pwy_vec, data_kinds)
 
-function load_pathways(sif_filenames, data_kinds)
-
-    pathways = read_all_sif_files(sif_filenames)
-   
-    extended_pwys = [extend_pathway(pwy) for pwy in pathways] 
-    
+    extended_pwys = [extend_pathway(pwy) for pwy in pwy_vec]
     all_proteins = get_all_proteins(extended_pwys)
-
     empty_feature_map = initialize_featuremap(all_proteins, data_kinds)
 
+    return (extended_pwys, empty_feature_map)
+end
+
+
+function load_pathway_sifs(sif_filenames, data_kinds)
+
+    pathways = read_all_sif_files(sif_filenames)
+    extended_pwys, empty_feature_map = load_pathways(pathways, data_kinds)
+ 
     return (extended_pwys, empty_feature_map)
 end 
 

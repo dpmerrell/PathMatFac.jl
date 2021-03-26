@@ -1,7 +1,7 @@
 
 using Statistics
 
-export GroupStandardizer, fit!, transform
+export GroupStandardizer, fit!, transform, inv_transform
 
 # The GroupStandardizer shifts and scales
 # the columns of a dataset, yielding
@@ -64,6 +64,30 @@ function transform(gs::GroupStandardizer, X::AbstractArray, groups::Vector)
     end
     return X
 end
+
+
+function inv_transform(gs::GroupStandardizer, X::AbstractArray, groups::Vector)
+
+    m, n = size(X)
+    gp_hierarchy = get_instance_hierarchy(collect(1:m), groups)
+
+    for (gp, instances) in gp_hierarchy
+    
+        if gp in keys(gs.std_params)
+            X[instances,:] .= X[instances,:].*gs.std_params[gp]["sigma"] .+ gs.std_params[gp]["mu"]
+        else
+            if size(instances,1) == 1
+                println("WARNING: only one instance in group ", gp)
+            end
+            mus = nanmean(X[instances,:])
+            sigmas = nanstd(X[instances,:])
+            X[instances,:] .= X[instances,:].*sigmas .+ mus
+        end
+    end
+    return X
+end
+
+
 
 
 

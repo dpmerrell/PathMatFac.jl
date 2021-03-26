@@ -15,7 +15,7 @@ if __name__=="__main__":
     args = parser.parse_args()
 
     dropped = set(args.dropped_pathways)
-    result = [fname for fname in args.all_pathways if fname not in dropped]
+    result = [fname for fname in args.all_pathways if fname.split("/")[-1].split(".")[0] not in dropped]
 
     with open(args.output_json, "w") as f:
         json.dump(result, f)
