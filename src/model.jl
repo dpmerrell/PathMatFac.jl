@@ -1,11 +1,12 @@
 
 using LinearAlgebra, SparseArrays
 
+export MatFacModel
 
 mutable struct MatFacModel
 
-    X::AbstractMatrix{Number}      # KxM "instance factor" matrix
-    Y::AbstractMatrix{Number}      # KxN "feature factor" matrix
+    X::AbstractMatrix      # KxM "instance factor" matrix
+    Y::AbstractMatrix      # KxN "feature factor" matrix
 
     losses::AbstractVector         # N-dim vector of losses; one per feature
     
@@ -15,8 +16,9 @@ mutable struct MatFacModel
 end
 
 
-function MatFacModel(instance_reg_mats::AbstractVector{AbstractMatrix}, 
-                     feature_reg_mats::AbstractVector{AbstractMatrix})
+function MatFacModel(instance_reg_mats::AbstractVector, 
+                     feature_reg_mats::AbstractVector,
+                     losses::AbstractVector)
 
     M = size(instance_reg_mats[1],1)
     N = size(feature_reg_mats[1],1)
@@ -26,8 +28,7 @@ function MatFacModel(instance_reg_mats::AbstractVector{AbstractMatrix},
     Y = 0.001 .* randn(K, N)
 
     return MatFacModel(X, Y, losses, instance_reg_mats,
-                                     feature_reg_mats,
-                                     obs_matrix
+                                     feature_reg_mats
                       )
 end
 
