@@ -18,3 +18,21 @@ function reg_grad(X, idx, reg_mats)
 end
 
 
+function compute_reg_loss(X, reg_mats)
+    s = 0.0
+    for i=1:length(reg_mats)
+        s += 0.5 * dot(X[i,:], reg_mats[i]*X[i,:])
+    end
+    return s
+end
+
+function add_reg_grad!(grad_X, X, reg_mats)
+    for i=1:length(reg_mats)
+        grad_X[i,:] .+= (reg_mats[i]*X[i,:])
+    end
+
+    return nothing
+end
+
+
+

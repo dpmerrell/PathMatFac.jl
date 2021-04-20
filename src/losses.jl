@@ -23,6 +23,14 @@ function grad_y(ql::QuadLoss, x, y, a)
     return ql.scale * (dot(x,y) - a) .* x
 end
 
+function compute_quadloss(XY, A)
+    return 0.5*sum( (XY - A).^2 )
+end
+
+function compute_quadloss_delta!(XY, A)
+    XY .-= A
+    return nothing
+end
 
 ###############################
 # Logistic loss (binary data)
@@ -46,6 +54,20 @@ function accum_grad_y!(g, ll::LogisticLoss, x, xy, a)
     return 
 end
 
+function compute_logloss(XY, A)
+    XY .= exp.(-XY)
+    XY .+= 1.0
+    XY .= 1.0 ./XY
+    return -sum( A .* log.(XY) + (1.0 .- A).*log.(1.0 .- XY) )
+end
+
+function compute_logloss_delta!(XY, A)
+    XY .= exp.(-XY)
+    XY .+= 1.0
+    XY .= 1.0 ./ XY
+    XY .-= A
+    return nothing 
+end
 
 ###############################
 # Poisson loss (count data)
@@ -67,4 +89,15 @@ function grad_y(pl::PoissonLoss, x, y, a)
     return pl.scale * ( a - exp(dot(x,y)) ) .* x
 end
 
- 
+function compute_poissonloss(XY, A)
+    return sum(XY.*A - exp.(XY))
+end
+
+function compute_poissonloss_delta!(XY, A)
+    XY .= exp.(XY)
+    XY .*= -1.0
+    XY .+= A
+    return nothing
+end
+
+

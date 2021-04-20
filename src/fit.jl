@@ -1,6 +1,6 @@
 
 
-export fit!
+export fit!, fit_cuda!
 
 
 function fit!(model::MatFacModel, A::AbstractMatrix;
@@ -76,6 +76,106 @@ function fit!(model::MatFacModel, A::AbstractMatrix;
         println(iter)
 
     end # while
+
+end
+
+
+using CUDA
+using CUDA.CUSPARSE
+
+function fit_cuda!(model::MatFacModel, A::AbstractMatrix;
+                   inst_reg_weight=1.0, feat_reg_weight=1.0,
+                   max_iter::Int=100, lr::Float64=0.001, 
+                   abs_tol::Float64=1e-6, rel_tol::Float64=1e-5,
+                   loss_iter::Int64=10)
+
+
+    # Setup
+    loss = Inf
+    iter = 0
+
+    M = size(A,1)
+    N = size(A,2)
+    K = size(model.X, 1)
+
+    # Move data and model to the GPU.
+    # Float16 is sufficiently precise.
+    X_d = CuArray{Float32}(model.X)
+    Y_d = CuArray{Float32}(model.Y)
+    A_d = CuArray{Float16}(A)
+    XY_d = CUDA.zeros(Float16, M,N)
+   
+    # Some bookkeeping for missing values.
+    obs_mask = map(!isnan, A_d)
+    missing_mask = (map(isnan, A_d) .* Float16(0.5))
+    # Convert NaNs in the data --> zeros so CuArray arithmetic works
+    mask_func(x) = isnan(x) ? Float16(0.5) : Float16(x)
+    map!(mask_func, A_d, A_d)
+
+    # TODO: bookkeeping for the loss functions
+    #       * indices for each loss function type
+    #       * feature_scales for each column
+    feature_scales = CUDA.ones(Float16, (1, size(Y_d,2)))
+
+    # Convert regularizers to CuSparse matrices
+    inst_reg_mats_d = [CuSparseMatrixCSC{Float32}(mat .* inst_reg_weight) for mat in model.instance_reg_mats]
+    feat_reg_mats_d = [CuSparseMatrixCSC{Float32}(mat .* feat_reg_weight) for mat in model.feature_reg_mats]
+
+    # Arrays for holding gradients
+    grad_X = CUDA.zeros(Float32, size(X_d))
+    grad_Y = CUDA.zeros(Float32, size(Y_d))
+
+    while iter < max_iter 
+
+        ############################
+        # Update X 
+        XY_d .= transpose(X_d)*Y_d
+        XY_d .*= obs_mask
+        XY_d .+= missing_mask 
+        # TODO: loop over the different loss function types
+        compute_delta_logloss!(XY_d, A_d)
+        XY_d .*= feature_scales
+        grad_X .= (Y_d * transpose(XY_d))
+
+        add_reg_grad!(grad_X, X_d, inst_reg_mats_d) 
+        grad_X .*= lr
+        X_d .-= grad_X
+
+        ############################
+        # Update Y 
+        XY_d .= transpose(X_d)*Y_d
+        XY_d .*= obs_mask
+        XY_d .+= missing_mask
+        # TODO: loop over the different loss function types
+        compute_delta_logloss!(XY_d, A_d) 
+        XY_d .*= feature_scales
+        grad_Y .= (X_d * XY_d)
+
+        add_reg_grad!(grad_Y, Y_d, feat_reg_mats_d)
+        grad_Y .*= lr
+        Y_d .-= grad_Y
+
+        iter += 1
+        print_str = "Iteration: $iter"
+
+        # Every so often, compute the loss
+        if iter % loss_iter == 0
+            XY_d .= transpose(X_d)*Y_d
+            XY_d .*= obs_mask
+            
+            # TODO: loop over loss function types
+            loss = compute_logloss(XY_d, A_d)
+            loss += compute_reg_loss(X_d, inst_reg_mats_d)
+            loss += compute_reg_loss(Y_d, feat_reg_mats_d)
+            print_str = string(print_str, "\tLoss: $loss")
+        end
+        println(print_str)
+
+    end # while
+
+    # Move model X and Y back to CPU
+    model.X = Array{Float32}(X_d)
+    model.Y = Array{Float32}(Y_d)
 
 end
 
