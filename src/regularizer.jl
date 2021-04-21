@@ -30,7 +30,6 @@ function add_reg_grad!(grad_X, X, reg_mats)
     for i=1:length(reg_mats)
         grad_X[i,:] .+= (reg_mats[i]*X[i,:])
     end
-
     return nothing
 end
 

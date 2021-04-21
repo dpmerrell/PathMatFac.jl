@@ -84,11 +84,10 @@ using CUDA
 using CUDA.CUSPARSE
 
 function fit_cuda!(model::MatFacModel, A::AbstractMatrix;
-                   inst_reg_weight=1.0, feat_reg_weight=1.0,
-                   max_iter::Int=100, lr::Float64=0.001, 
-                   abs_tol::Float64=1e-6, rel_tol::Float64=1e-5,
-                   loss_iter::Int64=10)
-
+                   inst_reg_weight::Real=1.0, feat_reg_weight::Real=1.0,
+                   max_iter::Integer=100, lr::Real=0.001, 
+                   abs_tol::Real=1e-6, rel_tol::Real=1e-5,
+                   loss_iter::Integer=10)
 
     # Setup
     loss = Inf
@@ -98,6 +97,8 @@ function fit_cuda!(model::MatFacModel, A::AbstractMatrix;
     N = size(A,2)
     K = size(model.X, 1)
 
+    lr = Float32(lr)
+
     # Move data and model to the GPU.
     # Float16 is sufficiently precise.
     X_d = CuArray{Float32}(model.X)
@@ -106,8 +107,8 @@ function fit_cuda!(model::MatFacModel, A::AbstractMatrix;
     XY_d = CUDA.zeros(Float16, M,N)
    
     # Some bookkeeping for missing values.
-    obs_mask = map(!isnan, A_d)
-    missing_mask = (map(isnan, A_d) .* Float16(0.5))
+    obs_mask = (!isnan).(A_d)
+    missing_mask = (isnan.(A_d) .* Float16(0.5))
     # Convert NaNs in the data --> zeros so CuArray arithmetic works
     mask_func(x) = isnan(x) ? Float16(0.5) : Float16(x)
     map!(mask_func, A_d, A_d)
@@ -133,9 +134,9 @@ function fit_cuda!(model::MatFacModel, A::AbstractMatrix;
         XY_d .*= obs_mask
         XY_d .+= missing_mask 
         # TODO: loop over the different loss function types
-        compute_delta_logloss!(XY_d, A_d)
+        compute_logloss_delta!(XY_d, A_d)
         XY_d .*= feature_scales
-        grad_X .= (Y_d * transpose(XY_d))
+        grad_X .= (Y_d * transpose(XY_d)) ./ N
 
         add_reg_grad!(grad_X, X_d, inst_reg_mats_d) 
         grad_X .*= lr
@@ -147,9 +148,9 @@ function fit_cuda!(model::MatFacModel, A::AbstractMatrix;
         XY_d .*= obs_mask
         XY_d .+= missing_mask
         # TODO: loop over the different loss function types
-        compute_delta_logloss!(XY_d, A_d) 
+        compute_logloss_delta!(XY_d, A_d) 
         XY_d .*= feature_scales
-        grad_Y .= (X_d * XY_d)
+        grad_Y .= (X_d * XY_d) ./ M
 
         add_reg_grad!(grad_Y, Y_d, feat_reg_mats_d)
         grad_Y .*= lr
@@ -164,7 +165,7 @@ function fit_cuda!(model::MatFacModel, A::AbstractMatrix;
             XY_d .*= obs_mask
             
             # TODO: loop over loss function types
-            loss = compute_logloss(XY_d, A_d)
+            loss = compute_logloss!(XY_d, A_d)
             loss += compute_reg_loss(X_d, inst_reg_mats_d)
             loss += compute_reg_loss(Y_d, feat_reg_mats_d)
             print_str = string(print_str, "\tLoss: $loss")

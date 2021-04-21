@@ -54,11 +54,11 @@ function accum_grad_y!(g, ll::LogisticLoss, x, xy, a)
     return 
 end
 
-function compute_logloss(XY, A)
+function compute_logloss!(XY, A)
     XY .= exp.(-XY)
     XY .+= 1.0
     XY .= 1.0 ./XY
-    return -sum( A .* log.(XY) + (1.0 .- A).*log.(1.0 .- XY) )
+    return -sum( A .* log.(1e-5 .+ XY) + (1.0 .- A).*log.(1e-5 + 1.0 .- XY) )
 end
 
 function compute_logloss_delta!(XY, A)
