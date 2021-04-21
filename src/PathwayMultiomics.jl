@@ -2,8 +2,8 @@
 module PathwayMultiomics
 
 
-include("losses.jl")
 include("model.jl")
+include("losses.jl")
 include("regularizer.jl")
 include("graph_util.jl")
 include("fit.jl")

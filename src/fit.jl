@@ -80,22 +80,39 @@ function fit!(model::MatFacModel, A::AbstractMatrix;
 end
 
 
-using CUDA
-using CUDA.CUSPARSE
-
 function fit_cuda!(model::MatFacModel, A::AbstractMatrix;
                    inst_reg_weight::Real=1.0, feat_reg_weight::Real=1.0,
                    max_iter::Integer=100, lr::Real=0.001, 
                    abs_tol::Real=1e-6, rel_tol::Real=1e-5,
-                   loss_iter::Integer=10)
+                   loss_iter::Integer=10, 
+                   K_opt_X::Union{Nothing,Integer}=nothing, 
+                   K_opt_Y::Union{Nothing,Integer}=nothing)
 
     # Setup
-    loss = Inf
     iter = 0
 
     M = size(A,1)
     N = size(A,2)
     K = size(model.X, 1)
+
+    @assert size(model.X,1) == size(model.Y,1)
+
+    # Distinguish between (1) K, the hidden dimension;
+    #                     (2) the subsets 1:K_opt_X, 1:K_opt_Y of 1:K that is optimized;
+    #                     (3) the subset of optimized dims that are regularized.
+    # The regularized dim is determined by the lists of matrices
+    # provided during MatFacModel construction.
+    # K_opt_X, K_opt_Y have default value K.
+    if K_opt_X == nothing
+        K_opt_X = K
+    end
+    if K_opt_Y == nothing
+        K_opt_Y = K
+    end
+    print("X OPT DIM: ", K_opt_X)
+    print("Y OPT DIM: ", K_opt_Y)
+    @assert K_opt_X <= K
+    @assert K_opt_Y <= K
 
     lr = Float32(lr)
 
@@ -113,18 +130,22 @@ function fit_cuda!(model::MatFacModel, A::AbstractMatrix;
     mask_func(x) = isnan(x) ? Float16(0.5) : Float16(x)
     map!(mask_func, A_d, A_d)
 
-    # TODO: bookkeeping for the loss functions
-    #       * indices for each loss function type
-    #       * feature_scales for each column
-    feature_scales = CUDA.ones(Float16, (1, size(Y_d,2)))
+    # Scaling factors for the columns
+    scales = [loss.scale for loss in model.losses]
+    feature_scales = CuArray{Float32}(transpose(scales))
+    
+    # Bookkeeping for the loss functions
+    ql_idx = CuVector{Int64}(findall(typeof.(model.losses) .== QuadLoss))
+    ll_idx = CuVector{Int64}(findall(typeof.(model.losses) .== LogisticLoss))
+    pl_idx = CuVector{Int64}(findall(typeof.(model.losses) .== PoissonLoss))
 
     # Convert regularizers to CuSparse matrices
     inst_reg_mats_d = [CuSparseMatrixCSC{Float32}(mat .* inst_reg_weight) for mat in model.instance_reg_mats]
     feat_reg_mats_d = [CuSparseMatrixCSC{Float32}(mat .* feat_reg_weight) for mat in model.feature_reg_mats]
 
     # Arrays for holding gradients
-    grad_X = CUDA.zeros(Float32, size(X_d))
-    grad_Y = CUDA.zeros(Float32, size(Y_d))
+    grad_X = CUDA.zeros(Float32, (K_opt_X, size(X_d,2)))
+    grad_Y = CUDA.zeros(Float32, (K_opt_Y, size(Y_d,2)))
 
     while iter < max_iter 
 
@@ -133,39 +154,50 @@ function fit_cuda!(model::MatFacModel, A::AbstractMatrix;
         XY_d .= transpose(X_d)*Y_d
         XY_d .*= obs_mask
         XY_d .+= missing_mask 
-        # TODO: loop over the different loss function types
-        compute_logloss_delta!(XY_d, A_d)
+        CUDA.@sync compute_loss_delta!(XY_d, A_d, ql_idx, ll_idx, pl_idx)
+        println("LOSS DELTAS:")
+        println("\tfrac nonzero: ", sum(XY_d .!= 0.0)/M/N)
+        println("\taverage abs: ", sum(abs.(XY_d./N))/M)
+        readline()
         XY_d .*= feature_scales
-        grad_X .= (Y_d * transpose(XY_d)) ./ N
+        println("FEATURE-SCALED LOSS DELTAS:")
+        println("\tfrac nonzero: ", sum(XY_d .!= 0.0)/M/N)
+        println("\taverage abs: ", sum(abs.(XY_d./N))/M)
+        readline()
+        grad_X .= (Y_d[1:K_opt_X,:] * transpose(XY_d)) ./ N
+        println("GRADIENT_X:")
+        println("\tfrac nonzero: ", sum(grad_X .!= 0.0)/M/K)
+        println("\taverage abs: ", sum(abs.(XY_d./K))/M)
+        readline()
 
-        add_reg_grad!(grad_X, X_d, inst_reg_mats_d) 
+
+        CUDA.@sync add_reg_grad!(grad_X, X_d, inst_reg_mats_d) 
         grad_X .*= lr
-        X_d .-= grad_X
+        X_d[1:K_opt_X,:] .-= grad_X
 
         ############################
         # Update Y 
         XY_d .= transpose(X_d)*Y_d
         XY_d .*= obs_mask
         XY_d .+= missing_mask
-        # TODO: loop over the different loss function types
-        compute_logloss_delta!(XY_d, A_d) 
+        CUDA.@sync compute_loss_delta!(XY_d, A_d, ql_idx, ll_idx, pl_idx)
         XY_d .*= feature_scales
-        grad_Y .= (X_d * XY_d) ./ M
+        grad_Y .= (X_d[1:K_opt_Y,:] * XY_d) ./ M
 
-        add_reg_grad!(grad_Y, Y_d, feat_reg_mats_d)
+        CUDA.@sync add_reg_grad!(grad_Y, Y_d, feat_reg_mats_d)
         grad_Y .*= lr
-        Y_d .-= grad_Y
+        Y_d[1:K_opt_Y,:] .-= grad_Y
 
         iter += 1
         print_str = "Iteration: $iter"
 
+        ############################
         # Every so often, compute the loss
-        if iter % loss_iter == 0
+        if (iter % loss_iter == 0)
             XY_d .= transpose(X_d)*Y_d
             XY_d .*= obs_mask
             
-            # TODO: loop over loss function types
-            loss = compute_logloss!(XY_d, A_d)
+            loss = compute_loss!(XY_d, A_d, ql_idx, ll_idx, pl_idx)
             loss += compute_reg_loss(X_d, inst_reg_mats_d)
             loss += compute_reg_loss(Y_d, feat_reg_mats_d)
             print_str = string(print_str, "\tLoss: $loss")
@@ -177,7 +209,8 @@ function fit_cuda!(model::MatFacModel, A::AbstractMatrix;
     # Move model X and Y back to CPU
     model.X = Array{Float32}(X_d)
     model.Y = Array{Float32}(Y_d)
-
+   
+    return nothing
 end
 
 

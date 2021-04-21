@@ -18,7 +18,11 @@ function reg_grad(X, idx, reg_mats)
 end
 
 
-function compute_reg_loss(X, reg_mats)
+#####################################
+# CUDA functions
+
+function compute_reg_loss(X::CuArray{Float32,2}, 
+                          reg_mats::AbstractVector)
     s = 0.0
     for i=1:length(reg_mats)
         s += 0.5 * dot(X[i,:], reg_mats[i]*X[i,:])
@@ -26,12 +30,14 @@ function compute_reg_loss(X, reg_mats)
     return s
 end
 
-function add_reg_grad!(grad_X, X, reg_mats)
+
+function add_reg_grad!(grad_X::CuArray{Float32,2}, 
+                       X::CuArray{Float32,2}, 
+                       reg_mats::AbstractVector)
     for i=1:length(reg_mats)
         grad_X[i,:] .+= (reg_mats[i]*X[i,:])
     end
     return nothing
 end
-
 
 

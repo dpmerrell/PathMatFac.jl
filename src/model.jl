@@ -1,5 +1,5 @@
 
-using LinearAlgebra, SparseArrays
+using LinearAlgebra, SparseArrays, CUDA, CUDA.CUSPARSE
 
 export MatFacModel
 
@@ -18,17 +18,25 @@ end
 
 function MatFacModel(instance_reg_mats::AbstractVector, 
                      feature_reg_mats::AbstractVector,
-                     losses::AbstractVector)
+                     losses::AbstractVector;
+                     K::Union{Nothing,Integer}=nothing)
 
     M = size(instance_reg_mats[1],1)
     N = size(feature_reg_mats[1],1)
-    K = length(instance_reg_mats)
-    
-    X = 0.01 .* randn(K, M) ./ sqrt(K) 
+
+    if K == nothing
+        K = max(length(instance_reg_mats),
+                length(feature_reg_mats))
+    else
+        @assert K >= max(length(instance_reg_mats),
+                         length(feature_reg_mats))
+    end
+
+    X = 0.001 .* randn(K, M) ./ sqrt(K) 
     Y = 0.01 .* randn(K, N)
 
     return MatFacModel(X, Y, losses, instance_reg_mats,
-                                     feature_reg_mats
+                                     feature_reg_mats,
                       )
 end
 
