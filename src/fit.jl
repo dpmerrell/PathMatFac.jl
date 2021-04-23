@@ -109,8 +109,6 @@ function fit_cuda!(model::MatFacModel, A::AbstractMatrix;
     if K_opt_Y == nothing
         K_opt_Y = K
     end
-    print("X OPT DIM: ", K_opt_X)
-    print("Y OPT DIM: ", K_opt_Y)
     @assert K_opt_X <= K
     @assert K_opt_Y <= K
 
@@ -122,7 +120,13 @@ function fit_cuda!(model::MatFacModel, A::AbstractMatrix;
     Y_d = CuArray{Float32}(model.Y)
     A_d = CuArray{Float16}(A)
     XY_d = CUDA.zeros(Float16, M,N)
-   
+ 
+    # Some frequently-used views of the X and Y arrays 
+    X_d_opt_view = view(X_d, 1:K_opt_X, :)
+    X_d_grad_view = view(X_d, 1:K_opt_Y, :)
+    Y_d_opt_view = view(Y_d, 1:K_opt_Y, :)
+    Y_d_grad_view = view(Y_d, 1:K_opt_X, :)
+
     # Some bookkeeping for missing values.
     obs_mask = (!isnan).(A_d)
     missing_mask = (isnan.(A_d) .* Float16(0.5))
@@ -139,6 +143,13 @@ function fit_cuda!(model::MatFacModel, A::AbstractMatrix;
     ll_idx = CuVector{Int64}(findall(typeof.(model.losses) .== LogisticLoss))
     pl_idx = CuVector{Int64}(findall(typeof.(model.losses) .== PoissonLoss))
 
+    XY_ql_view = view(XY_d, :, ql_idx)
+    XY_ll_view = view(XY_d, :, ll_idx)
+    XY_pl_view = view(XY_d, :, pl_idx)
+    A_ql_view = view(A_d, :, ql_idx)
+    A_ll_view = view(A_d, :, ll_idx)
+    A_pl_view = view(A_d, :, pl_idx)
+
     # Convert regularizers to CuSparse matrices
     inst_reg_mats_d = [CuSparseMatrixCSC{Float32}(mat .* inst_reg_weight) for mat in model.instance_reg_mats]
     feat_reg_mats_d = [CuSparseMatrixCSC{Float32}(mat .* feat_reg_weight) for mat in model.feature_reg_mats]
@@ -154,39 +165,31 @@ function fit_cuda!(model::MatFacModel, A::AbstractMatrix;
         XY_d .= transpose(X_d)*Y_d
         XY_d .*= obs_mask
         XY_d .+= missing_mask 
-        CUDA.@sync compute_loss_delta!(XY_d, A_d, ql_idx, ll_idx, pl_idx)
-        println("LOSS DELTAS:")
-        println("\tfrac nonzero: ", sum(XY_d .!= 0.0)/M/N)
-        println("\taverage abs: ", sum(abs.(XY_d./N))/M)
-        readline()
+        compute_quadloss_delta!(XY_ql_view, A_ql_view)
+        compute_logloss_delta!(XY_ll_view, A_ll_view)
+        compute_poissonloss_delta!(XY_pl_view, A_pl_view)
+
         XY_d .*= feature_scales
-        println("FEATURE-SCALED LOSS DELTAS:")
-        println("\tfrac nonzero: ", sum(XY_d .!= 0.0)/M/N)
-        println("\taverage abs: ", sum(abs.(XY_d./N))/M)
-        readline()
-        grad_X .= (Y_d[1:K_opt_X,:] * transpose(XY_d)) ./ N
-        println("GRADIENT_X:")
-        println("\tfrac nonzero: ", sum(grad_X .!= 0.0)/M/K)
-        println("\taverage abs: ", sum(abs.(XY_d./K))/M)
-        readline()
+        grad_X .= (Y_d_grad_view * transpose(XY_d)) ./ N
 
-
-        CUDA.@sync add_reg_grad!(grad_X, X_d, inst_reg_mats_d) 
+        add_reg_grad!(grad_X, X_d, inst_reg_mats_d) 
         grad_X .*= lr
-        X_d[1:K_opt_X,:] .-= grad_X
+        X_d_opt_view .-= grad_X
 
         ############################
         # Update Y 
         XY_d .= transpose(X_d)*Y_d
         XY_d .*= obs_mask
         XY_d .+= missing_mask
-        CUDA.@sync compute_loss_delta!(XY_d, A_d, ql_idx, ll_idx, pl_idx)
+        compute_quadloss_delta!(XY_ql_view, A_ql_view)
+        compute_logloss_delta!(XY_ll_view, A_ll_view)
+        compute_poissonloss_delta!(XY_pl_view, A_pl_view)
         XY_d .*= feature_scales
-        grad_Y .= (X_d[1:K_opt_Y,:] * XY_d) ./ M
+        grad_Y .= (X_d_grad_view * XY_d) ./ M
 
-        CUDA.@sync add_reg_grad!(grad_Y, Y_d, feat_reg_mats_d)
+        add_reg_grad!(grad_Y, Y_d, feat_reg_mats_d)
         grad_Y .*= lr
-        Y_d[1:K_opt_Y,:] .-= grad_Y
+        Y_d_opt_view .-= grad_Y
 
         iter += 1
         print_str = "Iteration: $iter"
@@ -197,7 +200,9 @@ function fit_cuda!(model::MatFacModel, A::AbstractMatrix;
             XY_d .= transpose(X_d)*Y_d
             XY_d .*= obs_mask
             
-            loss = compute_loss!(XY_d, A_d, ql_idx, ll_idx, pl_idx)
+            loss = compute_quadloss!(XY_ql_view, A_ql_view)
+            loss += compute_logloss!(XY_ll_view, A_ll_view)
+            loss += compute_poissonloss!(XY_pl_view, A_pl_view)
             loss += compute_reg_loss(X_d, inst_reg_mats_d)
             loss += compute_reg_loss(Y_d, feat_reg_mats_d)
             print_str = string(print_str, "\tLoss: $loss")

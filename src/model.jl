@@ -32,7 +32,7 @@ function MatFacModel(instance_reg_mats::AbstractVector,
                          length(feature_reg_mats))
     end
 
-    X = 0.001 .* randn(K, M) ./ sqrt(K) 
+    X = 0.01 .* randn(K, M) ./ sqrt(K) 
     Y = 0.01 .* randn(K, N)
 
     return MatFacModel(X, Y, losses, instance_reg_mats,

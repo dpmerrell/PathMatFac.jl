@@ -26,15 +26,11 @@ end
 function compute_quadloss!(XY, A)
     return 0.5*sum( (XY - A).^2 )
 end
-precompile(compute_quadloss!, (CuArray{Float16,2},
-                               CuArray{Float16,2}))
 
 function compute_quadloss_delta!(XY, A)
     XY .-= A
     return nothing
 end
-precompile(compute_quadloss_delta!, (CuArray{Float16,2},
-                                     CuArray{Float16,2}))
 
 ###############################
 # Logistic loss (binary data)
@@ -64,8 +60,6 @@ function compute_logloss!(XY, A)
     XY .= 1.0 ./XY
     return -sum( A .* log.(1e-5 .+ XY) + (1.0 .- A).*log.(1e-5 + 1.0 .- XY) )
 end
-#precompile(compute_logloss!, (CuArray{Float16,2},
-#                              CuArray{Float16,2}))
 
 
 function compute_logloss_delta!(XY, A)
@@ -73,14 +67,8 @@ function compute_logloss_delta!(XY, A)
     XY .+= 1.0
     XY .= 1.0 ./ XY
     XY .-= A
-    println("FINISHED COMPUTING LOGLOSS DELTA:")
-    println("\tfrac nonzero: ", sum(XY .!= 0.0)/M/N)
-    println("\taverage abs: ", sum(abs.(XY./N))/M)
-    readline()
     return nothing 
 end
-#precompile(compute_logloss_delta!, (CuArray{Float16,2},
-#                                    CuArray{Float16,2}))
 
 ###############################
 # Poisson loss (count data)
@@ -102,11 +90,9 @@ function grad_y(pl::PoissonLoss, x, y, a)
     return pl.scale * ( a - exp(dot(x,y)) ) .* x
 end
 
-function compute_poissonloss!(XY::CuArray, A::CuArray)
+function compute_poissonloss!(XY, A)
     return sum(XY.*A - exp.(XY))
 end
-precompile(compute_poissonloss!, (CuArray{Float16,2},
-                                  CuArray{Float16,2}))
 
 function compute_poissonloss_delta!(XY, A)
     XY .= exp.(XY)
@@ -114,47 +100,6 @@ function compute_poissonloss_delta!(XY, A)
     XY .+= A
     return nothing
 end
-precompile(compute_poissonloss_delta!, (CuArray{Float16,2},
-                                        CuArray{Float16,2}))
 
-#########################################
-# Other functions
-function compute_loss!(XY, A, ql_idx, ll_idx, pl_idx)
-    loss = 0.0
-    if length(ql_idx) > 0
-        loss += compute_quadloss!(XY[:,ql_idx], A[:,ql_idx])
-    end
-    if length(ll_idx) > 0
-        loss += compute_logloss!(XY[:,ll_idx], A[:,ll_idx])
-    end
-    if length(pl_idx) > 0
-        loss += compute_poissonloss!(XY[:,pl_idx], A[:,pl_idx])
-    end
-    return loss
-end
-precompile(compute_loss!, (CuArray{Float16,2}, CuArray{Float16,2},
-                           CuVector{Int64}, CuVector{Int64},
-                           CuVector{Int64}))
-
-
-function compute_loss_delta!(XY, A, ql_idx, ll_idx, pl_idx)
-    println("XY:")
-    println("\tfrac nonzero: ", sum(XY .!= 0.0)/M/N)
-    println("\taverage abs: ", sum(abs.(XY./N))/M)
-    readline()
-    if length(ql_idx) > 0
-        compute_quadloss_delta!(XY[:,ql_idx], A[:,ql_idx])
-    end
-    if length(ll_idx) > 0
-        compute_logloss_delta!(XY[:,ll_idx], A[:,ll_idx])
-    end
-    if length(pl_idx) > 0
-        compute_poissonloss_delta!(XY[:,pl_idx], A[:,pl_idx])
-    end
-    return nothing
-end
-precompile(compute_loss_delta!, (CuArray{Float16,2}, CuArray{Float16,2},
-                                 CuVector{Int64}, CuVector{Int64},
-                                 CuVector{Int64}))
 
 
