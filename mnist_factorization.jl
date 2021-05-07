@@ -134,11 +134,14 @@ instance_spmat = graph_to_spmat(instance_graph);
 
 println("BUILT PIXEL AND INSTANCE MATRICES")
 
+# Have an unregularized "offset" factor
 k = 10 
 instance_spmat_vec = [copy(instance_spmat) for i=1:k]
-feature_spmat_vec = [copy(pixel_spmat) for i=1:k]
+feature_spmat_vec = [copy(pixel_spmat) for i=1:k-1]
 losses = [LogisticLoss(1.0) for i=1:28*28]
-model = MatFacModel(instance_spmat_vec, feature_spmat_vec, losses);
+model = MatFacModel(instance_spmat_vec, feature_spmat_vec, losses; K=k);
+model.X[k,:] .= 1.0
+
 
 println("INITIALIZED MODEL")
 
@@ -146,8 +149,8 @@ BLAS.set_num_threads(1)
 
 println("ABOUT TO FIT")
 #fit!(model, aug_pixel_vals; inst_reg_weight=1.0, feat_reg_weight=1.0, max_iter=50, lr=0.005)
-#fit_cuda!(model, aug_pixel_vals; inst_reg_weight=0.01, feat_reg_weight=0.0125, max_iter=1000, lr=2.0)
-fit_cuda!(model, aug_pixel_vals; inst_reg_weight=0.0, feat_reg_weight=0.0, max_iter=2500, lr=2.0)
+#fit_cuda!(model, aug_pixel_vals; inst_reg_weight=0.1, feat_reg_weight=0.1, max_iter=1000, lr=0.1, K_opt_X=(k-1), K_opt_Y=k)
+fit_cuda!(model, aug_pixel_vals; inst_reg_weight=0.1, feat_reg_weight=0.1, max_iter=2000, loss_iter=1, lr=0.5, momentum=0.8, K_opt_X=(k-1), K_opt_Y=k, rel_tol=1e-9)
 
 labels = convert(Vector{Int64}, labels)
 colors = collect(keys(PyPlot.colorsm.TABLEAU_COLORS))

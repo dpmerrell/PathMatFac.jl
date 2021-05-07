@@ -102,4 +102,35 @@ function compute_poissonloss_delta!(XY, A)
 end
 
 
+##################################
+# Other functions
+##################################
+function compute_loss!(X, Y, XY_ql, XY_ll, XY_pl, A, X_reg_mats, Y_reg_mats)
+    loss = compute_quadloss!(XY_ql, A)
+    loss += compute_logloss!(XY_ll, A)
+    loss += compute_poissonloss!(XY_pl, A)
+    loss += compute_reg_loss(X, X_reg_mats)
+    loss += compute_reg_loss(Y, Y_reg_mats)
+    return loss
+end
+
+
+function compute_grad_delta!(X, Y, XY, XY_ql, XY_ll, XY_pl, A)
+    compute_quadloss_delta!(XY_ql_view, A_ql_view)
+    compute_logloss_delta!(XY_ll_view, A_ll_view)
+    compute_poissonloss_delta!(XY_pl_view, A_pl_view)
+    
+end
+
+
+function compute_grad_X(X, Y, XY, XY_ql, XY_ll, XY_pl, A, feature_scales)
+
+    compute_grad_delta!(X,Y, XY, XY_ql, XY_ll, XY_pl, A)
+
+    XY_d .*= feature_scales
+    grad_X .= (Y_d_grad_view * transpose(XY_d)) ./ N
+
+    add_reg_grad!(grad_X, X_d, inst_reg_mats_d) 
+end
+
 
