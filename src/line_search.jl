@@ -1,7 +1,8 @@
 
 
-function grad_descent_line_search!(x_view, grad_x_view, f, grad_f; alpha=1e-3, c1=1e-5, c2=0.9, 
-                                                                   grow=1.5, shrink=0.5, max_iter=10)
+function grad_descent_line_search!(x_view, grad_x_view, f, grad_f; 
+                                   alpha=1e-3, c1=1e-5, c2=0.9, 
+                                   grow=1.5, shrink=0.5, max_iter=10)
 
     cur_val = f(x_view)
     cur_grad = grad_f(x_view)

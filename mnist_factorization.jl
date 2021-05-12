@@ -3,21 +3,50 @@ using CSV
 using DataFrames
 using SparseArrays
 using Statistics
+import StatsBase: sample
 using LinearAlgebra
 using PathwayMultiomics
 #using Profile
 #using ProfileView
 
+showln(x) = (show(x); println())
 
+################################
+# LOAD DATA
 data = CSV.read("mnist_matrix.tsv", DataFrame; header=false, delim="\t");
 data = convert(Matrix, data);
-pixel_vals = data[:,1:end-1];
-labels = data[:,end];
-classes = sort(unique(labels));
+full_X = data[:,1:end-1];
+full_labels = data[:,end];
+classes = sort(unique(full_labels));
 
+
+################################
+# TRAIN/TEST SPLIT
+M = size(data,1)
+
+train_idx = sort(sample(1:M, Int(0.9*M), replace=false))
+train_idx_set = Set(train_idx)
+test_idx = Int[i for i=1:M if !in(i, train_idx_set)]
+
+train_X = full_X[train_idx,:]
+train_labels = full_labels[train_idx]
+showln("TRAIN SET: ") 
+showln(size(train_X))
+
+test_X = full_X[test_idx,:]
+test_labels = full_labels[test_idx]
+showln("TEST SET: ")
+showln(size(test_X))
+
+full_X = vcat(train_X, test_X)
+full_labels = vcat(train_labels, test_labels)
+showln("FULL DATA: ")
+showln(size(full_X))
+
+################################
+# SOME USEFUL FUNCTIONS
 unflatten_mnist(vec) = transpose(reshape(vec, (28,28)))
 
-#matshow(unflatten_mnist(pixel_vals[110,:]))
 
 function coord_to_idx(x, y, H)
     return (x-1)*H + y
@@ -27,6 +56,9 @@ function idx_to_pixel_coord(idx, H)
     return (div((idx-1),H), ((idx-1) % H))
 end
 
+
+################################
+# BUILD THE PIXEL GRAPH
 function build_pixel_graph(H, W)
     pixel_graph = [Int64[] for idx=1:(H*W)]
     
@@ -66,15 +98,20 @@ function plot_graph(g, idx_to_coord_func)
 end
 
 pixel_graph = build_pixel_graph(28,28);
+
 mnist_idx_to_coord_func(idx) = idx_to_pixel_coord(idx,28)
 
+
+####################################
+# BUILD THE TRAIN INSTANCE GRAPH
 function build_instance_graph(labels)
     
     classes = sort(unique(labels))
     class_to_idx = Dict(cls => length(labels)+i for (i, cls) in enumerate(classes))
     n_classes = length(classes)
+    n_bk = n_classes + 1
                                       # Leaf nodes;  # class nodes;  # root node
-    instance_graph = [Int64[] for i=1:(length(labels) + n_classes)] # + 1) ];
+    instance_graph = [Int64[] for i=1:(length(labels) + n_bk) ];
 
     for (leaf_idx, label) in enumerate(labels)
         cls_idx = class_to_idx[label]
@@ -82,21 +119,26 @@ function build_instance_graph(labels)
         push!(instance_graph[cls_idx], leaf_idx)
     end
     
-    #root_idx = length(instance_graph)
-    #for cls in classes
-    #    cls_idx = class_to_idx[cls]
-    #    push!(instance_graph[cls_idx], root_idx)
-    #    push!(instance_graph[root_idx], cls_idx)
-    #end
+    root_idx = length(instance_graph)
+    for cls in classes
+        cls_idx = class_to_idx[cls]
+        push!(instance_graph[cls_idx], root_idx)
+        push!(instance_graph[root_idx], cls_idx)
+    end
     
     return instance_graph
 end
 
-instance_graph = build_instance_graph(labels);
 
-println("BUILT PIXEL AND INSTANCE GRAPHS")
+####################################
+# BUILD THE TRAIN INSTANCE MATRIX
+train_instance_graph = build_instance_graph(train_labels);
+aug_X = vcat( train_X, fill(NaN, length(classes)+1, 28*28) );
 
-aug_pixel_vals = [pixel_vals; zeros(length(classes), 28*28)];
+showln("AUGMENTED X: ") 
+showln(size(aug_X))
+
+showln("BUILT PIXEL AND INSTANCE GRAPHS")
 
 function graph_to_spmat(graph; epsilon=0.001)
    
@@ -130,59 +172,113 @@ function graph_to_spmat(graph; epsilon=0.001)
 end
 
 pixel_spmat = graph_to_spmat(pixel_graph);
-instance_spmat = graph_to_spmat(instance_graph);
+train_inst_spmat = graph_to_spmat(train_instance_graph);
 
-println("BUILT PIXEL AND INSTANCE MATRICES")
 
-# Have an unregularized "offset" factor
+####################################
+# BUILD THE TEST SET INSTANCE MATRIX
+function build_test_graph(train_graph, train_labels, test_labels)
+
+    M_train = length(train_labels)
+    M_train_aug = length(train_graph)
+    M_test = length(test_labels)
+    M_full = M_train_aug + M_test
+
+    classes = sort(unique(train_labels))
+    n_classes = length(classes)
+    n_bk = n_classes + 1
+    @assert n_bk == M_train_aug - M_train 
+
+    label_to_idx = Dict(l => (M_train + i) for (i,l) in enumerate(classes))
+
+    test_graph = copy(train_graph)
+
+    for i=1:M_test
+        test_idx = M_train_aug + i
+        parent_idx = label_to_idx[test_labels[i]]
+
+        push!(test_graph, [parent_idx])
+        push!(test_graph[parent_idx], test_idx)
+    end
+
+    return test_graph
+end
+
+test_instance_graph = build_test_graph(train_instance_graph, train_labels, test_labels)
+test_spmat = graph_to_spmat(test_instance_graph)
+println("TEST SPARSE MATRIX:")
+showln(test_spmat)
+
+showln("BUILT PIXEL AND INSTANCE MATRICES")
+
+
+############################################
+# CONSTRUCT THE MODEL
 k = 10 
-instance_spmat_vec = [copy(instance_spmat) for i=1:k]
+
 feature_spmat_vec = [copy(pixel_spmat) for i=1:k-1]
+train_instance_spmat_vec = [copy(train_inst_spmat) for i=1:k]
+test_instance_spmat_vec = [copy(test_spmat) for i=1:k]
+
 losses = [LogisticLoss(1.0) for i=1:28*28]
-model = MatFacModel(instance_spmat_vec, feature_spmat_vec, losses; K=k);
+model = MatFacModel(train_instance_spmat_vec, feature_spmat_vec, losses; K=k);
+# Have an unregularized "offset" factor
 model.X[k,:] .= 1.0
 
+showln("INITIALIZED MODEL")
 
-println("INITIALIZED MODEL")
 
-BLAS.set_num_threads(1)
+############################################
+# TRAIN MODEL
+showln("ABOUT TO FIT")
+fit_abstracted!(model, aug_X; inst_reg_weight=0.1, feat_reg_weight=0.1, max_iter=1000, loss_iter=1, lr=0.5, momentum=0.8, K_opt_X=(k-1), K_opt_Y=k, rel_tol=1e-9)
 
-println("ABOUT TO FIT")
-#fit!(model, aug_pixel_vals; inst_reg_weight=1.0, feat_reg_weight=1.0, max_iter=50, lr=0.005)
-#fit_cuda!(model, aug_pixel_vals; inst_reg_weight=0.1, feat_reg_weight=0.1, max_iter=1000, lr=0.1, K_opt_X=(k-1), K_opt_Y=k)
-fit_cuda!(model, aug_pixel_vals; inst_reg_weight=0.1, feat_reg_weight=0.1, max_iter=2000, loss_iter=1, lr=0.5, momentum=0.8, K_opt_X=(k-1), K_opt_Y=k, rel_tol=1e-9)
-
-labels = convert(Vector{Int64}, labels)
+train_labels = convert(Vector{Int64}, train_labels)
+test_labels = convert(Vector{Int64}, test_labels)
 colors = collect(keys(PyPlot.colorsm.TABLEAU_COLORS))
 
-function embedding_scatter(X)
-    F = LinearAlgebra.svd(X)
+function embedding_scatter(X, labels; F=nothing)
+    projected = nothing
+    if F == nothing
+        F = LinearAlgebra.svd(X)
+        projected = F.Vt
+    else
+        projected = diagm(1.0./F.S) * (transpose(F.U)* X)
+    end
     M = length(labels)
     for lab in sort(unique(labels))
         lab_idx = findall(labels .== lab) 
-        scatter3D(F.Vt[1, lab_idx], F.Vt[2,lab_idx], F.Vt[3,lab_idx], color=colors[lab+1], label=string(lab))
-        #scatter(F.Vt[1, lab_idx], F.Vt[2,lab_idx], color=colors[lab+1], label=string(lab))
+        scatter3D(projected[1, lab_idx], projected[2,lab_idx], projected[3,lab_idx], color=colors[lab+1], label=string(lab))
     end
     legend()
+
+    return F
 end
 
-embedding_scatter(model.X)
+embedding_F = embedding_scatter(model.X[1:(end-1),:], train_labels)
 savefig("embedding_scatter.png", dpi=200)
-#clf()
-
-#logistic(x) = 1.0 ./ (1.0 .+ exp.(-x))
 
 for i=1:k
     matshow(unflatten_mnist(model.Y[i,:]))
     colorbar()
     savefig(string("embedding_basis_",i,".png"), dpi=200)
-    #clf()
 end
 
-#Threads.nthreads()
 
-#for i=1:20
-#    matshow(unflatten_mnist(transpose(model.Y) * model.X[:,109+i]))
-#end
+#####################################
+# TRANSFORM THE HELDOUT DATA
 
+new_factor = 0.001*randn(k, length(test_labels))
+new_factor[k,:] .= 1.0
+
+showln("NEW FACTOR:")
+showln(size(new_factor))
+
+transformed = PathwayMultiomics.transform(model, test_X; inst_reg_weight=0.0, max_iter=1000, loss_iter=1, lr=0.1, momentum=0.8, K_opt_X=(k-1), rel_tol=1e-9, X_new=new_factor) #, new_inst_reg_mats=test_instance_spmat_vec)
+
+println("TRANSFORMED:")
+println(size(transformed))
+
+embedding_scatter(transformed[1:(end-1),:], test_labels; F=embedding_F)
+savefig("transformed_scatter.png", dpi=200)
 

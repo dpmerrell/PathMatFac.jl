@@ -91,7 +91,7 @@ function grad_y(pl::PoissonLoss, x, y, a)
 end
 
 function compute_poissonloss!(XY, A)
-    return sum(XY.*A - exp.(XY))
+    return sum(1.0.*XY.*A - exp.(1.0.*XY))
 end
 
 function compute_poissonloss_delta!(XY, A)
@@ -105,32 +105,55 @@ end
 ##################################
 # Other functions
 ##################################
-function compute_loss!(X, Y, XY_ql, XY_ll, XY_pl, A, X_reg_mats, Y_reg_mats)
-    loss = compute_quadloss!(XY_ql, A)
-    loss += compute_logloss!(XY_ll, A)
-    loss += compute_poissonloss!(XY_pl, A)
+function compute_loss!(X, Y, XY_ql, XY_ll, XY_pl, 
+                             A_ql, A_ll, A_pl, 
+                             X_reg_mats, Y_reg_mats)
+    loss = compute_quadloss!(XY_ql, A_ql)
+    loss += compute_logloss!(XY_ll, A_ll)
+    loss += compute_poissonloss!(XY_pl, A_pl)
     loss += compute_reg_loss(X, X_reg_mats)
     loss += compute_reg_loss(Y, Y_reg_mats)
     return loss
 end
 
 
-function compute_grad_delta!(X, Y, XY, XY_ql, XY_ll, XY_pl, A)
-    compute_quadloss_delta!(XY_ql_view, A_ql_view)
-    compute_logloss_delta!(XY_ll_view, A_ll_view)
-    compute_poissonloss_delta!(XY_pl_view, A_pl_view)
-    
+function compute_grad_delta!(XY_ql, XY_ll, XY_pl, 
+                             A_ql, A_ll, A_pl)
+    compute_quadloss_delta!(XY_ql, A_ql)
+    compute_logloss_delta!(XY_ll, A_ll)
+    compute_poissonloss_delta!(XY_pl, A_pl)
 end
 
 
-function compute_grad_X(X, Y, XY, XY_ql, XY_ll, XY_pl, A, feature_scales)
+function compute_grad_X!(grad_X, X, Y, XY, 
+                         XY_ql, XY_ll, XY_pl, 
+                         A_ql, A_ll, A_pl, 
+                         feature_scales, inst_reg_mats)
 
-    compute_grad_delta!(X,Y, XY, XY_ql, XY_ll, XY_pl, A)
+    compute_grad_delta!(XY_ql, XY_ll, XY_pl, 
+                        A_ql, A_ll, A_pl)
 
-    XY_d .*= feature_scales
-    grad_X .= (Y_d_grad_view * transpose(XY_d)) ./ N
+    XY .*= feature_scales
+    N = size(XY,2)
+    grad_X .= (Y * transpose(XY)) ./ N
 
-    add_reg_grad!(grad_X, X_d, inst_reg_mats_d) 
+    add_reg_grad!(grad_X, X, inst_reg_mats) 
+end
+
+
+function compute_grad_Y!(grad_Y, X, Y, XY, 
+                         XY_ql, XY_ll, XY_pl, 
+                         A_ql, A_ll, A_pl, 
+                         feature_scales, feat_reg_mats)
+
+    compute_grad_delta!(XY_ql, XY_ll, XY_pl, 
+                        A_ql, A_ll, A_pl)
+
+    XY .*= feature_scales
+    M = size(XY,1)
+    grad_Y .= X * XY ./ M
+
+    add_reg_grad!(grad_Y, Y, feat_reg_mats) 
 end
 
 
