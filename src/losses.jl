@@ -58,7 +58,7 @@ function compute_logloss!(XY, A)
     XY .= exp.(-XY)
     XY .+= 1.0
     XY .= 1.0 ./XY
-    return -sum( A .* log.(1e-5 .+ XY) + (1.0 .- A).*log.(1e-5 + 1.0 .- XY) )
+    return -sum( A .* log.(1e-12 .+ XY) + (1.0 .- A).*log.(1e-12 + 1.0 .- XY) )
 end
 
 
