@@ -3,18 +3,19 @@ using CSV
 using DataFrames
 using SparseArrays
 
-export load_pathway_sifs, load_pathways, pathways_to_ugraphs, 
-       hierarchy_to_regularizers,
-       get_instance_hierarchy, feature_to_loss, 
-       DEFAULT_OMICS, DEFAULT_OMIC_MAP
+include("script_util.jl")
+include("old_graph_util.jl")
 
+#export load_pathway_sifs, load_pathways, pathways_to_ugraphs, 
+#       hierarchy_to_regularizers,
+#       get_instance_hierarchy, feature_to_loss, 
+#       DEFAULT_OMICS, DEFAULT_OMIC_MAP
 
-
-DEFAULT_OMICS = ["cna",
-                 "mutation",
-                 "methylation",
-                 "mrnaseq",
-                 "rppa"]
+#DEFAULT_OMICS = ["cna",
+#                 "mutation",
+#                 "methylation",
+#                 "mrnaseq",
+#                 "rppa"]
 
 DEFAULT_OMIC_DTYPES = Dict("cna" => Float64,
                            "mutation" => Bool,
@@ -30,26 +31,26 @@ DEFAULT_OMIC_MAP = Dict("cna" => ["dna", 1],
                              "rppa" => ["protein", 1]
                              )
 
-function value_to_idx(values)
-    return Dict(v => idx for (idx, v) in enumerate(values))
-end
-
-function keymatch(l_keys, r_keys)
-
-    rkey_to_idx = value_to_idx(r_keys) 
-
-    l_idx = []
-    r_idx = []
-
-    for (i, lk) in enumerate(l_keys)
-        if lk in keys(rkey_to_idx)
-            push!(l_idx, i)
-            push!(r_idx, rkey_to_idx[lk])
-        end
-    end
-
-    return l_idx, r_idx
-end
+#function value_to_idx(values)
+#    return Dict(v => idx for (idx, v) in enumerate(values))
+#end
+#
+#function keymatch(l_keys, r_keys)
+#
+#    rkey_to_idx = value_to_idx(r_keys) 
+#
+#    l_idx = []
+#    r_idx = []
+#
+#    for (i, lk) in enumerate(l_keys)
+#        if lk in keys(rkey_to_idx)
+#            push!(l_idx, i)
+#            push!(r_idx, rkey_to_idx[lk])
+#        end
+#    end
+#
+#    return l_idx, r_idx
+#end
 
 
 ###################################
