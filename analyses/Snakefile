@@ -11,6 +11,7 @@ TCGA_DIR = config["tcga_dir"]
 
 SCRIPT_DIR = "scripts"
 JULIA_SCRIPT_DIR = path.join(SCRIPT_DIR, "julia_scripts")
+R_DIR = path.join(SCRIPT_DIR, "R_scripts")
 NCI_PID_DIR = path.join("data","ncipid")
 NCI_PWY_IDS = sorted([ fname.split(path.sep)[-1].split(".")[0] for fname in glob(path.join(NCI_PID_DIR, "pid_*.tab"))])
 OMIC_TYPES = config["omic_types"]
@@ -34,27 +35,105 @@ SIM_SCORE_DIR = path.join(SIM_DIR, "scores")
 test_holdout_ctypes = "_".join(CANCER_TYPES[5:])
 test_holdout_pwys = "_".join(NCI_PWY_IDS[50:])
 
+PYNBS_PREP_DIR = path.join(TEMP_DIR, "pynbs_tsvs")
+PYNBS_NET_DIR = path.join(PYNBS_PREP_DIR, "networks")
+PYNBS_MUT_DIR = path.join(PYNBS_PREP_DIR, "mutations")
 
 rule all:
     input:
-        path.join(SIM_INFER_DIR,"dataset=tcga_ncipid",
-			        "split=keep:HNSC,BRCA",
-				"features=dropomic:",
-				"mask=droprand:0.05",
-                                "pwys=ncipid",
-                                "factors.hdf")
+#        path.join(SIM_SCORE_DIR,"dataset=tcga_ncipid",
+#                                "factor_model",
+#                                "split=keep:HNSC,BRCA",
+#                                "features=dropomic:",
+#                                "mask=droprand:0.05",
+#                                "pwys=ncipid",
+#                                "imputation.json"),
+#        path.join(SIM_INFER_DIR,"dataset=tcga_ncipid",
+#                                "factor_model",
+#                                "split=keep:HNSC,BRCA",
+#                                "features=dropomic:",
+#                                "mask=droprand:0.05",
+#                                "pwys=ncipid",
+#                                "factors.hdf"),
+#        path.join(SIM_INFER_DIR,"dataset=tcga_ncipid",
+#                                "plier",
+#				"split=keep:HNSC,BRCA",
+#                                "pwys=ncipid",
+#                                "result.rds"),
+#        "pynbs_help.txt"
+        net_tsv=path.join(PYNBS_NET_DIR, "ncipid.tsv"),
+	mut_tsv=path.join(PYNBS_MUT_DIR, "dataset=tcga_ncipid", "split=keep:HNSC,BRCA", "mask=droprand:0.05.tsv")
 
 
 rule sim_score_imputation:
     input:
         src=path.join(SCRIPT_DIR, "score_imputation.py"),
-        imp=path.join(SIM_INFER_DIR, "{path}", "{dataset,[_a-z]+}_{mask_frac,[.0-9]+}_imputed.json"),
+        imp=path.join(SIM_INFER_DIR,"dataset={dataset}",
+                                    "factor_model",
+                                    "split={split}",
+                                    "features={features}",
+                                    "mask={mask}",
+                                    "pwys={pwys}",
+                                    "imputed.json"),
         truth=path.join(SIM_DATA_DIR, "{dataset}.hdf"),
         mask=path.join(SIM_MASK_DIR, "dataset={dataset}", "mask={mask}.json")
     output:
-        path.join(SIM_SCORE_DIR, "impute", "{path}","{dataset,[_a-z]+}_{mask_frac,[.0-9]+}.json")
+        path.join(SIM_SCORE_DIR,"dataset={dataset}",
+                                "factor_model",
+                                "split={split}",
+                                "features={features}",
+                                "mask={mask}",
+                                "pwys={pwys}",
+                                "imputation.json")
     shell:
         "python {input.src} {input.imp} {input.truth} {input.mask} {output}"
+
+
+rule sim_run_pynbs:
+    input:
+        img="pynbs.simg"
+    output:
+        "pynbs_help.txt"
+    shell:
+        "./{input.img} --help > {output}"
+
+
+rule sim_pynbs_prep_network:
+    input:
+        src=path.join(SCRIPT_DIR,"pynbs_prep_pwy.py"),
+        pwys_json=path.join(PWY_JSON_DIR, "{pwys}.json")
+    output:
+        net_tsv=path.join(PYNBS_NET_DIR, "{pwys}.tsv")
+    shell:
+        "python {input.src} {input.pwys_json} {output.net_tsv}"
+
+
+rule sim_pynbs_prep_mut:
+    input:
+        src=path.join(SCRIPT_DIR,"pynbs_prep_mut.py"),
+        omic_hdf=path.join(SIM_DATA_DIR,"{dataset}.hdf"),
+        split_json=path.join(SIM_SPLIT_DIR,"dataset={dataset}","split={split}.json"),
+        mask_json=path.join(SIM_MASK_DIR, "dataset={dataset}", "mask={mask}.json"),
+    output:
+        mut_tsv=path.join(PYNBS_MUT_DIR, "dataset={dataset}", "split={split}", "mask={mask}.tsv")
+    shell:
+        "python {input.src} {input.omic_hdf} {input.split_json} {input.mask_json} {output.mut_tsv}"
+
+
+rule sim_run_plier:
+    input:
+        src=path.join(R_DIR, "plier_wrapper.R"),
+        dataset_hdf=path.join(SIM_DATA_DIR, "{dataset}.hdf"),
+        split_json=path.join(SIM_SPLIT_DIR, "dataset={dataset}","split={split}.json"),
+        pwys_json=path.join(PWY_JSON_DIR, "{pwys}.json")
+    output:
+        rds=path.join(SIM_INFER_DIR,"dataset={dataset}",
+                                    "plier",
+                                    "split={split}",
+                                    "pwys={pwys}",
+                                    "result.rds"),
+    shell:
+        "Rscript {input.src} {input.dataset_hdf} {input.split_json} {input.pwys_json} {output.rds}"
 
 
 rule sim_run_factorize:
@@ -67,12 +146,14 @@ rule sim_run_factorize:
         pwys_json=path.join(PWY_JSON_DIR, "{pwys}.json")
     output:
         factors=path.join(SIM_INFER_DIR,"dataset={dataset}",
+                                        "factor_model",
                                         "split={split}",
                                         "features={features}",
                                         "mask={mask}",
                                         "pwys={pwys}",
                                         "factors.hdf"),
         imputed=path.join(SIM_INFER_DIR,"dataset={dataset}",
+                                        "factor_model",
                                         "split={split}",
                                         "features={features}",
                                         "mask={mask}",
@@ -121,6 +202,14 @@ rule simulate_full_data:
         path.join(SIM_DATA_DIR, "tcga_{pwys}.hdf")
     shell:
         "julia --project=.. {input.src} {input.pwy_json} {input.pat_tree} {output}"
+
+
+rule get_pynbs:
+    output:
+        "pynbs.simg"
+    shell:
+        "singularity pull --name {output} shub://dpmerrell/pynbs-singularity:latest"
+    
 
 
 def get_sifs(wc):

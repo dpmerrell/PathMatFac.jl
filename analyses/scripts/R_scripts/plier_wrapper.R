@@ -31,11 +31,30 @@ get_prot_idx <- function(genes, proteins){
 }
 
 
-get_mrnaseq_data <- function(hdf_file, proteins){
+#get_train_idx <- function(data_patients, train_patients){
+#
+#    pat_to_idx <- list()
+#    for(i in 1:length(data_patients)){
+#        pat_to_idx[[data_patients[i]]] <- i
+#    }
+#    
+#    train_idx <- list()
+#    for(i in 1:length(train_patients)){
+#        train_idx[i] <- pat_to_idx[[train_patients[i]]]
+#    }
+#
+#    return(train_idx)
+#}
+
+
+get_mrnaseq_data <- function(hdf_file, train_idx, proteins){
 
     feature_names <- h5read(hdf_file, "features")
     data_genes <- lapply(strsplit(feature_names, "_"), get_gene)
     instance_names <- h5read(hdf_file, "instances")
+    train_instances <- instance_names[train_idx]
+
+    #train_idx <- get_train_idx(instance_names, train_patients)
 
     mrnaseq_idx <- get_mrnaseq_idx(feature_names)
     mrnaseq_feat <- data_genes[mrnaseq_idx]
@@ -54,14 +73,16 @@ get_mrnaseq_data <- function(hdf_file, proteins){
     print(ncol(dataset))
 
     #print("GOT A LITTLE FARTHER")
-    mrnaseq_data <- dataset[prot_mrnaseq_idx,]
+    mrnaseq_data <- dataset[prot_mrnaseq_idx, train_idx]
+    print(nrow(mrnaseq_data))
+    print(ncol(mrnaseq_data))
 
     #print("GOT A LITTLE FARTHER")
     mrnaseq_df <- as.data.frame(mrnaseq_data, row.names=prot_mrnaseq_feat)
     #print("BUILT THE DF")
-    colnames(mrnaseq_df) <- instance_names
+    colnames(mrnaseq_df) <- train_instances
     #print("ADDED COLUMN NAMES")
-    return(mrnaseq_df[,1:100])
+    return(mrnaseq_df)
 
 }
 
@@ -140,16 +161,17 @@ main <- function(){
     #             make_option("--act_l", type="numeric", default=0.2)
     #             )
 
-    parser <- OptionParser(usage="plier_wrapper.R OMIC_HDF PWY_JSON OUTPUT_FILE") # [options]", option_list=option_list)
+    parser <- OptionParser(usage="plier_wrapper.R OMIC_HDF SPLIT_JSON PWY_JSON OUTPUT_FILE") # [options]", option_list=option_list)
 
     # Parse the arguments
-    arguments <- parse_args(parser, positional_arguments=3)
+    arguments <- parse_args(parser, positional_arguments=4)
     opt <- arguments$options
     args <- arguments$args
 
     omic_hdf <- args[1]
-    pwy_json <- args[2]
-    out_file <- args[3]
+    split_json <- args[2]
+    pwy_json <- args[3]
+    out_file <- args[4]
     print(omic_hdf)
     print(pwy_json)
 
@@ -161,13 +183,17 @@ main <- function(){
     # a dataframe of genesets
     genesets <- pwys_to_genesets(pwys, pwy_names)
     print("GENE SETS (ROWS, COLS)")
-    print(genesets)
     print(nrow(genesets)) 
     print(ncol(genesets))
+
+    # Load the training split
+    split_info = read_json(split_json, simplifyVector=TRUE)# auto_unbox=TRUE)
+    train_idx = split_info[["train"]]
+    print(train_idx)
  
     # Get all of the RNA seq data
     # corresponding to those proteins
-    mrnaseq_df <- get_mrnaseq_data(omic_hdf, row.names(genesets))
+    mrnaseq_df <- get_mrnaseq_data(omic_hdf, train_idx, row.names(genesets))
     #print("MRNASEQ_DF (ROWS, COLS)")
     #print(row.names(mrnaseq_df))
     #print(nrow(mrnaseq_df))
