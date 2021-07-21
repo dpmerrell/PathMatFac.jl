@@ -3,7 +3,14 @@ using PathwayMultiomics
 using HDF5
 using JSON
 
-tcga_omic_types = DEFAULT_OMICS 
+
+DEFAULT_OMICS = ["cna",
+                 "mutation",
+                 "methylation",
+                 "mrnaseq",
+                 "rppa"]
+
+tcga_omic_types = DEFAULT_OMICS
 
 log_transformed_data_types = [] #"methylation"]
 standardized_data_types = ["methylation", "cna", "mrnaseq", "rppa"]

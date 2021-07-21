@@ -141,7 +141,7 @@ rule sim_run_factorize:
         src=path.join(JULIA_SCRIPT_DIR, "train_pwy_factors.jl"),
         dataset_hdf=path.join(SIM_DATA_DIR, "{dataset}.hdf"),
         split_json=path.join(SIM_SPLIT_DIR, "dataset={dataset}", "split={split}.json"),
-	features_json=path.join(SIM_USED_FEATURE_DIR, "dataset={dataset}", "features={features}.json"),
+        features_json=path.join(SIM_USED_FEATURE_DIR, "dataset={dataset}", "features={features}.json"),
         mask_json=path.join(SIM_MASK_DIR, "dataset={dataset}", "mask={mask}.json"),
         pwys_json=path.join(PWY_JSON_DIR, "{pwys}.json")
     output:
@@ -160,7 +160,7 @@ rule sim_run_factorize:
                                         "pwys={pwys}",
                                         "imputed.json")
     shell:
-        "julia --project=.. {input.src} {input.dataset_hdf} {input.split_json} {input.features_json} {input.mask_json} {input.pwys_json} {output.factors} {output.imputed}"
+        "julia --project=.. {input.src} {input.dataset_hdf} {input.split_json} {input.features_json} {input.mask_json} {input.pwys_json} {output.factors}" # {output.imputed}"
 
 
 rule sim_train_test_split:
@@ -197,7 +197,7 @@ rule simulate_full_data:
     input:
         src=path.join(JULIA_SCRIPT_DIR, "simulate_data.jl"),
         pwy_json=path.join(PWY_JSON_DIR,"{pwys}.json"),
-	pat_tree=path.join(TCGA_DIR, "tcga_patient_hierarchy.json")
+        pat_tree=path.join(TCGA_DIR, "tcga_patient_hierarchy.json")
     output:
         path.join(SIM_DATA_DIR, "tcga_{pwys}.hdf")
     shell:
@@ -224,7 +224,7 @@ def get_sifs(wc):
 rule ncipid_sifs_to_json:
     input:
         src=path.join(SCRIPT_DIR, "sifs_to_json.py"),
-	#sifs=get_sifs
+    #sifs=get_sifs
         sifs=expand(path.join(PID_SIF_DIR, "{pwy}.sif"), pwy=NCI_PWY_IDS)
     output:
         json=path.join(PWY_JSON_DIR, "ncipid.json")
