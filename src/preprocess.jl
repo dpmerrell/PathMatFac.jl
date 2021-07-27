@@ -338,9 +338,11 @@ function get_all_proteins(pathways)
     proteins = Set{String}()
     for edge_list in pathways
         for edge in edge_list
-            tok = split(edge[1],"_")
-            if tok[2] == "protein"
-                push!(proteins, tok[1])
+            for node in edge[1:2]
+                tok = split(node,"_")
+                if tok[2] == "protein"
+                    push!(proteins, tok[1])
+                end
             end
         end
     end
@@ -349,9 +351,29 @@ function get_all_proteins(pathways)
 end
 
 
+function get_all_nodes(edge_list)
+    nodes = Set{String}()
+    for edge in edge_list
+        push!(nodes, edge[1])
+        push!(nodes, edge[2])
+    end
+    return nodes
+end
+
+
+function get_all_nodes_many(edge_lists)
+    nodes = Set{String}()
+    for edge_list in edge_lists
+        union!(nodes, get_all_nodes(edge_list))
+    end
+    return nodes
+end
+
+
 function get_omic_types(feature_names)
     return collect(Set([split(feat, "_")[end] for feat in feature_names]))
 end
+
 
 ################################################################
 # Mapping features to pathways

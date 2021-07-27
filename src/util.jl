@@ -1,22 +1,19 @@
 
+using GPUMatFac
+
 export DEFAULT_OMICS, sort_features
 
 
-DEFAULT_OMIC_DTYPES = Dict("cna" => Float64,
-                           "mutation" => Bool,
-                           "methylation" => Float64,
-                           "mrnaseq" => Float64, 
-                           "rppa" => Float64
+DEFAULT_OMIC_LOSSES = Dict("cna" => LogisticLoss,
+                           "mutation" => LogisticLoss,
+                           "methylation" => QuadLoss,
+                           "mrnaseq" => PoissonLoss, 
+                           "rppa" => QuadLoss
                           )
-DEFAULT_OMICS = collect(keys(DEFAULT_OMIC_DTYPES))
+
+DEFAULT_OMICS = collect(keys(DEFAULT_OMIC_LOSSES))
 DEFAULT_OMIC_SET = Set(DEFAULT_OMICS)
 
-DEFAULT_OMIC_LOSSES = Dict("cna" => "logistic",
-                           "mutation" => "logistic",
-                           "methylation" => "quadratic",
-                           "mrnaseq" => "poisson", 
-                           "rppa" => "quadratic"
-                          )
 
 DEFAULT_OMIC_MAP = Dict("cna" => ["dna", 1],
                         "mutation" => ["dna", -1],
@@ -63,7 +60,7 @@ end
 function get_loss(feature_name; omic_losses=DEFAULT_OMIC_LOSSES)
     omic_type = get_omic_type(feature_name)
     if omic_type in keys(omic_losses)
-        return omic_losses[omic_type], omic_type, feature_name
+        return string(omic_losses[omic_type]), omic_type, feature_name
     else
         return "", "", feature_name
     end

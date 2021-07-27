@@ -44,29 +44,20 @@ end
 
 
 #############################################################
-# Model assembly
+# Assembling sparse matrices
 #############################################################
 
-function feature_to_loss(feature_name)
-    omic_type = split(feature_name, "_")[end]
-    if DEFAULT_OMIC_DTYPES[omic_type] <: Bool
-        return LogisticLoss()
-    else
-        return QuadLoss() 
-    end
+function edgelist_to_spmat(edgelist, name_to_idx; epsilon=1e-5)
+
+    N = length(name_to_idx)
+
+
 end
 
 
-function set_matrix_dtypes!(matrix, col_idx, col_names)
-    for idx in col_idx
-        omic_type = split(col_names[idx], "_")[end]
-        col_type = DEFAULT_OMIC_DTYPES[omic_type] 
-        
-        not_nan = findall(!isnan, matrix[:,idx])
-        matrix[not_nan, idx] = convert(Vector{col_type}, matrix[not_nan, idx])
-    end
-end
-
+#############################################################
+# Model assembly
+#############################################################
 
 function assemble_model(pathways, omic_matrix, feature_names, 
                         sample_ids, sample_groups)
@@ -81,12 +72,29 @@ function assemble_model(pathways, omic_matrix, feature_names,
                                                 omic_types, DEFAULT_OMIC_MAP) 
                       for pwy in extended_pwys] 
 
+    # Assemble the augmented feature set
+    augmented_features = collect(get_all_nodes_many(augmented_pwys))
     println("AUGMENTED PATHWAYS:")
     println(augmented_pwys)
-
-    srt_feature_names = sort_features(feature_names)
+    augmented_features = sort_features(augmented_features)
     println("SORTED FEATURE NAMES")
-    println(srt_feature_names)
+    println(augmented_features)
+
+    # Assemble the regularizer sparse matrices
+    feat_to_idx = value_to_idx(augmented_features)
+    feature_reg_mats = edgelists_to_spmats(augmented_pwys, feat_to_idx)
+
+    # - sample regularizer matrices
+    #     * build the patient edge list from the "sample groups" vector
+    #     * translate the patient edge list to a sparse matrix
+    #     * generate k copies of it, total
+    #
+    # Assemble the vector of losses
+    #
+    # Initialize the GPUMatFac model
+    #
+    # Assemble the data matrix
+    #
 
 end
 
@@ -100,19 +108,4 @@ function assemble_model_from_sifs(sif_filenames, omic_matrix, feature_names,
 
 end
 
-#function extend_losses(losses, features, ext_features)
-#
-#    ext_losses = fill(QuadLoss(), size(ext_features,1))
-#    ext_losses = convert(Vector{Loss}, ext_losses)
-#
-#    feat_to_loss = Dict(feat => loss for (feat, loss) in zip(features, losses))
-#
-#    for (i, feat) in enumerate(ext_features)
-#        if feat in keys(feat_to_loss)
-#            ext_losses[i] = feat_to_loss[feat]
-#        end
-#    end
-#
-#    return ext_losses
-#end
 
