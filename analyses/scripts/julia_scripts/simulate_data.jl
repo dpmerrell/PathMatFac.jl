@@ -1,11 +1,9 @@
 
-include("script_util.jl")
-include("preprocess.jl")
 
 using LinearAlgebra
-#import PathwayMultiomics: get_all_proteins, pathways_to_ugraphs, 
-#                          ugraphs_to_matrices, hierarchy_to_matrix,
-#                          DEFAULT_OMICS
+import PathwayMultiomics: get_all_proteins, pathways_to_ugraphs, 
+                          ugraphs_to_matrices, hierarchy_to_matrix,
+                          DEFAULT_OMICS
 
 import Base: isdigit
 

@@ -37,12 +37,13 @@ test_holdout_pwys = "_".join(NCI_PWY_IDS[50:])
 
 rule all:
     input:
-        path.join(SIM_INFER_DIR,"dataset=tcga_ncipid",
-                  "split=keep:HNSC,BRCA",
-                  "features=dropomic:",
-                  "mask=droprand:0.05",
-                  "pwys=ncipid",
-                  "factors.hdf")
+#        path.join(SIM_INFER_DIR,"dataset=tcga_ncipid",
+#                  "split=keep:HNSC,BRCA",
+#                  "features=dropomic:",
+#                  "mask=droprand:0.05",
+#                  "pwys=ncipid",
+#                  "factors.hdf")
+        path.join(PWY_JSON_DIR, "ncipid.json")
 
 
 rule sim_score_imputation:
