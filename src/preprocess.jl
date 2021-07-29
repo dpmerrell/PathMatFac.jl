@@ -2,7 +2,7 @@
 using CSV, DataFrames, HDF5
 
 export load_pathways, load_pathway_sifs, populate_featuremap, 
-       get_omic_feature_names
+       get_omic_feature_names, get_omic_instances, get_omic_groups
 
 
 #############################################################

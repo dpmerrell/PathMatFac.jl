@@ -56,8 +56,18 @@ function keymatch(l_keys, r_keys)
     return l_idx, r_idx
 end
 
+function get_loss(feature_name; omic_type_set=DEFAULT_OMIC_SET, 
+                                omic_losses=DEFAULT_OMIC_LOSSES)
+    omic_type = get_omic_type(feature_name; omic_type_set=omic_type_set)
+    if omic_type in keys(omic_losses)
+        return omic_losses[omic_type]
+    else
+        return NoLoss
+    end
+end
 
-function get_loss(feature_name; omic_losses=DEFAULT_OMIC_LOSSES)
+function srt_get_loss(feature_name; omic_type_set=DEFAULT_OMIC_SET,
+                                    omic_losses=DEFAULT_OMIC_LOSSES)
     omic_type = get_omic_type(feature_name)
     if omic_type in keys(omic_losses)
         return string(omic_losses[omic_type]), omic_type, feature_name
@@ -78,7 +88,7 @@ end
 
 
 function sort_features(feature_names; omic_losses=DEFAULT_OMIC_LOSSES)
-    tuple_list = [get_loss(feat; omic_losses=omic_losses) for feat in feature_names]
+    tuple_list = [srt_get_loss(feat; omic_losses=omic_losses) for feat in feature_names]
     sort!(tuple_list)
     return [t[end] for t in tuple_list]
 end
