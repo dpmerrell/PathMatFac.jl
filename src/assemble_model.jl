@@ -1,7 +1,7 @@
 
 using SparseArrays
 
-export assemble_model_from_sifs
+export assemble_model, assemble_model_from_sifs
 
 ##############################################################
 # Add data nodes to the pathways
