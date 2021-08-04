@@ -1,5 +1,6 @@
 
 using GPUMatFac
+import GPUMatFac: LogisticLoss, QuadLoss, PoissonLoss, NoLoss
 
 export DEFAULT_OMICS, sort_features
 

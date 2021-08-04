@@ -17,13 +17,9 @@ mutable struct MultiomicModel
     aug_sample_to_idx::Dict    # Maps from sample IDs to row indices in the MatFacModel
 
     # Omic dataset
-    omic_matrix::AbstractMatrix
+    omic_matrix::Union{Nothing,AbstractMatrix}
 
 end
 
 
 
-function MultiomicModel(feature_names) 
-
-
-end

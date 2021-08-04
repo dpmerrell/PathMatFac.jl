@@ -110,8 +110,10 @@ end
 
 function augment_samples(sample_ids, group_ids; rooted=true)
     result = vcat(sample_ids, unique(group_ids))
+    #println("RESULT")
+    #println(result)
     if rooted
-        push!(result, ["ROOT"])
+        push!(result, "ROOT")
     end
     return result
 end
@@ -172,8 +174,8 @@ function assemble_model(pathways, omic_matrix, feature_names,
     end
 
     # build the sample edge list from the "sample groups" vector
-    sample_edgelist = create_sample_edgelist(sample_ids, sample_groups, rooted=rooted_samples)
     augmented_samples = augment_samples(sample_ids, sample_groups, rooted=rooted_samples) 
+    sample_edgelist = create_sample_edgelist(sample_ids, sample_groups, rooted=rooted_samples)
     sample_to_idx = value_to_idx(augmented_samples)
 
     # translate the sample edge list to a sparse matrix
@@ -189,7 +191,9 @@ function assemble_model(pathways, omic_matrix, feature_names,
     # Initialize the GPUMatFac model
     matfac_model = MatFacModel(sample_reg_mats, feature_reg_mats, loss_vector)
 
-    return matfac_model
+    return MultiomicModel(matfac_model, augmented_features, augmented_pwys,
+                          feat_to_idx, augmented_samples, sample_edgelist,
+                          sample_to_idx, omic_matrix)
 
 end
 

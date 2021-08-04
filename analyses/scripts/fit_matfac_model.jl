@@ -14,6 +14,9 @@ function main(args)
     sample_groups = get_omic_groups(omic_hdf_filename)
     model = assemble_model_from_sifs(sif_filenames, nothing, features, sample_names, sample_groups)
 
+    save_hdf("test_model.hdf", model)
+    reloaded = load_hdf("test_model.hdf")
+
 end
 
 
