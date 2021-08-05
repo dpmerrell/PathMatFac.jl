@@ -1,4 +1,5 @@
 
+include("script_util.jl")
 
 using PathwayMultiomics
 
@@ -15,10 +16,14 @@ function main(args)
 
     omic_data = get_omic_data(omic_hdf_filename)
 
-    model = assemble_model_from_sifs(sif_filenames, nothing, features, sample_names, sample_groups)
+    model = assemble_model_from_sifs(sif_filenames, omic_data, features, sample_names, sample_groups)
 
-    save_hdf("test_model.hdf", model)
-    reloaded = load_hdf("test_model.hdf")
+    #save_hdf("test_model.hdf", model)
+    #reloaded = load_hdf("test_model.hdf")
+
+    fit!(model)
+
+    save_hdf("test_model_fitted.hdf", model)
 
 end
 

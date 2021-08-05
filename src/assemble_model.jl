@@ -187,7 +187,7 @@ function assemble_model(pathways, omic_matrix, feature_names,
 
     # Assemble the regularizer sparse matrices
     aug_feat_to_idx = value_to_idx(augmented_features)
-    feature_reg_mats = edgelists_to_spmats(augmented_pwys, feat_to_idx)
+    feature_reg_mats = edgelists_to_spmats(augmented_pwys, aug_feat_to_idx)
     #println("FEATURE REGULARIZATION MATRICES:")
     #for mat in feature_reg_mats
     #    println(mat)
@@ -199,7 +199,7 @@ function assemble_model(pathways, omic_matrix, feature_names,
     aug_sample_to_idx = value_to_idx(augmented_samples)
 
     # translate the sample edge list to a sparse matrix
-    sample_reg_mats = fill(edgelist_to_spmat(sample_edgelist, sample_to_idx), K)
+    sample_reg_mats = fill(edgelist_to_spmat(sample_edgelist, aug_sample_to_idx), K)
     #println("SAMPLE REGULARIZATION MATRIX:")
     #println(sample_reg_mats[1])
     
@@ -216,8 +216,8 @@ function assemble_model(pathways, omic_matrix, feature_names,
                                                              sample_ids, augmented_samples)
 
     return MultiomicModel(matfac_model, augmented_features, augmented_pwys,
-                          feat_to_idx, augmented_samples, sample_edgelist,
-                          sample_to_idx, augmented_omic_matrix)
+                          aug_feat_to_idx, augmented_samples, sample_edgelist,
+                          aug_sample_to_idx, augmented_omic_matrix)
 
 end
 
