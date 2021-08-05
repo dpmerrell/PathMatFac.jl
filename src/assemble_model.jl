@@ -140,6 +140,28 @@ end
 
 
 #############################################################
+# Assemble the data matrix
+#############################################################
+
+function augment_omic_matrix(omic_matrix, feature_names, augmented_features, 
+                                          sample_names, augmented_samples)
+
+    feat_idx_vec, aug_feat_idx_vec = keymatch(feature_names, augmented_features)
+    sample_idx_vec, aug_sample_idx_vec = keymatch(sample_names, augmented_samples)
+
+    M = length(augmented_samples)
+    N = length(augmented_features)
+    result = fill(NaN, M, N) 
+
+    for (f_idx, aug_f_idx) in zip(feat_idx_vec, aug_feat_idx_vec)
+        result[aug_sample_idx_vec, aug_f_idx] .= omic_matrix[sample_idx_vec, f_idx] 
+    end
+
+    return result
+end
+
+
+#############################################################
 # Model assembly
 #############################################################
 
@@ -164,7 +186,7 @@ function assemble_model(pathways, omic_matrix, feature_names,
     augmented_features = sort_features(augmented_features)
 
     # Assemble the regularizer sparse matrices
-    feat_to_idx = value_to_idx(augmented_features)
+    aug_feat_to_idx = value_to_idx(augmented_features)
     feature_reg_mats = edgelists_to_spmats(augmented_pwys, feat_to_idx)
     #println("FEATURE REGULARIZATION MATRICES:")
     #for mat in feature_reg_mats
@@ -174,7 +196,7 @@ function assemble_model(pathways, omic_matrix, feature_names,
     # build the sample edge list from the "sample groups" vector
     augmented_samples = augment_samples(sample_ids, sample_groups, rooted=rooted_samples) 
     sample_edgelist = create_sample_edgelist(sample_ids, sample_groups, rooted=rooted_samples)
-    sample_to_idx = value_to_idx(augmented_samples)
+    aug_sample_to_idx = value_to_idx(augmented_samples)
 
     # translate the sample edge list to a sparse matrix
     sample_reg_mats = fill(edgelist_to_spmat(sample_edgelist, sample_to_idx), K)
@@ -189,9 +211,13 @@ function assemble_model(pathways, omic_matrix, feature_names,
     # Initialize the GPUMatFac model
     matfac_model = MatFacModel(sample_reg_mats, feature_reg_mats, loss_vector)
 
+    # Assemble the matrix to be factorized
+    augmented_omic_matrix = augment_omic_matrix(omic_matrix, feature_names, augmented_features,
+                                                             sample_ids, augmented_samples)
+
     return MultiomicModel(matfac_model, augmented_features, augmented_pwys,
                           feat_to_idx, augmented_samples, sample_edgelist,
-                          sample_to_idx, omic_matrix)
+                          sample_to_idx, augmented_omic_matrix)
 
 end
 
