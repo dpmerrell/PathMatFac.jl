@@ -54,8 +54,8 @@ function multiomicmodel_from_hdf(hdf_file, path::String; load_omic_matrix::Bool=
     
     feature_names = hdf_file[string(path, "/feature_names")][:]
     pwy_keys = sort(keys(hdf_file[string(path, "/pwy_graphs")]))
-    println("PATHWAY KEYS:")
-    println(pwy_keys)
+    #println("PATHWAY KEYS:")
+    #println(pwy_keys)
     pathways = [edgelist_from_hdf(hdf_file, string(path, "/pwy_graphs/", k)) for k in pwy_keys]
     aug_feature_to_idx = dictionary_from_hdf(hdf_file, string(path, "/aug_feature_to_idx"))
 

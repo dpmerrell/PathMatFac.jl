@@ -7,6 +7,6 @@ include("assemble_model.jl")
 include("model.jl")
 include("model_io.jl")
 
-println("Hello World")
+#println("Hello World")
 
 end

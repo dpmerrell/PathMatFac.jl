@@ -110,8 +110,6 @@ end
 
 function augment_samples(sample_ids, group_ids; rooted=true)
     result = vcat(sample_ids, unique(group_ids))
-    #println("RESULT")
-    #println(result)
     if rooted
         push!(result, "ROOT")
     end
@@ -168,10 +166,10 @@ function assemble_model(pathways, omic_matrix, feature_names,
     # Assemble the regularizer sparse matrices
     feat_to_idx = value_to_idx(augmented_features)
     feature_reg_mats = edgelists_to_spmats(augmented_pwys, feat_to_idx)
-    println("FEATURE REGULARIZATION MATRICES:")
-    for mat in feature_reg_mats
-        println(mat)
-    end
+    #println("FEATURE REGULARIZATION MATRICES:")
+    #for mat in feature_reg_mats
+    #    println(mat)
+    #end
 
     # build the sample edge list from the "sample groups" vector
     augmented_samples = augment_samples(sample_ids, sample_groups, rooted=rooted_samples) 
@@ -180,13 +178,13 @@ function assemble_model(pathways, omic_matrix, feature_names,
 
     # translate the sample edge list to a sparse matrix
     sample_reg_mats = fill(edgelist_to_spmat(sample_edgelist, sample_to_idx), K)
-    println("SAMPLE REGULARIZATION MATRIX:")
-    println(sample_reg_mats[1])
+    #println("SAMPLE REGULARIZATION MATRIX:")
+    #println(sample_reg_mats[1])
     
     # Assemble the vector of losses
     loss_vector = Loss[get_loss(feat)(1.0) for feat in augmented_features]
-    println("LOSS VECTOR")
-    println(loss_vector)
+    #println("LOSS VECTOR")
+    #println(loss_vector)
 
     # Initialize the GPUMatFac model
     matfac_model = MatFacModel(sample_reg_mats, feature_reg_mats, loss_vector)

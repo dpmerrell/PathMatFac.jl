@@ -1,55 +1,12 @@
 
 using CSV, DataFrames, HDF5
 
-export load_pathways, load_pathway_sifs, populate_featuremap, 
-       get_omic_feature_names, get_omic_instances, get_omic_groups
+export load_pathways, load_pathway_sifs
 
 
 #############################################################
 # Omic data IO
 #############################################################
-
-function get_omic_feature_names(omic_hdf)
-
-    idx = h5open(omic_hdf, "r") do file
-        read(file, "features")
-    end
-
-    return idx 
-end
-
-
-function get_omic_instances(omic_hdf)
-
-    patients = h5open(omic_hdf, "r") do file
-        read(file, "instances")
-    end
-
-    return patients 
-end
-
-
-function get_omic_groups(omic_hdf)
-
-    cancer_types = h5open(omic_hdf, "r") do file
-        read(file, "cancer_types")
-    end
-
-    return cancer_types
-end
-
-
-function get_omic_data(omic_hdf)
-
-    dataset = h5open(omic_hdf, "r") do file
-        read(file, "data")
-    end
-
-    # Julia reads arrays from HDF files
-    # in the (weird) FORTRAN order
-    return permutedims(dataset)
-end
-
 
 function build_instance_hierarchy(instance_ids::Vector{T}, 
                                   instance_groups::Vector{String}) where T
