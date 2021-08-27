@@ -74,12 +74,12 @@ function edgelist_to_spmat(edgelist, node_to_idx; epsilon=1e-5)
         # below the diagonal
         push!(I, idx[1])
         push!(J, idx[2])
-        push!(V, value)
+        push!(V, -value)
         
         # above the diagonal
         push!(I, idx[2])
         push!(J, idx[1])
-        push!(V, value)
+        push!(V, -value)
 
         # increment diagonal entries
         # (maintain positive definite-ness)
@@ -188,10 +188,6 @@ function assemble_model(pathways, omic_matrix, feature_names,
     # Assemble the regularizer sparse matrices
     aug_feat_to_idx = value_to_idx(augmented_features)
     feature_reg_mats = edgelists_to_spmats(augmented_pwys, aug_feat_to_idx)
-    #println("FEATURE REGULARIZATION MATRICES:")
-    #for mat in feature_reg_mats
-    #    println(mat)
-    #end
 
     # build the sample edge list from the "sample groups" vector
     augmented_samples = augment_samples(sample_ids, sample_groups, rooted=rooted_samples) 
@@ -200,13 +196,9 @@ function assemble_model(pathways, omic_matrix, feature_names,
 
     # translate the sample edge list to a sparse matrix
     sample_reg_mats = fill(edgelist_to_spmat(sample_edgelist, aug_sample_to_idx), K)
-    #println("SAMPLE REGULARIZATION MATRIX:")
-    #println(sample_reg_mats[1])
     
     # Assemble the vector of losses
     loss_vector = Loss[get_loss(feat)(1.0) for feat in augmented_features]
-    #println("LOSS VECTOR")
-    #println(loss_vector)
 
     # Initialize the GPUMatFac model
     matfac_model = MatFacModel(sample_reg_mats, feature_reg_mats, loss_vector)

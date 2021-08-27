@@ -49,10 +49,11 @@ function hierarchy_to_matrix(patient_hierarchy)
             end
         end
     end
+
     rec_h2m("", patient_hierarchy) 
     graph = construct_elugraph(edges)
 
-    node_to_idx = value_to_idx(all_nodes) # Dict(v => idx for (idx,v) in enumerate(all_nodes))
+    node_to_idx = value_to_idx(all_nodes) 
 
     matrix = ugraph_to_matrix(graph, node_to_idx) 
 
@@ -150,144 +151,6 @@ function extend_pathway(pathway)
 
     return new_edges
 end
-
-
-
-#
-#
-#function ugraph_to_matrix(graph::ElUgraph, node_to_idx, 
-#                          epsilon=nothing, 
-#                          standardize=true)
-#    N = length(node_to_idx)
-#
-#    if epsilon == nothing
-#        epsilon = 1.0 / sqrt(N)
-#    end
-#
-#    I = Int64[]
-#    J = Int64[]
-#    V = Float64[]
-#    diag_entries = fill(epsilon, N)
-#
-#    for edge in graph.edges
-#        # Append off-diagonal entries
-#        push!(I, node_to_idx[edge[1]])
-#        push!(J, node_to_idx[edge[2]])
-#        push!(V, -1.0*edge[3])
-#
-#        # Increment diagonal entries
-#        # (maintain diagonal dominance)
-#        diag_entries[node_to_idx[edge[1]]] += 1.0
-#    end
-#
-#    # Now append diagonal entries
-#    for (i,v) in enumerate(diag_entries)
-#        push!(I, i)
-#        push!(J, i)
-#        push!(V, v)
-#    end 
-#
-#    m = sparse(I, J, V, N, N)
-#   
-#    # optionally: rescale matrix s.t. we
-#    # have ones on the diagonal (i.e., the 
-#    # matrix is an inverted correlation matrix) 
-#    if standardize
-#        standardizer = sparse(1:N, 1:N, 1.0./sqrt.(diag_entries), N, N)
-#        m = standardizer * m * standardizer 
-#    end
-#
-#    return m 
-#end
-#
-#
-#function ugraphs_to_matrices(ugraphs::Vector{ElUgraph})
-#
-#    # Get all of the nodes from all of the graphs
-#    all_nodes = Set{String}()
-#    for graph in ugraphs
-#        for edge in graph.edges
-#            push!(all_nodes, edge[1])
-#        end
-#    end
-#
-#    # in lexicographic order
-#    all_nodes = sort(collect(all_nodes))
-#    N = size(all_nodes,1)
-#
-#    # create a mapping from node names to indices
-#    node_to_idx = value_to_idx(all_nodes) # Dict(v => i for (i, v) in enumerate(all_nodes))
-#
-#    # now translate the ugraphs to sparse matrices
-#    matrices = [ugraph_to_matrix(u, node_to_idx) for u in ugraphs]
-#
-#    return matrices, all_nodes
-#end
-#
-#
-#function pwy_to_matrix(pwy, featuremap, data_type_map;
-#                       extension_strategy="sparse_latent")
-#
-#    ext_pwy = add_data_nodes_to_pathway(pwy, featuremap,
-#                                             data_type_map;
-#                                             strategy=extension_strategy)
-#    
-#
-#    # Get all of the nodes from all of the graphs
-#    all_nodes = Set{String}()
-#    for graph in ugraphs
-#        for edge in graph.edges
-#            push!(all_nodes, edge[1])
-#        end
-#    end
-#
-#    # in lexicographic order
-#    all_nodes = sort(collect(all_nodes))
-#    N = size(all_nodes,1)
-#
-#    # create a mapping from node names to indices
-#    node_to_idx = value_to_idx(all_nodes) # Dict(v => i for (i, v) in enumerate(all_nodes))
-#
-#    # now translate the ugraphs to sparse matrices
-#    matrices = [ugraph_to_matrix(u, node_to_idx) for u in ugraphs]
-#
-#    return matrices, all_nodes
-#end
-#
-#
-#"""
-#    Given a vector of pathways and a populated featuremap,
-#    return a corresponding dictionary of sparse matrices
-#    and an array that maps indices to pathway nodes
-#"""
-#function pathways_to_ugraphs(pathways, featuremap;
-#                             data_types=DEFAULT_OMICS, 
-#                             data_type_map=DEFAULT_OMIC_MAP,
-#                             pwy_data_augmentation="sparse_latent",
-#                             pwy_to_ugraph="symmetrize")
-#
-#    # Augment the pathways with additional nodes
-#    # to represent the data    
-#    ext_pathways = [add_data_nodes_to_pathway(pwy, featuremap, data_types, data_type_map;
-#                                              strategy=pwy_data_augmentation)
-#                                              for pwy in pathways]
-#
-#    # Pathways are currently interpreted as
-#    # directed graphs. Convert to undirected graphs
-#    ugraphs = ElUgraph[construct_elugraph(pwy) for pwy in ext_pathways]
-#
-#    return ugraphs 
-#end
-#
-#
-#function ugraphs_to_regularizers(ugraphs::Vector{ElUgraph}; offset=false)
-#
-#    matrices, ext_features = ugraphs_to_matrices(ugraphs)
-#
-#    regularizers = matrices_to_regularizers(matrices, ext_features; offset=offset)
-#
-#    return regularizers, ext_features
-#end
 
 
 function get_all_proteins(pathways)
