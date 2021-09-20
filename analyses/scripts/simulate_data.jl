@@ -1,13 +1,27 @@
 
 
-using LinearAlgebra
-import PathwayMultiomics: get_all_proteins, pathways_to_ugraphs, 
-                          ugraphs_to_matrices, hierarchy_to_matrix,
-                          DEFAULT_OMICS
+using LinearAlgebra, JSON, HDF5
+import PathwayMultiomics: extend_pathway,
+                          get_all_proteins, 
+                          build_instance_hierarchy,
+                          hierarchy_to_matrix,
+                          add_data_nodes_to_pathway,
+                          assemble_feature_reg_mats,
+                          assemble_instance_reg_mats,
+                          DEFAULT_OMIC_MAP
 
 import Base: isdigit
 
-sim_omic_types = DEFAULT_OMICS
+sim_omic_types = collect(keys(DEFAULT_OMIC_MAP))
+
+logistic(x) = 1.0 ./ (1.0 .+ exp.(-x))
+
+link_functions = Dict( "cna" => identity,
+                       "mutation" => logistic,
+                       "methylation" => identity,
+                       "mrnaseq" => identity,
+                       "rppa" => identity
+                      )
 
 
 function get_all_omic_features(pwy_vec)
@@ -20,7 +34,24 @@ function get_all_omic_features(pwy_vec)
 end
 
 
-function generate_factor(prec_mats)
+function generate_patient_factor(patients, patient_groups, k, temperature)
+
+    patient_hierarchy = build_instance_hierarchy(patients, patient_groups)
+    matrix, all_nodes = hierarchy_to_matrix(patient_hierarchy)
+    n = size(matrix, 1)
+
+    # Generate k samples from N(0, I)
+    z = randn(n, k)
+
+    # Transform them by Covariance^{-1/2}
+    fac = cholesky(matrix)
+    Y = transpose((fac.UP \ z) .* sqrt(temperature))
+
+    return Y, all_nodes
+end
+
+
+function generate_factor(prec_mats, temperature)
     k = length(prec_mats)
     m = size(prec_mats[1], 1)    
     X = fill(NaN, m, k)
@@ -29,43 +60,27 @@ function generate_factor(prec_mats)
 
         fac = cholesky(Symmetric(omega))
         z = randn(m)
-        X[:,i] .= fac.UP \ z
+        X[:,i] .= (fac.UP \ z) .* sqrt(temperature)
     end
 
-    return X
+    return transpose(X)
 end
 
 
-function generate_patient_factor(hierarchy, k)
+function generate_feature_factor(pathways, temperature)
 
-    matrix, all_nodes = hierarchy_to_matrix(hierarchy)
-    n = size(matrix, 1)
+    # First, need to extend the pathways
+    extended_pwys = [extend_pathway(pwy) for pwy in pathways]
 
-    # Generate k samples from N(0, I)
-    z = randn(n, k)
+    # Then, get all of the omic features from the extended pathways 
+    feature_names = get_all_omic_features(extended_pwys) 
+    
+    matrices, 
+    aug_features, _ = assemble_feature_reg_mats(pathways, feature_names, sim_omic_types)
 
-    # Transform them by Covariance^{-1/2}
-    fac = cholesky(matrix)
-    Y = fac.UP \ z
-
-    return Y, all_nodes
-end
-
-
-function generate_feature_factor(pathways)
-
-    pwy_vec, featuremap = load_pathways(pathways, sim_omic_types)
-
-    omic_feature_vec = get_all_omic_features(pwy_vec) 
-
-    featuremap = populate_featuremap_tcga(featuremap, omic_feature_vec)
-
-    ugraphs = pathways_to_ugraphs(pwy_vec, featuremap)
-    matrices, all_features = ugraphs_to_matrices(ugraphs)
-
-    X = generate_factor(matrices)
+    X = generate_factor(matrices, temperature)
  
-    return X, all_features  
+    return X, aug_features
 end
 
 
@@ -81,7 +96,7 @@ function filter_hidden_features(X, all_features)
         end 
     end
 
-    return X[kept_idx, :], all_features[kept_idx]
+    return X[:, kept_idx], all_features[kept_idx]
 end
 
 
@@ -96,128 +111,150 @@ function filter_hidden_patients(Y, all_patients)
         end 
     end
 
-    return Y[kept_idx, :], all_patients[kept_idx]
+    return Y[:, kept_idx], all_patients[kept_idx]
 end
 
 
-logistic(x) = 1.0 ./ (1.0 .+ exp.(-x))
-
-function sample_bernoulli(logits)
-    return convert(Vector{Float64}, logistic(logits) .>= rand(length(logits)))
-end
-
-function sample_normal(means; sigma=0.05)
-    return (sigma .* randn(length(means))) .+ means
-end
-
-function assign_distributions(feature_names)
-
-    samplers = []
-
-    for fname in feature_names
-        omic_type = split(fname, "_")[end]
-        if omic_type == "mutation"
-            push!(samplers, sample_bernoulli)
-        else
-            push!(samplers, sample_normal)
-        end
-    end
-    return samplers 
-end
-
-
-function assign_biases(feature_names)
+function generate_biases(feature_names, param_settings) 
 
     biases = zeros(size(feature_names, 1))
-    # TODO get rid of this hard-coded laziness
-    #      (chosen s.t. probability is <.001)
-    v = -6.0
 
     for (i, feat) in enumerate(feature_names)
         omic_type = split(feat, "_")[end]
-        if omic_type == "mutation"
-            biases[i] = v
-        end 
+
+        biases[i] = randn()*param_settings[string("b_std_",omic_type)] \
+                           + param_settings[string("b_mu_",omic_type)]
+
     end
     return biases
 end
 
 
-function generate_data_matrix(X, Y, sample_funcs, biases)
+function apply_link_functions(mu, omic_types)
 
-    K = size(X, 2)
-
-    # Multiply the factors. We rescale
-    # by 1/sqrt(K) in order to
-    # control the variance of the entries of XY^T. 
-    mu = (X * transpose(Y))./ sqrt(K) .+ biases
-
-    # Sample data as prescribed by the 
-    # sampling functions, informed by the matrix
-    # product
-    for row in 1:length(sample_funcs)
-        mu[row,:] = sample_funcs[row](mu[row,:])
-    end    
+    for (j, ot) in enumerate(omic_types)
+        mu[:,j] .= link_functions[ot](mu[:,j])
+    end
 
     return mu
-    
 end
 
 
-function save_results(output_hdf, A, X, Y, feature_vec, patient_vec, patient_hierarchy, pwy_names)
+function apply_noise(A, omic_types, param_settings)
 
-    patient_to_ctype = Dict(pat => ctype for (ctype, pat_vec) in patient_hierarchy for pat in pat_vec)
-    ctype_vec = String[patient_to_ctype[pat] for pat in patient_vec]
+    M = size(A,1)
+    for (j, ot) in enumerate(omic_types)
+        if ot == "mutation"
+            A[:,j] .= float(rand(M) .<= A[:,j])
+        else
+            A[:,j] .= A[:,j] .+ randn(M)*param_settings[string("noise_std_",ot)]
+        end
+    end
+
+    return A
+end
+
+
+function generate_data_matrix(X, Y, biases, omic_types, param_settings)
+
+    mu = (transpose(X) * Y) .+ transpose(biases)
+
+    mu = apply_link_functions(mu, omic_types)
+    mu = apply_noise(mu, omic_types, param_settings)
+
+    return mu    
+end
+
+
+function save_results(output_hdf, A, X, Y, b, instance_vec, 
+                      feature_vec, group_vec, pwy_names)
 
     pwy_names = String[p for p in pwy_names]
 
     # Write to the HDF file
     h5open(output_hdf, "w") do file
-        # Write factors and feature list
-        write(file, "feature_factor", X)
-        write(file, "instance_factor", Y)
-        write(file, "features", convert(Vector{String}, feature_vec))
-        write(file, "instances", convert(Vector{String}, patient_vec)) 
-        write(file, "cancer_types", convert(Vector{String}, ctype_vec))
-        write(file, "pathways", pwy_names)
         write(file, "data", A)
+        write(file, "features", convert(Vector{String}, feature_vec))
+        write(file, "instances", convert(Vector{String}, instance_vec)) 
+        
+        write(file, "X", X)
+        write(file, "Y", Y)
+        write(file, "b", b)
+        write(file, "groups", convert(Vector{String}, group_vec))
+        write(file, "pathways", pwy_names)
     end
+end
+
+function parse_args(args, param_settings)
+
+    for arg in args[4:end]
+        k, v = split(arg, "=")
+        v = parse(Float64, v)
+        param_settings[k] = v
+    end
+    
+    return param_settings
 end
 
 
 function main(args)
 
+    # Default Values for various parameters
+    param_settings = Dict(
+                          "X_temperature" => 2.0,
+                          "Y_temperature" => 0.5,
+                          "b_mu_mutation" => -6.0, 
+                          "b_mu_cna" => 0.0, 
+                          "b_mu_methylation" => 0.0,
+                          "b_mu_mrnaseq" => 0.0, 
+                          "b_mu_rppa" => 0.0,
+                          "b_std_mutation" => 0.5, 
+                          "b_std_cna" => 0.1, 
+                          "b_std_methylation" => 1.0,
+                          "b_std_mrnaseq" => 3.0, 
+                          "b_std_rppa" => 0.0,
+                          "b_temperature" => 1.0,
+                          "noise_std_cna" => 0.1, 
+                          "noise_std_methylation" => 1.0,
+                          "noise_std_mrnaseq" => 3.0, 
+                          "noise_std_rppa" => 0.0
+                         )
+    
     pwy_json = args[1]
     patient_json = args[2]
     output_hdf = args[3]
 
-    # Generate the "feature" factor (m x k)
+    param_settings = parse_args(args, param_settings)
+
     pwy_dict = JSON.Parser.parsefile(pwy_json)
     pwys = pwy_dict["pathways"]
     pwy_names = pwy_dict["names"]
-    X, all_features = generate_feature_factor(pwys)
 
-    # Generate the "patient" factor (n x k)
-    k = size(X,2)
-    patient_hierarchy = JSON.Parser.parsefile(patient_json)
-    Y, all_patients = generate_patient_factor(patient_hierarchy, k)
+    # Generate the "patient" factor (K x M)
+    K = length(pwys) 
+    patient_dict = JSON.Parser.parsefile(patient_json)
+    patients = patient_dict["instances"]
+    groups = patient_dict["groups"]
+
+    X, all_patients = generate_patient_factor(patients, groups, K, 
+                                              param_settings["X_temperature"]/K)
+    # Generate the "feature" factor (K x N)
+    Y, all_features = generate_feature_factor(pwys, param_settings["Y_temperature"]/K)
+
 
     # filter out the hidden features and patients
-    X, kept_features = filter_hidden_features(X, all_features)
-    Y, kept_patients = filter_hidden_patients(Y, all_patients)
-
-    # Assign link functions and sampling functions to features
-    # (i.e., consistent with probabilistic assumptions)
-    sample_funcs = assign_distributions(kept_features)
+    X, kept_patients = filter_hidden_patients(X, all_patients)
+    Y, kept_features = filter_hidden_features(Y, all_features)
 
     # Assign biases to features
-    biases = assign_biases(kept_features)
+    biases = generate_biases(kept_features, param_settings)
 
     # Generate the data matrix (m x n)
-    A = generate_data_matrix(X, Y, sample_funcs, biases)
+    omic_types = [split(feat, "_")[end] for feat in kept_features] 
+    A = generate_data_matrix(X, Y, biases, omic_types, param_settings)
 
     # Write to HDF
-    save_results(output_hdf, A, X, Y, kept_features, kept_patients, patient_hierarchy, pwy_names)
+    save_results(output_hdf, A, X, Y, biases, kept_patients, kept_features, groups, pwy_names)
 
 end
 

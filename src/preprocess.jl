@@ -9,7 +9,7 @@ export load_pathways, load_pathway_sifs
 #############################################################
 
 function build_instance_hierarchy(instance_ids::Vector{T}, 
-                                  instance_groups::Vector{String}) where T
+                                  instance_groups::Vector) where T
 
     hierarchy = Dict(gp => T[] for gp in unique(instance_groups))
 
@@ -51,11 +51,9 @@ function hierarchy_to_matrix(patient_hierarchy)
     end
 
     rec_h2m("", patient_hierarchy) 
-    graph = construct_elugraph(edges)
 
-    node_to_idx = value_to_idx(all_nodes) 
-
-    matrix = ugraph_to_matrix(graph, node_to_idx) 
+    node_to_idx = value_to_idx(all_nodes)
+    matrix = edgelist_to_spmat(edges, node_to_idx) 
 
     return (matrix, all_nodes)
 
@@ -253,8 +251,7 @@ function load_pathways(pwy_vec, feature_names)
     empty_feature_map = initialize_featuremap(all_proteins, data_kinds)
 
     populated_feature_map = populate_featuremap(empty_feature_map, feature_names)
-
-
+    
     return (extended_pwys, populated_feature_map)
 end
 

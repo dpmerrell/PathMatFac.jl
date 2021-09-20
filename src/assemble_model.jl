@@ -165,11 +165,7 @@ end
 # Model assembly
 #############################################################
 
-function assemble_model(pathways, omic_matrix, feature_names, 
-                        sample_ids, sample_groups;
-                        rooted_samples=true)
-
-    K = length(pathways)
+function assemble_feature_reg_mats(pathways, feature_names, omic_types)
 
     # Extend the pathways to include "central dogma" entities
     extended_pwys, featuremap = load_pathways(pathways, feature_names)
@@ -189,14 +185,38 @@ function assemble_model(pathways, omic_matrix, feature_names,
     aug_feat_to_idx = value_to_idx(augmented_features)
     feature_reg_mats = edgelists_to_spmats(augmented_pwys, aug_feat_to_idx)
 
+    return feature_reg_mats, augmented_features, aug_feat_to_idx
+end
+
+
+function assemble_instance_reg_mats(sample_idx, sample_groups, rooted_samples)
+    
     # build the sample edge list from the "sample groups" vector
     augmented_samples = augment_samples(sample_ids, sample_groups, rooted=rooted_samples) 
     sample_edgelist = create_sample_edgelist(sample_ids, sample_groups, rooted=rooted_samples)
     aug_sample_to_idx = value_to_idx(augmented_samples)
 
     # translate the sample edge list to a sparse matrix
+    K = length(pathways)
     sample_reg_mats = fill(edgelist_to_spmat(sample_edgelist, aug_sample_to_idx), K)
+
+    return sample_reg_mats, augmented_samples, aug_sample_to_idx
+end
+
+function assemble_model(pathways, omic_matrix, feature_names, 
+                        sample_ids, sample_groups;
+                        rooted_samples=true)
+
+
+    feature_reg_mats, 
+    augmented_features, 
+    aug_feat_to_idx = assemble_feature_reg_mats(pathways, feature_names, omic_types)
+   
+    sample_reg_mats, 
+    augmented_samples, 
+    aug_sample_to_idx = assemble_instance_reg_mats(sample_idx, sample_groups, rooted_samples)
     
+
     # Assemble the vector of losses
     loss_vector = Loss[get_loss(feat)(1.0) for feat in augmented_features]
 
