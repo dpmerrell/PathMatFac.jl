@@ -4,62 +4,6 @@ using CSV, DataFrames, HDF5
 export load_pathways, load_pathway_sifs
 
 
-#############################################################
-# Omic data IO
-#############################################################
-
-function build_instance_hierarchy(instance_ids::Vector{T}, 
-                                  instance_groups::Vector) where T
-
-    hierarchy = Dict(gp => T[] for gp in unique(instance_groups))
-
-    for (i, inst) in enumerate(instance_ids)
-        push!(hierarchy[instance_groups[i]], inst)
-    end
-
-    return hierarchy
-
-end
-
-
-"""
-    Given a nested dictionary of patients,
-    generate an undirected graph representation
-    of that tree; and then create a sparse matrix
-    for it.
-"""
-function hierarchy_to_matrix(patient_hierarchy)
-
-    edges = []
-    all_nodes = []
-
-    # Recursively build an edge list 
-    # from the dictionary
-    function rec_h2m(parent_name, children)
-        push!(all_nodes, parent_name)
-        if typeof(children) <: Vector
-            for child_name in children
-                push!(edges, [parent_name, child_name, 1.0])
-                push!(all_nodes, child_name)
-            end
-        elseif typeof(children) <: Dict
-            for child_name in sort(collect(keys(children)))
-                push!(edges, [parent_name, child_name, 1.0])
-                rec_h2m(child_name, children[child_name])
-            end
-        end
-    end
-
-    rec_h2m("", patient_hierarchy) 
-
-    node_to_idx = value_to_idx(all_nodes)
-    matrix = edgelist_to_spmat(edges, node_to_idx) 
-
-    return (matrix, all_nodes)
-
-end
-
-
 ######################################################
 # Pathway IO
 ######################################################
@@ -188,10 +132,6 @@ function get_all_nodes_many(edge_lists)
 end
 
 
-function get_omic_types(feature_names)
-    return collect(Set([split(feat, "_")[end] for feat in feature_names]))
-end
-
 
 ################################################################
 # Mapping features to pathways
@@ -201,10 +141,10 @@ end
     Prepare a data structure that will map
     graph nodes to rows of data.
 """
-function initialize_featuremap(all_pwy_proteins, all_data_types)
+function initialize_featuremap(all_pwy_proteins, unique_assays)
 
-    result = Dict( string(pro, "_", dt) =>  Vector{Int}() 
-                                   for dt in all_data_types  
+    result = Dict( (pro, dt) =>  Vector{Int}() 
+                                   for assay in unique_assays  
                                        for pro in all_pwy_proteins)
     result["unmapped"] = Vector{Int}()
     return result
@@ -215,19 +155,16 @@ end
     Given an empty featuremap, populate it from the array 
     of features. 
 """
-function populate_featuremap(featuremap, features)
+function populate_featuremap(featuremap, genes, assays)
 
-    for (idx, feat) in enumerate(features)
+    for (idx, gene, assay) in enumerate(zip(genes, assays))
         
-        tok = split(feat, "_")
-        # extract the protein names
-        prot_names = split(tok[1], " ")
+        # extract gene names (there may be more than one)
+        gene_names = split(gene, " ")
         
-        omic_datatype = tok[end]
- 
-        # for each protein name
-        for protein in prot_names
-            k = string(protein, "_", omic_datatype)
+        # for each gene name
+        for gene in gene_names
+            k = (gene, assay)
             if k in keys(featuremap)
                 push!(featuremap[k], idx)
             end
@@ -243,23 +180,27 @@ end
 # Putting it all together...
 ####################################################
 
-function load_pathways(pwy_vec, feature_names)
+function load_pathways(pwy_vec, feature_genes, feature_assays)
 
     extended_pwys = [extend_pathway(pwy) for pwy in pwy_vec]
-    all_proteins = get_all_proteins(extended_pwys)
-    data_kinds = get_omic_types(feature_names)
-    empty_feature_map = initialize_featuremap(all_proteins, data_kinds)
+    pwy_proteins = get_all_proteins(extended_pwys)
+    unique_assays = unique(feature_assays)
+    empty_feature_map = initialize_featuremap(pwy_proteins, unique_assays)
 
-    populated_feature_map = populate_featuremap(empty_feature_map, feature_names)
+    populated_feature_map = populate_featuremap(empty_feature_map, 
+                                                feature_genes, 
+                                                feature_assays)
     
     return (extended_pwys, populated_feature_map)
 end
 
 
-function load_pathway_sifs(sif_filenames, feature_names)
+function load_pathway_sifs(sif_filenames, feature_genes, feature_assays)
 
     pathways = read_all_sif_files(sif_filenames)
-    extended_pwys, feature_map = load_pathways(pathways, feature_names)
+    extended_pwys, feature_map = load_pathways(pathways, 
+                                               feature_genes,
+                                               feature_assays)
  
     return (extended_pwys, feature_map)
 end 

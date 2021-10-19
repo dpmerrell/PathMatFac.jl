@@ -2,8 +2,6 @@
 
 using HDF5
 
-#import GPUMatFac: to_hdf, model_from_hdf
-
 export save_hdf, load_hdf
 
 
@@ -30,15 +28,11 @@ function to_hdf(hdf_file, path::String, model::MultiomicModel; save_omic_matrix:
 
     GPUMatFac.to_hdf(hdf_file, string(path, "/matfac"), model.matfac)
     
-    write(hdf_file, string(path, "/feature_names"), model.feature_names)
-    for (i, pwy) in enumerate(model.pwy_graphs)
-        edgelist_to_hdf(hdf_file, string(path, "/pwy_graphs/", i), pwy)
-    end
-    to_hdf(hdf_file, string(path, "/aug_feature_to_idx"), model.aug_feature_to_idx)
+    write(hdf_file, string(path, "/feature_genes"), model.feature_genes)
+    write(hdf_file, string(path, "/feature_assays"), model.feature_assays)
 
     write(hdf_file, string(path, "/sample_ids"), model.sample_ids)
-    edgelist_to_hdf(hdf_file, string(path, "/sample_graph"), model.sample_graph)
-    to_hdf(hdf_file, string(path, "/aug_sample_to_idx"), model.aug_sample_to_idx)
+    write(hdf_file, string(path, "/sample_groups"), model.sample_ids)
 
     if save_omic_matrix
         write(hdf_file, string(path, "/omic_matrix"), model.omic_matrix)
@@ -52,16 +46,11 @@ function multiomicmodel_from_hdf(hdf_file, path::String; load_omic_matrix::Bool=
     
     matfac = GPUMatFac.matfac_from_hdf(hdf_file, string(path, "/matfac"))
     
-    feature_names = hdf_file[string(path, "/feature_names")][:]
-    pwy_keys = sort(keys(hdf_file[string(path, "/pwy_graphs")]))
-    #println("PATHWAY KEYS:")
-    #println(pwy_keys)
-    pathways = [edgelist_from_hdf(hdf_file, string(path, "/pwy_graphs/", k)) for k in pwy_keys]
-    aug_feature_to_idx = dictionary_from_hdf(hdf_file, string(path, "/aug_feature_to_idx"))
+    feature_genes = hdf_file[string(path, "/feature_genes")][:]
+    feature_assays = hdf_file[string(path, "/feature_assays")][:]
 
     sample_ids = hdf_file[string(path, "/sample_ids")][:]
-    sample_graph = edgelist_from_hdf(hdf_file, string(path, "/sample_graph"))
-    aug_sample_to_idx = dictionary_from_hdf(hdf_file, string(path, "/aug_sample_to_idx"))
+    sample_groups = hdf_file[string(path, "/sample_groups")][:]
     
     if load_omic_matrix
         if in("omic_matrix", keys(hdf_file["path"]))
@@ -73,9 +62,8 @@ function multiomicmodel_from_hdf(hdf_file, path::String; load_omic_matrix::Bool=
         omic_matrix = nothing
     end
 
-    return MultiomicModel(matfac, feature_names, pathways, aug_feature_to_idx, 
-                          sample_ids, sample_graph, aug_sample_to_idx, 
-                          omic_matrix)
+    return MultiomicModel(matfac, feature_genes, feature_assays,
+                          sample_ids, sample_groups, omic_matrix)
 end
 
 ###########################################

@@ -2,21 +2,29 @@
 using GPUMatFac
 import GPUMatFac: LogisticLoss, QuadLoss, PoissonLoss, NoLoss
 
-export DEFAULT_OMICS, sort_features
+export DEFAULT_ASSAYS, sort_features
 
 
-DEFAULT_OMIC_LOSSES = Dict("cna" => LogisticLoss,
+#DEFAULT_ASSAY_LOSSES = Dict("cna" => LogisticLoss,
+#                           "mutation" => LogisticLoss,
+#                           "methylation" => QuadLoss,
+#                           "mrnaseq" => PoissonLoss, 
+#                           "rppa" => QuadLoss
+#                          )
+DEFAULT_ASSAY_LOSSES = Dict("cna" => QuadLoss,
                            "mutation" => LogisticLoss,
                            "methylation" => QuadLoss,
-                           "mrnaseq" => PoissonLoss, 
+                           "mrnaseq" => QuadLoss, 
                            "rppa" => QuadLoss
                           )
 
-DEFAULT_OMICS = collect(keys(DEFAULT_OMIC_LOSSES))
-DEFAULT_OMIC_SET = Set(DEFAULT_OMICS)
 
 
-DEFAULT_OMIC_MAP = Dict("cna" => ["dna", 1],
+DEFAULT_ASSAYS = collect(keys(DEFAULT_OMIC_LOSSES))
+DEFAULT_ASSAY_SET = Set(DEFAULT_ASSAYS)
+
+
+DEFAULT_ASSAY_MAP = Dict("cna" => ["dna", 1],
                         "mutation" => ["dna", -1],
                         "methylation" => ["mrna", -1],
                         "mrnaseq" => ["mrna", 1],
@@ -57,39 +65,39 @@ function keymatch(l_keys, r_keys)
     return l_idx, r_idx
 end
 
-function get_loss(feature_name; omic_type_set=DEFAULT_OMIC_SET, 
-                                omic_losses=DEFAULT_OMIC_LOSSES)
-    omic_type = get_omic_type(feature_name; omic_type_set=omic_type_set)
-    if omic_type in keys(omic_losses)
-        return omic_losses[omic_type]
+function get_loss(feature; assay_set=DEFAULT_ASSAY_SET, 
+                           assay_losses=DEFAULT_ASSAY_LOSSES)
+    assay = get_assay(feature; assay_set=assay_set)
+    if assay in keys(assay_losses)
+        return assay_losses[assay]
     else
         return NoLoss
     end
 end
 
-function srt_get_loss(feature_name; omic_type_set=DEFAULT_OMIC_SET,
-                                    omic_losses=DEFAULT_OMIC_LOSSES)
-    omic_type = get_omic_type(feature_name)
-    if omic_type in keys(omic_losses)
-        return string(omic_losses[omic_type]), omic_type, feature_name
+function srt_get_loss(feature; assay_set=DEFAULT_ASSAY_SET,
+                               assay_losses=DEFAULT_ASSAY_LOSSES)
+    assay = get_assay(feature; assay_set=assay_set)
+    if assay in keys(assay_losses)
+        return string(assay_losses[assay]), assay, feature
     else
         return "", "", feature_name
     end
 end
 
 
-function get_omic_type(feature_name; omic_type_set=DEFAULT_OMIC_SET)
-    suff = split(feature_name, "_")[end] 
-    if suff in omic_type_set
-        return suff
+function get_assay(feature; assay_set=DEFAULT_ASSAY_SET)
+    assay = feature[2] 
+    if assay in assay_set
+        return assay
     else
         return ""
     end
 end
 
 
-function sort_features(feature_names; omic_losses=DEFAULT_OMIC_LOSSES)
-    tuple_list = [srt_get_loss(feat; omic_losses=omic_losses) for feat in feature_names]
+function sort_features(features; assay_losses=DEFAULT_ASSAY_LOSSES)
+    tuple_list = [srt_get_loss(feat; assay_losses=assay_losses) for feat in features]
     sort!(tuple_list)
     return [t[end] for t in tuple_list]
 end
