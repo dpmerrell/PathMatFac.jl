@@ -7,16 +7,17 @@ mutable struct MultiomicModel
     matfac::MatFacModel
 
     ## Omic feature/pathway stuff
-    #feature_names::Vector      # vector of feature names
-    #aug_feature_to_idx::Dict   # Maps from feature names to column indices in the MatFacModel
-    feature_genes::Vector
-    feature_assays::Vector
+    original_genes::Vector
+    original_assays::Vector
+    augmented_genes::Vector
+    augmented_assays::Vector
+    feature_to_idx::Dict   # Maps from features to column indices in the MatFacModel
 
     ## Sample stuff
-    #sample_ids::Vector         # vector of sample IDs
-    #aug_sample_to_idx::Dict    # Maps from sample IDs to row indices in the MatFacModel
-    sample_ids::Vector
-    sample_groups::Vector
+    original_samples::Vector
+    original_groups::Vector
+    augmented_samples::Vector
+    sample_to_idx::Dict    # Maps from sample IDs to row indices in the MatFacModel
 
     # Omic dataset
     omic_matrix::Union{Nothing,AbstractMatrix}

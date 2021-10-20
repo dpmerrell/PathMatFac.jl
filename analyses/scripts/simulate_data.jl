@@ -7,7 +7,7 @@ import PathwayMultiomics: extend_pathway,
                           hierarchy_to_matrix,
                           add_data_nodes_to_pathway,
                           assemble_feature_reg_mats,
-                          assemble_instance_reg_mats,
+                          assemble_instance_reg_mat,
                           DEFAULT_OMIC_MAP
 
 import Base: isdigit
@@ -76,7 +76,7 @@ function generate_feature_factor(pathways, temperature)
     feature_names = get_all_omic_features(extended_pwys) 
     
     matrices, 
-    aug_features, _ = assemble_feature_reg_mats(pathways, feature_names, sim_omic_types)
+    aug_features, _ = assemble_feature_reg_mats(pathways, feature_names) 
 
     X = generate_factor(matrices, temperature)
  
@@ -212,12 +212,12 @@ function main(args)
                           "b_std_cna" => 0.1, 
                           "b_std_methylation" => 1.0,
                           "b_std_mrnaseq" => 3.0, 
-                          "b_std_rppa" => 0.0,
+                          "b_std_rppa" => 1.0,
                           "b_temperature" => 1.0,
                           "noise_std_cna" => 0.1, 
                           "noise_std_methylation" => 1.0,
                           "noise_std_mrnaseq" => 3.0, 
-                          "noise_std_rppa" => 0.0
+                          "noise_std_rppa" => 1.0
                          )
     
     pwy_json = args[1]

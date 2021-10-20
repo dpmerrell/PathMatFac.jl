@@ -21,8 +21,9 @@ function add_data_nodes_sparse_latent(pathway,
         for assay in unique_assays
             for idx in feature_map[(protein, assay)]
                 data_node = (protein, assay) 
-                v = assay_map[assay]            
-                push!(pathway, [(protein, v[1]), data_node, v[2]])
+                v = assay_map[assay]
+                pwy_node = (string(protein, "_", v[1]), "")
+                push!(pathway, [pwy_node, data_node, v[2]])
             end
         end
     end
@@ -50,7 +51,7 @@ end
 # Assembling sparse matrices
 #############################################################
 
-function edgelist_to_spmat(edgelist, node_to_idx; epsilon=1e-5)
+function edgelist_to_spmat(edgelist, node_to_idx; epsilon=1e-5, verbose=false)
 
     N = length(node_to_idx)
 
@@ -58,6 +59,9 @@ function edgelist_to_spmat(edgelist, node_to_idx; epsilon=1e-5)
     # in case of redundancy, keep the latest
     edge_dict = Dict()
     for e in edgelist
+        if verbose
+            println(e)
+        end
         e1 = node_to_idx[e[1]]
         e2 = node_to_idx[e[2]]
         u = max(e1, e2)
@@ -101,8 +105,8 @@ function edgelist_to_spmat(edgelist, node_to_idx; epsilon=1e-5)
     return result
 end
 
-function edgelists_to_spmats(edgelists, node_to_idx)
-    return [edgelist_to_spmat(el, node_to_idx) for el in edgelists]
+function edgelists_to_spmats(edgelists, node_to_idx; verbose=false)
+    return [edgelist_to_spmat(el, node_to_idx; verbose=verbose) for el in edgelists]
 end
 
 #############################################################
@@ -144,11 +148,11 @@ end
 # Assemble the data matrix
 #############################################################
 
-function augment_omic_matrix(omic_matrix, feature_names, augmented_features, 
-                                          sample_names, augmented_samples)
+function augment_omic_matrix(omic_matrix, original_features, augmented_features, 
+                                          original_samples, augmented_samples)
 
-    feat_idx_vec, aug_feat_idx_vec = keymatch(feature_names, augmented_features)
-    sample_idx_vec, aug_sample_idx_vec = keymatch(sample_names, augmented_samples)
+    feat_idx_vec, aug_feat_idx_vec = keymatch(original_features, augmented_features)
+    sample_idx_vec, aug_sample_idx_vec = keymatch(original_samples, augmented_samples)
 
     M = length(augmented_samples)
     N = length(augmented_features)
@@ -207,12 +211,17 @@ function assemble_feature_reg_mats(pathways, feature_genes, feature_assays;
 
     assay_edgelist = construct_assay_edgelist(augmented_features,
                                               unique_assays)
-
+    #println("ASSAY EDGELIST:")
+    #println(assay_edgelist)
     augmented_features = sort_features(augmented_features)
+    #println("AUGMENTED_FEATURES:")
+    #println(augmented_features)
 
     # Assemble the regularizer sparse matrices
     aug_feat_to_idx = value_to_idx(augmented_features)
-    feature_reg_mats = edgelists_to_spmats(augmented_pwys, aug_feat_to_idx)
+    #println("AUG FEAT TO IDX:")
+    #println(aug_feat_to_idx)
+    feature_reg_mats = edgelists_to_spmats(augmented_pwys, aug_feat_to_idx)#; verbose=true)
 
     assay_reg_mat = edgelist_to_spmat(assay_edgelist, aug_feat_to_idx)
 
@@ -235,11 +244,12 @@ end
 
 
 
+
 function assemble_model(pathways, omic_matrix, 
                         feature_genes, feature_assays, 
                         sample_ids, sample_groups)
 
-    features = collect(zip(feature_genes, feature_assays))
+    original_features = collect(zip(feature_genes, feature_assays))
 
     ## Assemble regularizer matrices
 
@@ -249,16 +259,16 @@ function assemble_model(pathways, omic_matrix,
     augmented_features, 
     aug_feat_to_idx = assemble_feature_reg_mats(pathways, feature_genes,
                                                           feature_assays)
+
     # Patient group-based regularizer matrix
     sample_reg_mat, 
-    augmented_samples, 
+    augmented_sample_ids, 
     aug_sample_to_idx = assemble_instance_reg_mat(sample_ids, sample_groups)
     K = length(pathways)
     sample_reg_mats = fill(sample_reg_mat, K)
 
     # Assemble the vector of losses
     loss_vector = Loss[get_loss(feat)(1.0) for feat in augmented_features]
-
 
     # Initialize the GPUMatFac model
     matfac_model = MatFacModel(sample_reg_mats, feature_reg_mats, loss_vector;
@@ -268,11 +278,19 @@ function assemble_model(pathways, omic_matrix,
 
     # Assemble the matrix to be factorized
     augmented_omic_matrix = augment_omic_matrix(omic_matrix, 
-                                                feature_names, augmented_features,
-                                                sample_ids, augmented_samples)
+                                                original_features, augmented_features,
+                                                sample_ids, augmented_sample_ids)
 
-    return MultiomicModel(matfac_model, augmented_features, aug_feat_to_idx, 
-                          augmented_samples, aug_sample_to_idx, augmented_omic_matrix)
+    augmented_genes = [feat[1] for feat in augmented_features]
+    augmented_assays = [feat[2] for feat in augmented_features]
+
+    return MultiomicModel(matfac_model, feature_genes, feature_assays,
+                                        augmented_genes, augmented_assays,
+                                        aug_feat_to_idx,
+                                        sample_ids, sample_groups,
+                                        augmented_sample_ids, 
+                                        aug_sample_to_idx,
+                                        augmented_omic_matrix)
 
 end
 
@@ -282,7 +300,8 @@ function assemble_model_from_sifs(sif_filenames, omic_matrix,
                                   sample_ids, sample_groups)
     
     pathways = read_all_sif_files(sif_filenames)
-    assemble_model(pathways, omic_matrix, feature_names,
+    assemble_model(pathways, omic_matrix,
+                   feature_genes, feature_assays,
                    sample_ids, sample_groups)
 
 end

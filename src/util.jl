@@ -20,7 +20,7 @@ DEFAULT_ASSAY_LOSSES = Dict("cna" => QuadLoss,
 
 
 
-DEFAULT_ASSAYS = collect(keys(DEFAULT_OMIC_LOSSES))
+DEFAULT_ASSAYS = collect(keys(DEFAULT_ASSAY_LOSSES))
 DEFAULT_ASSAY_SET = Set(DEFAULT_ASSAYS)
 
 
@@ -75,16 +75,6 @@ function get_loss(feature; assay_set=DEFAULT_ASSAY_SET,
     end
 end
 
-function srt_get_loss(feature; assay_set=DEFAULT_ASSAY_SET,
-                               assay_losses=DEFAULT_ASSAY_LOSSES)
-    assay = get_assay(feature; assay_set=assay_set)
-    if assay in keys(assay_losses)
-        return string(assay_losses[assay]), assay, feature
-    else
-        return "", "", feature_name
-    end
-end
-
 
 function get_assay(feature; assay_set=DEFAULT_ASSAY_SET)
     assay = feature[2] 
@@ -96,10 +86,22 @@ function get_assay(feature; assay_set=DEFAULT_ASSAY_SET)
 end
 
 
+function srt_get_loss(feature; assay_set=DEFAULT_ASSAY_SET,
+                               assay_losses=DEFAULT_ASSAY_LOSSES)
+    assay = get_assay(feature; assay_set=assay_set)
+    gene = feature[1]
+    if assay in keys(assay_losses)
+        return string(assay_losses[assay]), assay, gene 
+    else
+        return "", "", gene
+    end
+end
+
+
 function sort_features(features; assay_losses=DEFAULT_ASSAY_LOSSES)
     tuple_list = [srt_get_loss(feat; assay_losses=assay_losses) for feat in features]
     sort!(tuple_list)
-    return [t[end] for t in tuple_list]
+    return [(t[end], t[2]) for t in tuple_list]
 end
 
 

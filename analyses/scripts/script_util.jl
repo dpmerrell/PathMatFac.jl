@@ -1,15 +1,27 @@
 
 using HDF5
 
-function get_omic_feature_names(omic_hdf)
+function get_omic_feature_genes(omic_hdf)
 
-    idx = h5open(omic_hdf, "r") do file
+    features = h5open(omic_hdf, "r") do file
         read(file, "features")
     end
 
-    return idx 
+    genes = [split(feat, "_")[1] for feat in features]
+
+    return genes
 end
 
+function get_omic_feature_assays(omic_hdf)
+
+    features = h5open(omic_hdf, "r") do file
+        read(file, "features")
+    end
+
+    assays = [split(feat, "_")[2] for feat in features]
+
+    return assays
+end
 
 function get_omic_instances(omic_hdf)
 

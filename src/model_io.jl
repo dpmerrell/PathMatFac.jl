@@ -24,15 +24,33 @@ end
 # MultiomicModel
 ######################################
 
+
+function tuple_to_str(tuple)
+    return join(tuple, "::")
+end
+
+function str_to_tuple(str)
+    return tuple(split(str,"::")...)
+end
+
+
 function to_hdf(hdf_file, path::String, model::MultiomicModel; save_omic_matrix::Bool=false)
 
     GPUMatFac.to_hdf(hdf_file, string(path, "/matfac"), model.matfac)
     
-    write(hdf_file, string(path, "/feature_genes"), model.feature_genes)
-    write(hdf_file, string(path, "/feature_assays"), model.feature_assays)
+    write(hdf_file, string(path, "/original_genes"), model.original_genes)
+    write(hdf_file, string(path, "/original_assays"), model.original_assays)
+    write(hdf_file, string(path, "/augmented_genes"), model.augmented_genes)
+    write(hdf_file, string(path, "/augmented_assays"), model.augmented_assays)
+    
+    string_feat_to_idx = Dict([tuple_to_str(k) => v for (k,v) in model.feature_to_idx])
+    to_hdf(hdf_file, string(path, "/feature_to_idx"), string_feat_to_idx)
 
-    write(hdf_file, string(path, "/sample_ids"), model.sample_ids)
-    write(hdf_file, string(path, "/sample_groups"), model.sample_ids)
+    write(hdf_file, string(path, "/original_samples"), model.original_samples)
+    write(hdf_file, string(path, "/original_groups"), model.original_groups)
+    write(hdf_file, string(path, "/augmented_samples"), model.augmented_samples)
+    
+    to_hdf(hdf_file, string(path, "/sample_to_idx"), model.sample_to_idx)
 
     if save_omic_matrix
         write(hdf_file, string(path, "/omic_matrix"), model.omic_matrix)
@@ -46,12 +64,19 @@ function multiomicmodel_from_hdf(hdf_file, path::String; load_omic_matrix::Bool=
     
     matfac = GPUMatFac.matfac_from_hdf(hdf_file, string(path, "/matfac"))
     
-    feature_genes = hdf_file[string(path, "/feature_genes")][:]
-    feature_assays = hdf_file[string(path, "/feature_assays")][:]
+    original_genes = hdf_file[string(path, "/original_genes")][:]
+    original_assays = hdf_file[string(path, "/original_assays")][:]
+    augmented_genes = hdf_file[string(path, "/augmented_genes")][:]
+    augmented_assays = hdf_file[string(path, "/augmented_assays")][:]
+    str_feat_to_idx = dictionary_from_hdf(hdf_file, string(path, "/feature_to_idx"))
+    feat_to_idx = Dict([str_to_tuple(k)=>v for (k,v) in str_feat_to_idx])
 
-    sample_ids = hdf_file[string(path, "/sample_ids")][:]
-    sample_groups = hdf_file[string(path, "/sample_groups")][:]
-    
+    original_samples= hdf_file[string(path, "/original_samples")][:]
+    original_groups = hdf_file[string(path, "/original_groups")][:]
+    augmented_samples = hdf_file[string(path, "/augmented_samples")][:]
+    augmented_groups = hdf_file[string(path, "/augmented_groups")][:]
+    sample_to_idx = dictionary_from_hdf(hdf_file, string(path, "/sample_to_idx"))
+
     if load_omic_matrix
         if in("omic_matrix", keys(hdf_file["path"]))
             omic_matrix = hdf_file[string(path, "/omic_matrix")][:,:]
@@ -62,8 +87,13 @@ function multiomicmodel_from_hdf(hdf_file, path::String; load_omic_matrix::Bool=
         omic_matrix = nothing
     end
 
-    return MultiomicModel(matfac, feature_genes, feature_assays,
-                          sample_ids, sample_groups, omic_matrix)
+    return MultiomicModel(matfac, original_genes, original_assays,
+                                  augmented_genes, augmented_assays,
+                                  feat_to_idx,
+                                  original_samples, original_groups,
+                                  augmented_samples, augmented_groups,
+                                  sample_to_idx,
+                                  omic_matrix)
 end
 
 ###########################################

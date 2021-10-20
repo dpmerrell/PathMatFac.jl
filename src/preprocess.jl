@@ -95,13 +95,31 @@ function extend_pathway(pathway)
 end
 
 
+"""
+Tag the nodes of the pathway with empty strings,
+indicating that they will be virtual/unobserved features
+in the model.
+"""
+function tag_pathway(pathway)
+
+    result = []
+    for edge in pathway
+        new_edge = [(edge[1],""), (edge[2],""), edge[3]]
+        push!(result, new_edge)
+    end
+
+    return result
+end
+
+
 function get_all_proteins(pathways)
 
     proteins = Set{String}()
     for edge_list in pathways
         for edge in edge_list
             for node in edge[1:2]
-                tok = split(node,"_")
+                name = node[1]
+                tok = split(name,"_")
                 if tok[2] == "protein"
                     push!(proteins, tok[1])
                 end
@@ -114,7 +132,7 @@ end
 
 
 function get_all_nodes(edge_list)
-    nodes = Set{String}()
+    nodes = Set()
     for edge in edge_list
         push!(nodes, edge[1])
         push!(nodes, edge[2])
@@ -124,7 +142,7 @@ end
 
 
 function get_all_nodes_many(edge_lists)
-    nodes = Set{String}()
+    nodes = Set()
     for edge_list in edge_lists
         union!(nodes, get_all_nodes(edge_list))
     end
@@ -143,10 +161,10 @@ end
 """
 function initialize_featuremap(all_pwy_proteins, unique_assays)
 
-    result = Dict( (pro, dt) =>  Vector{Int}() 
-                                   for assay in unique_assays  
-                                       for pro in all_pwy_proteins)
-    result["unmapped"] = Vector{Int}()
+    result = Dict( (pro, assay) =>  Vector{Int}() 
+                                    for assay in unique_assays  
+                                        for pro in all_pwy_proteins)
+    #result["unmapped"] = Vector{Int}()
     return result
 end
 
@@ -157,7 +175,7 @@ end
 """
 function populate_featuremap(featuremap, genes, assays)
 
-    for (idx, gene, assay) in enumerate(zip(genes, assays))
+    for (idx, (gene, assay)) in enumerate(zip(genes, assays))
         
         # extract gene names (there may be more than one)
         gene_names = split(gene, " ")
@@ -183,15 +201,17 @@ end
 function load_pathways(pwy_vec, feature_genes, feature_assays)
 
     extended_pwys = [extend_pathway(pwy) for pwy in pwy_vec]
-    pwy_proteins = get_all_proteins(extended_pwys)
+    tagged_pwys = [tag_pathway(pwy) for pwy in extended_pwys]
+    pwy_proteins = get_all_proteins(tagged_pwys)
+
     unique_assays = unique(feature_assays)
     empty_feature_map = initialize_featuremap(pwy_proteins, unique_assays)
 
     populated_feature_map = populate_featuremap(empty_feature_map, 
                                                 feature_genes, 
                                                 feature_assays)
-    
-    return (extended_pwys, populated_feature_map)
+
+    return (tagged_pwys, populated_feature_map)
 end
 
 
