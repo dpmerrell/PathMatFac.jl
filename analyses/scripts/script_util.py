@@ -29,26 +29,50 @@ def load_true(truth_hdf):
     return true_data, true_instances, true_features
 
 
-def load_factor_hdf(factor_hdf, feat_key="index", inst_key="columns"):
+def load_embedding(model_hdf):
 
-    feat_factor = load_hdf(factor_hdf, "feature_factor")
-    inst_factor = load_hdf(factor_hdf, "instance_factor")
-    features = load_hdf(factor_hdf, feat_key, dtype=str)
-    instances = load_hdf(factor_hdf, inst_key, dtype=str) 
-    pathways = load_hdf(factor_hdf, "pathways", dtype=str)
+    with h5py.File(model_hdf, "r") as f:
+        X = f["matfac"]["X"][:,:]
 
-    pathways = np.array([pwy.split("/")[-1] for pwy in pathways])
-
-    print("SHAPES:")
-    print("\tfeat_factor:", feat_factor.shape)
-    print("\tinst_factor:", inst_factor.shape)
-    print("\tfeatures:", features.shape)
-    print("\tinstances:", instances.shape)
-    print("\tpathways:", pathways.shape)
-
-    return feat_factor, inst_factor, features, instances, pathways
+    return X
 
 
+def load_sample_info(model_hdf):
+
+    with h5py.File(model_hdf, "r") as f:
+        original_samples = f["original_samples"][:].astype(str)
+        augmented_samples = f["augmented_samples"][:].astype(str)
+        
+        original_groups = f["original_groups"][:].astype(str)
+
+    sample_to_idx = {samp : idx for (idx, samp) in enumerate(augmented_samples)}
+
+    return original_samples, original_groups, augmented_samples, sample_to_idx
+
+
+def load_feature_info(model_hdf):
+
+    with h5py.File(model_hdf, "r") as f:
+        original_genes = f["original_genes"][:].astype(str)
+        augmented_genes = f["augmented_genes"][:].astype(str)
+        
+        original_assays = f["original_assays"][:].astype(str)
+        augmented_assays = f["augmented_assays"][:].astype(str)
+
+    feat_to_idx = {(gene,assay) : idx for (idx, (gene,assay)) in enumerate(zip(augmented_genes, augmented_assays))}
+
+    return original_genes, original_assays, augmented_genes, feat_to_idx
+
+
+def load_instance_offset(model_hdf):
+    with h5py.File(model_hdf, "r") as f:
+        offset = f["matfac"]["instance_offset"][:]
+    return offset
+
+def load_feature_offset(model_hdf):
+    with h5py.File(model_hdf, "r") as f:
+        offset = f["matfac"]["feature_offset"][:]
+    return offset
 
 def value_to_idx(ls):
     return {k: idx for idx, k in enumerate(ls)}

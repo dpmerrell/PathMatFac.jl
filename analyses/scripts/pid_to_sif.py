@@ -50,8 +50,8 @@ def read_pid_file(filename):
 
 
 def standardize_edge(edge, entity_types):
-    u = edge[0]
-    v = edge[1]
+    u = edge[0].upper()
+    v = edge[1].upper()
     tag = edge[2]
    
     tag_sign = tag[-1] 

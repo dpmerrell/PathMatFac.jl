@@ -3,22 +3,18 @@ using HDF5
 
 function get_omic_feature_genes(omic_hdf)
 
-    features = h5open(omic_hdf, "r") do file
-        read(file, "features")
+    genes = h5open(omic_hdf, "r") do file
+        read(file, "feature_genes")
     end
-
-    genes = [split(feat, "_")[1] for feat in features]
 
     return genes
 end
 
 function get_omic_feature_assays(omic_hdf)
 
-    features = h5open(omic_hdf, "r") do file
-        read(file, "features")
+    assays = h5open(omic_hdf, "r") do file
+        read(file, "feature_assays")
     end
-
-    assays = [split(feat, "_")[2] for feat in features]
 
     return assays
 end
@@ -36,7 +32,7 @@ end
 function get_omic_groups(omic_hdf)
 
     cancer_types = h5open(omic_hdf, "r") do file
-        read(file, "groups")
+        read(file, "instance_groups")
     end
 
     return cancer_types

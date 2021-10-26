@@ -7,7 +7,7 @@ configfile: "config.yaml"
 SIM_PARAMS = config["sim_params"]
 SIM_REPLICATES = list(range(SIM_PARAMS["sim_replicates"]))
 
-TCGA_DIR = config["tcga_dir"]
+TCGA_DATA_DIR = config["tcga_dir"]
 
 SCRIPT_DIR = "scripts"
 JULIA_SCRIPT_DIR = path.join(SCRIPT_DIR, "julia_scripts")
@@ -23,71 +23,28 @@ SIF_DIR = path.join(PWY_DIR, "sifs")
 PID_SIF_DIR = path.join(SIF_DIR, "ncipid")
 PWY_JSON_DIR = path.join(PWY_DIR, "jsons")
 
-SIM_DIR = path.join(TEMP_DIR, "simulations")
+TCGA_DIR = path.join(TEMP_DIR, "tcga_evaluations")
+TCGA_VIS_DIR = path.join(TCGA_DIR, "visualizations")
+
+SIM_DIR = path.join(TEMP_DIR, "simulation_study")
 SIM_DATA_DIR = path.join(SIM_DIR, "datasets")
 SIM_INFER_DIR = path.join(SIM_DIR, "inferred")
-
-SIM_USED_FEATURE_DIR = path.join(SIM_DIR, "used_features")
-SIM_SPLIT_DIR = path.join(SIM_DIR, "train_test_splits")
-SIM_MASK_DIR = path.join(SIM_DIR, "missing_data_masks")
-SIM_SCORE_DIR = path.join(SIM_DIR, "scores")
-
-test_holdout_ctypes = "_".join(CANCER_TYPES[5:])
-test_holdout_pwys = "_".join(NCI_PWY_IDS[50:])
 
 PYNBS_PREP_DIR = path.join(TEMP_DIR, "pynbs_tsvs")
 PYNBS_NET_DIR = path.join(PYNBS_PREP_DIR, "networks")
 PYNBS_MUT_DIR = path.join(PYNBS_PREP_DIR, "mutations")
 
+INSTREG = [0.0, 500.0, 5000.0]
+FEATREG = [0.0, 500.0, 5000.0]
+LR = [0.005, 0.002]
+MAX_ITER = 1000
+
+
 rule all:
     input:
-        path.join(PWY_JSON_DIR, "ncipid.json")
-#        path.join(SIM_SCORE_DIR,"dataset=tcga_ncipid",
-#                                "factor_model",
-#                                "split=keep:HNSC,BRCA",
-#                                "features=dropomic:",
-#                                "mask=droprand:0.05",
-#                                "pwys=ncipid",
-#                                "imputation.json"),
-#        path.join(SIM_INFER_DIR,"dataset=tcga_ncipid",
-#                                "factor_model",
-#                                "split=keep:HNSC,BRCA",
-#                                "features=dropomic:",
-#                                "mask=droprand:0.05",
-#                                "pwys=ncipid",
-#                                "factors.hdf"),
-#        path.join(SIM_INFER_DIR,"dataset=tcga_ncipid",
-#                                "plier",
-#				"split=keep:HNSC,BRCA",
-#                                "pwys=ncipid",
-#                                "result.rds"),
-#        "pynbs_help.txt"
-#        net_tsv=path.join(PYNBS_NET_DIR, "ncipid.tsv"),
-#        mut_tsv=path.join(PYNBS_MUT_DIR, "dataset=tcga_ncipid", "split=keep:HNSC,BRCA", "mask=droprand:0.05.tsv")
-
-
-rule sim_score_imputation:
-    input:
-        src=path.join(SCRIPT_DIR, "score_imputation.py"),
-        imp=path.join(SIM_INFER_DIR,"dataset={dataset}",
-                                    "factor_model",
-                                    "split={split}",
-                                    "features={features}",
-                                    "mask={mask}",
-                                    "pwys={pwys}",
-                                    "imputed.json"),
-        truth=path.join(SIM_DATA_DIR, "{dataset}.hdf"),
-        mask=path.join(SIM_MASK_DIR, "dataset={dataset}", "mask={mask}.json")
-    output:
-        path.join(SIM_SCORE_DIR,"dataset={dataset}",
-                                "factor_model",
-                                "split={split}",
-                                "features={features}",
-                                "mask={mask}",
-                                "pwys={pwys}",
-                                "imputation.json")
-    shell:
-        "python {input.src} {input.imp} {input.truth} {input.mask} {output}"
+        expand(path.join(TCGA_VIS_DIR, "embedding_scatter", "lr={lr}_instreg={instreg}_featreg={featreg}.html"), lr=LR, instreg=INSTREG, featreg=FEATREG),
+        #expand(path.join(TCGA_VIS_DIR, "plots", "{off}offset_lr={lr}_instreg={instreg}_featreg={featreg}.png"), off=["feature","instance"], lr=LR, instreg=INSTREG, featreg=FEATREG),
+        expand(path.join(TCGA_DIR, "imputed", "lr={lr}_instreg={instreg}_featreg={featreg}/imputed.hdf"), lr=LR, instreg=INSTREG, featreg=FEATREG)
 
 
 rule sim_run_pynbs:
@@ -99,6 +56,48 @@ rule sim_run_pynbs:
         "./{input.img} --help > {output}"
 
 
+rule matfac_model_plot:
+    input:
+        fitted=path.join(TCGA_DIR, "fitted", "{params}", "model.hdf"),
+        src=path.join(SCRIPT_DIR, "vis_offset_plot.py")
+    output:
+        plt=path.join(TCGA_VIS_DIR, "plots", "{axis}offset_{params,[_.=0-9a-z]+}.png")
+    shell:
+        "python {input.src} {input.fitted} {wildcards.axis} {output.plt}"
+
+
+rule matfac_embedding_scatter:
+    input:
+        fitted=path.join(TCGA_DIR, "fitted", "{params}", "model.hdf"),
+        src=path.join(SCRIPT_DIR, "vis_embedding_scatter.py")
+    output:
+        scatter=path.join(TCGA_VIS_DIR, "embedding_scatter", "{params,[_.=0-9a-z]+}.html")
+    shell:
+        "python {input.src} {input.fitted} {output.scatter}"
+
+
+rule matfac_impute:
+    input:
+        fitted=path.join(TCGA_DIR, "fitted","{params}","model.hdf"),
+        src=path.join(SCRIPT_DIR, "matfac_impute.jl")
+    output:
+        imputed=path.join(TCGA_DIR, "imputed","{params}","imputed.hdf")
+    shell:
+        "julia --project=.. {input.src} {input.fitted} {output.imputed}"
+
+
+rule run_matfac:
+    input:
+        src=path.join(SCRIPT_DIR, "run_matfac.jl"),
+        hdf=path.join(TCGA_DATA_DIR, "tcga_omic_preprocessed.hdf"),
+        pwy=path.join(PWY_JSON_DIR, "ncipid.json")
+    output:
+        fitted=path.join(TCGA_DIR, "fitted", "lr={lr,[.0-9]+}_instreg={instreg,[.0-9]+}_featreg={featreg,[.0-9]+}", "model.hdf")
+    resources:
+        nvidia_gpu=1
+    shell:
+        "julia --project=.. {input.src} {input.hdf} {input.pwy} {output.fitted} inst_reg_weight={wildcards.instreg} feat_reg_weight={wildcards.featreg} lr={wildcards.lr} max_iter={MAX_ITER}"
+
 rule sim_pynbs_prep_network:
     input:
         src=path.join(SCRIPT_DIR,"pynbs_prep_pwy.py"),
@@ -107,91 +106,6 @@ rule sim_pynbs_prep_network:
         net_tsv=path.join(PYNBS_NET_DIR, "{pwys}.tsv")
     shell:
         "python {input.src} {input.pwys_json} {output.net_tsv}"
-
-
-rule sim_pynbs_prep_mut:
-    input:
-        src=path.join(SCRIPT_DIR,"pynbs_prep_mut.py"),
-        omic_hdf=path.join(SIM_DATA_DIR,"{dataset}.hdf"),
-        split_json=path.join(SIM_SPLIT_DIR,"dataset={dataset}","split={split}.json"),
-        mask_json=path.join(SIM_MASK_DIR, "dataset={dataset}", "mask={mask}.json"),
-    output:
-        mut_tsv=path.join(PYNBS_MUT_DIR, "dataset={dataset}", "split={split}", "mask={mask}.tsv")
-    shell:
-        "python {input.src} {input.omic_hdf} {input.split_json} {input.mask_json} {output.mut_tsv}"
-
-
-rule sim_run_plier:
-    input:
-        src=path.join(R_DIR, "plier_wrapper.R"),
-        dataset_hdf=path.join(SIM_DATA_DIR, "{dataset}.hdf"),
-        split_json=path.join(SIM_SPLIT_DIR, "dataset={dataset}","split={split}.json"),
-        pwys_json=path.join(PWY_JSON_DIR, "{pwys}.json")
-    output:
-        rds=path.join(SIM_INFER_DIR,"dataset={dataset}",
-                                    "plier",
-                                    "split={split}",
-                                    "pwys={pwys}",
-                                    "result.rds"),
-    shell:
-        "Rscript {input.src} {input.dataset_hdf} {input.split_json} {input.pwys_json} {output.rds}"
-
-
-rule sim_run_factorize:
-    input:
-        src=path.join(JULIA_SCRIPT_DIR, "train_pwy_factors.jl"),
-        dataset_hdf=path.join(SIM_DATA_DIR, "{dataset}.hdf"),
-        split_json=path.join(SIM_SPLIT_DIR, "dataset={dataset}", "split={split}.json"),
-        features_json=path.join(SIM_USED_FEATURE_DIR, "dataset={dataset}", "features={features}.json"),
-        mask_json=path.join(SIM_MASK_DIR, "dataset={dataset}", "mask={mask}.json"),
-        pwys_json=path.join(PWY_JSON_DIR, "{pwys}.json")
-    output:
-        factors=path.join(SIM_INFER_DIR,"dataset={dataset}",
-                                        "factor_model",
-                                        "split={split}",
-                                        "features={features}",
-                                        "mask={mask}",
-                                        "pwys={pwys}",
-                                        "factors.hdf"),
-        imputed=path.join(SIM_INFER_DIR,"dataset={dataset}",
-                                        "factor_model",
-                                        "split={split}",
-                                        "features={features}",
-                                        "mask={mask}",
-                                        "pwys={pwys}",
-                                        "imputed.json")
-    shell:
-        "julia --project=.. {input.src} {input.dataset_hdf} {input.split_json} {input.features_json} {input.mask_json} {input.pwys_json} {output.factors}" # {output.imputed}"
-
-
-rule sim_train_test_split:
-    input:
-        src=path.join(SCRIPT_DIR, "split_patients.py"),
-        hdf=path.join(SIM_DATA_DIR, "{dataset}.hdf")
-    output:
-        path.join(SIM_SPLIT_DIR, "dataset={dataset}", "split={split}.json")
-    shell:
-        "python {input.src} {input.hdf} {output} --split-str {wildcards.split}"
-
-
-rule sim_get_features:
-    input:
-        src=path.join(SCRIPT_DIR, "choose_features.py"),
-        hdf=path.join(SIM_DATA_DIR, "{dataset}.hdf")
-    output:
-        path.join(SIM_USED_FEATURE_DIR, "dataset={dataset}", "features={features}.json")
-    shell:
-        "python {input.src} {input.hdf} {output} --feature-str {wildcards.features}"
-
-
-rule sim_mask_data:
-    input:
-        src=path.join(SCRIPT_DIR, "mask_data.py"),
-        dataset=path.join(SIM_DATA_DIR, "{dataset}.hdf")
-    output:
-        path.join(SIM_MASK_DIR, "dataset={dataset}", "mask={mask_str}.json")
-    shell:
-        "python {input.src} {input.dataset} {output} --mask-str {wildcards.mask_str}"
 
 
 rule simulate_full_data:

@@ -2,7 +2,7 @@
 import pandas as pd
 import argparse
 import json
-
+import os
 
 def sif_to_edgelist(sif_path):
 
@@ -25,7 +25,7 @@ if __name__=="__main__":
 
     pathways = [sif_to_edgelist(sif) for sif in args.sif_files]
     result = { "pathways": pathways,
-               "names": args.sif_files
+               "names": [os.path.basename(pth) for pth in args.sif_files]
              }
     
     with open(args.out_json, "w") as fout:
