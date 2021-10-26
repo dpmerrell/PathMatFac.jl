@@ -1,4 +1,5 @@
 
+using Statistics
 using GPUMatFac
 import GPUMatFac: LogisticLoss, QuadLoss, PoissonLoss, NoLoss
 
@@ -11,12 +12,12 @@ export DEFAULT_ASSAYS, sort_features
 #                           "mrnaseq" => PoissonLoss, 
 #                           "rppa" => QuadLoss
 #                          )
-DEFAULT_ASSAY_LOSSES = Dict("cna" => QuadLoss,
-                           "mutation" => LogisticLoss,
-                           "methylation" => QuadLoss,
-                           "mrnaseq" => QuadLoss, 
-                           "rppa" => QuadLoss
-                          )
+DEFAULT_ASSAY_LOSSES = Dict("cna" => LogisticLoss,
+                            "mutation" => LogisticLoss,
+                            "methylation" => QuadLoss,
+                            "mrnaseq" => QuadLoss, 
+                            "rppa" => QuadLoss
+                            )
 
 
 
@@ -104,6 +105,15 @@ function sort_features(features; assay_losses=DEFAULT_ASSAY_LOSSES)
     return [(t[end], t[2]) for t in tuple_list]
 end
 
+function nansum(x)
+    return sum(filter(!isnan, x))
+end
 
+function nanmean(x)
+    return mean(filter(!isnan, x))
+end
 
+function nanvar(x)
+    return var(filter(!isnan, x))
+end
 

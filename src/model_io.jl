@@ -74,7 +74,6 @@ function multiomicmodel_from_hdf(hdf_file, path::String; load_omic_matrix::Bool=
     original_samples= hdf_file[string(path, "/original_samples")][:]
     original_groups = hdf_file[string(path, "/original_groups")][:]
     augmented_samples = hdf_file[string(path, "/augmented_samples")][:]
-    augmented_groups = hdf_file[string(path, "/augmented_groups")][:]
     sample_to_idx = dictionary_from_hdf(hdf_file, string(path, "/sample_to_idx"))
 
     if load_omic_matrix
@@ -91,7 +90,7 @@ function multiomicmodel_from_hdf(hdf_file, path::String; load_omic_matrix::Bool=
                                   augmented_genes, augmented_assays,
                                   feat_to_idx,
                                   original_samples, original_groups,
-                                  augmented_samples, augmented_groups,
+                                  augmented_samples,
                                   sample_to_idx,
                                   omic_matrix)
 end
