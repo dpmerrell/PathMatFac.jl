@@ -21,7 +21,7 @@ mutable struct MultiomicModel
 
     # Omic dataset
     omic_matrix::Union{Nothing,AbstractMatrix}
-
+    sample_covariates::Union{Nothing,AbstractMatrix}
 end
 
 

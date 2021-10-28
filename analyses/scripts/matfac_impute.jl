@@ -12,7 +12,10 @@ function main(args)
     Z = impute(model)
 
     h5open(output_hdf, "w") do file
-        write(file, "imputed", Z)
+        write(file, "omic_matrix", Z)
+        write(file, "augmented_genes", model.augmented_genes)
+        write(file, "augmented_assays", model.augmented_assays)
+        write(file, "augmented_samples", model.augmented_samples)
     end
 end
 

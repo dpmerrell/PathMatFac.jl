@@ -1,6 +1,15 @@
 import numpy as np
 import h5py
 
+
+NICE_NAMES = {"gender": "Sex",
+              "hpv_status": "HPV",
+              "tobacco_smoking_history": "Smoking",
+              "age_at_initial_pathologic_diagnosis": "Age",
+              "race": "Race"
+              }
+
+
 def load_hdf(dataset_hdf, key, dtype=float):
     
     with h5py.File(dataset_hdf, "r") as f:
@@ -45,7 +54,7 @@ def load_sample_info(model_hdf):
         
         original_groups = f["original_groups"][:].astype(str)
 
-    sample_to_idx = {samp : idx for (idx, samp) in enumerate(augmented_samples)}
+    sample_to_idx = {samp: idx for (idx, samp) in enumerate(augmented_samples)}
 
     return original_samples, original_groups, augmented_samples, sample_to_idx
 
@@ -59,9 +68,9 @@ def load_feature_info(model_hdf):
         original_assays = f["original_assays"][:].astype(str)
         augmented_assays = f["augmented_assays"][:].astype(str)
 
-    feat_to_idx = {(gene,assay) : idx for (idx, (gene,assay)) in enumerate(zip(augmented_genes, augmented_assays))}
+    feat_to_idx = {pair: idx for (idx, pair) in enumerate(zip(augmented_genes, augmented_assays))}
 
-    return original_genes, original_assays, augmented_genes, feat_to_idx
+    return original_genes, original_assays, augmented_genes, augmented_assays, feat_to_idx
 
 
 def load_instance_offset(model_hdf):

@@ -38,18 +38,6 @@ function parse_opts!(defaults, opt_list)
 end
 
 
-function inspect_omic_data(feature_assays, omic_data)
-
-    println("OMIC DATA: ", size(omic_data))
-    properties = Dict([ot => Dict("min" => Inf, "max"=>-Inf) for ot in unique(feature_assays)])
-
-    for (i, ot) in enumerate(feature_assays)
-        properties[ot]["min"] = min(properties[ot]["min"], minimum(omic_data[:,i])) 
-        properties[ot]["max"] = max(properties[ot]["max"], minimum(omic_data[:,i])) 
-    end
-    println(properties)
-end
-
 function main(args)
    
     omic_hdf_filename = args[1]
@@ -79,8 +67,6 @@ function main(args)
 
     omic_data = get_omic_data(omic_hdf_filename)
 
-    inspect_omic_data(feature_assays, omic_data)
-
     println("Assembling model...")
     
     pwy_dict = JSON.parsefile(pwy_json) 
@@ -94,13 +80,10 @@ function main(args)
     N = size(model.omic_matrix,2)
     println("OMIC DATA: ", M, " x ", N) 
 
-    #save_hdf("test_model.hdf", model)
-    #reloaded = load_hdf("test_model.hdf")
-
     println("Fitting model...")
     fit!(model; opts...)
 
-    save_hdf(out_hdf, model)
+    save_hdf(out_hdf, model; save_omic_matrix=true)
 
 end
 

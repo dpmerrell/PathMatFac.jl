@@ -121,7 +121,7 @@ function augment_samples(sample_ids, group_ids; rooted=true)
     return result
 end
 
-function create_sample_edgelist(sample_id_vec, group_vec; rooted=false)
+function create_sample_edgelist(sample_id_vec, group_vec; rooted=true)
     
     m = length(sample_id_vec)
     @assert m == length(group_vec)
@@ -211,16 +211,10 @@ function assemble_feature_reg_mats(pathways, feature_genes, feature_assays;
 
     assay_edgelist = construct_assay_edgelist(augmented_features,
                                               unique_assays)
-    #println("ASSAY EDGELIST:")
-    #println(assay_edgelist)
     augmented_features = sort_features(augmented_features)
-    #println("AUGMENTED_FEATURES:")
-    #println(augmented_features)
 
     # Assemble the regularizer sparse matrices
     aug_feat_to_idx = value_to_idx(augmented_features)
-    #println("AUG FEAT TO IDX:")
-    #println(aug_feat_to_idx)
     feature_reg_mats = edgelists_to_spmats(augmented_pwys, aug_feat_to_idx)#; verbose=true)
 
     assay_reg_mat = edgelist_to_spmat(assay_edgelist, aug_feat_to_idx)
@@ -247,7 +241,8 @@ end
 
 function assemble_model(pathways, omic_matrix, 
                         feature_genes, feature_assays, 
-                        sample_ids, sample_groups)
+                        sample_ids, sample_groups;
+                        sample_covariates=nothing)
 
     original_features = collect(zip(feature_genes, feature_assays))
 
@@ -284,13 +279,23 @@ function assemble_model(pathways, omic_matrix,
     augmented_genes = [feat[1] for feat in augmented_features]
     augmented_assays = [feat[2] for feat in augmented_features]
 
+
+    # TODO augment covariates for virtual samples
+    if sample_covariates != nothing
+        augmented_sample_covariates = zeros((len(augmented_sample_ids),1))
+    else
+        augmented_sample_covariates = sample_covariates
+    end
+
+
     return MultiomicModel(matfac_model, feature_genes, feature_assays,
                                         augmented_genes, augmented_assays,
                                         aug_feat_to_idx,
                                         sample_ids, sample_groups,
                                         augmented_sample_ids, 
                                         aug_sample_to_idx,
-                                        augmented_omic_matrix)
+                                        augmented_omic_matrix,
+                                        augmented_sample_covariates)
 
 end
 

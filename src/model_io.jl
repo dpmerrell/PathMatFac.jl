@@ -55,6 +55,10 @@ function to_hdf(hdf_file, path::String, model::MultiomicModel; save_omic_matrix:
     if save_omic_matrix
         write(hdf_file, string(path, "/omic_matrix"), model.omic_matrix)
     end
+    
+    if model.sample_covariates != nothing
+        write(hdf_file, string(path, "/sample_covariates"), model.sample_covariates)
+    end
 
     return
 end
@@ -77,7 +81,7 @@ function multiomicmodel_from_hdf(hdf_file, path::String; load_omic_matrix::Bool=
     sample_to_idx = dictionary_from_hdf(hdf_file, string(path, "/sample_to_idx"))
 
     if load_omic_matrix
-        if in("omic_matrix", keys(hdf_file["path"]))
+        if in("omic_matrix", keys(hdf_file[path]))
             omic_matrix = hdf_file[string(path, "/omic_matrix")][:,:]
         else
             @warn "No omic_matrix saved in HDF file"
@@ -86,13 +90,19 @@ function multiomicmodel_from_hdf(hdf_file, path::String; load_omic_matrix::Bool=
         omic_matrix = nothing
     end
 
+    if in("sample_covariates", keys(hdf_file[path]))
+        sample_covariates = hdf_file[string(path,"/sample_covariates")][:,:]
+    else
+        sample_covariates = nothing
+    end
+
     return MultiomicModel(matfac, original_genes, original_assays,
                                   augmented_genes, augmented_assays,
                                   feat_to_idx,
                                   original_samples, original_groups,
                                   augmented_samples,
                                   sample_to_idx,
-                                  omic_matrix)
+                                  omic_matrix, sample_covariates)
 end
 
 ###########################################

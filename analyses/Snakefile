@@ -36,15 +36,15 @@ PYNBS_MUT_DIR = path.join(PYNBS_PREP_DIR, "mutations")
 
 INSTREG = [0.0, 500.0, 5000.0]
 FEATREG = [0.0, 500.0, 5000.0]
-LR = [0.005, 0.002]
-MAX_ITER = 1000
+LR = [0.005]
+MAX_ITER = 800
 
 
 rule all:
     input:
         expand(path.join(TCGA_VIS_DIR, "embedding_scatter", "lr={lr}_instreg={instreg}_featreg={featreg}.html"), lr=LR, instreg=INSTREG, featreg=FEATREG),
-        #expand(path.join(TCGA_VIS_DIR, "plots", "{off}offset_lr={lr}_instreg={instreg}_featreg={featreg}.png"), off=["feature","instance"], lr=LR, instreg=INSTREG, featreg=FEATREG),
-        expand(path.join(TCGA_DIR, "imputed", "lr={lr}_instreg={instreg}_featreg={featreg}/imputed.hdf"), lr=LR, instreg=INSTREG, featreg=FEATREG)
+        expand(path.join(TCGA_VIS_DIR, "plots", "lr={lr}_instreg={instreg}_featreg={featreg}.png"), lr=LR, instreg=INSTREG, featreg=FEATREG),
+        #expand(path.join(TCGA_DIR, "imputed", "lr={lr}_instreg={instreg}_featreg={featreg}/imputed.hdf"), lr=LR, instreg=INSTREG, featreg=FEATREG)
 
 
 rule sim_run_pynbs:
@@ -58,22 +58,24 @@ rule sim_run_pynbs:
 
 rule matfac_model_plot:
     input:
-        fitted=path.join(TCGA_DIR, "fitted", "{params}", "model.hdf"),
-        src=path.join(SCRIPT_DIR, "vis_offset_plot.py")
+        model=path.join(TCGA_DIR, "fitted", "{params}", "model.hdf"),
+        omic=path.join(TCGA_DIR, "fitted", "{params}", "model.hdf"),
+        src=path.join(SCRIPT_DIR, "vis_model_plot.py")
     output:
-        plt=path.join(TCGA_VIS_DIR, "plots", "{axis}offset_{params,[_.=0-9a-z]+}.png")
+        plt=path.join(TCGA_VIS_DIR, "plots", "{params,[_.=0-9a-z]+}.png")
     shell:
-        "python {input.src} {input.fitted} {wildcards.axis} {output.plt}"
+        "python {input.src} {input.model} {input.omic} {output.plt}"
 
 
 rule matfac_embedding_scatter:
     input:
         fitted=path.join(TCGA_DIR, "fitted", "{params}", "model.hdf"),
+        clinical=path.join(TCGA_DATA_DIR, "tcga_clinical.hdf"),
         src=path.join(SCRIPT_DIR, "vis_embedding_scatter.py")
     output:
         scatter=path.join(TCGA_VIS_DIR, "embedding_scatter", "{params,[_.=0-9a-z]+}.html")
     shell:
-        "python {input.src} {input.fitted} {output.scatter}"
+        "python {input.src} {input.fitted} {input.clinical} {output.scatter}"
 
 
 rule matfac_impute:
