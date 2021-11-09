@@ -34,17 +34,27 @@ PYNBS_PREP_DIR = path.join(TEMP_DIR, "pynbs_tsvs")
 PYNBS_NET_DIR = path.join(PYNBS_PREP_DIR, "networks")
 PYNBS_MUT_DIR = path.join(PYNBS_PREP_DIR, "mutations")
 
-INSTREG = [0.0, 500.0, 5000.0]
-FEATREG = [0.0, 500.0, 5000.0]
-LR = [0.005]
-MAX_ITER = 800
+#INSTREG = [0.0, 500.0, 5000.0]
+#FEATREG = [0.0, 500.0, 5000.0]
+INSTREG = [5000.0]
+FEATREG = [5000.0]
+LR = [0.002]#, 0.005]
+#MAX_ITER = 800
+#MAX_ITER = [5000] 
+MAX_ITER = 1700
 
+HOLDOUT_CTYPES = ["", "OV:GBM:LAML"]
+#STD_ASSAYS = ["", "methylation"]
+STD_ASSAYS = ["methylation:mrnaseq"]
+EMBEDDING_PLOT_PC1 = [0,1]
+EMBEDDING_PLOT_GPS = ["", "HNSC:LUSC:ESCA"]
 
 rule all:
     input:
-        expand(path.join(TCGA_VIS_DIR, "embedding_scatter", "lr={lr}_instreg={instreg}_featreg={featreg}.html"), lr=LR, instreg=INSTREG, featreg=FEATREG),
-        expand(path.join(TCGA_VIS_DIR, "plots", "lr={lr}_instreg={instreg}_featreg={featreg}.png"), lr=LR, instreg=INSTREG, featreg=FEATREG),
-        #expand(path.join(TCGA_DIR, "imputed", "lr={lr}_instreg={instreg}_featreg={featreg}/imputed.hdf"), lr=LR, instreg=INSTREG, featreg=FEATREG)
+        expand(path.join(TCGA_VIS_DIR, "embedding_scatter", "pltgps={pltgps}_pc={pc}_holdout={holdout}_stdassay={stdassay}_lr={lr}_maxiter={mi}_instreg={instreg}_featreg={featreg}.html"), pltgps=EMBEDDING_PLOT_GPS, pc=EMBEDDING_PLOT_PC1, holdout=HOLDOUT_CTYPES, stdassay=STD_ASSAYS, lr=LR, mi=MAX_ITER, instreg=INSTREG, featreg=FEATREG),
+        expand(path.join(TCGA_VIS_DIR, "pathway_factors", "holdout={holdout}_stdassay={stdassay}_lr={lr}_maxiter={mi}_instreg={instreg}_featreg={featreg}.html"), holdout=HOLDOUT_CTYPES, stdassay=STD_ASSAYS, lr=LR, mi=MAX_ITER, instreg=INSTREG, featreg=FEATREG),
+        expand(path.join(TCGA_VIS_DIR, "plots", "holdout={holdout}_stdassay={stdassay}_lr={lr}_maxiter={mi}_instreg={instreg}_featreg={featreg}.png"), holdout=HOLDOUT_CTYPES, stdassay=STD_ASSAYS, lr=LR, mi=MAX_ITER, instreg=INSTREG, featreg=FEATREG),
+        #expand(path.join(TCGA_DIR, "imputed", "holdout={holdout}_stdassay={stdassay}_lr={lr}_maxiter={mi}_instreg={instreg}_featreg={featreg}/imputed.hdf"), holdout=HOLDOUT_CTYPES, stdassay=STD_ASSAYS, lr=LR, mi=MAX_ITER, instreg=INSTREG, featreg=FEATREG)
 
 
 rule sim_run_pynbs:
@@ -62,9 +72,20 @@ rule matfac_model_plot:
         omic=path.join(TCGA_DIR, "fitted", "{params}", "model.hdf"),
         src=path.join(SCRIPT_DIR, "vis_model_plot.py")
     output:
-        plt=path.join(TCGA_VIS_DIR, "plots", "{params,[_.=0-9a-z]+}.png")
+        plt=path.join(TCGA_VIS_DIR, "plots", "{params,[_.:=0-9a-zA-Z]+}.png")
     shell:
         "python {input.src} {input.model} {input.omic} {output.plt}"
+
+
+rule matfac_pwy_factor_plot:
+    input:
+        src=path.join(SCRIPT_DIR, "vis_pathway_factor_plot.py"),
+        fitted=path.join(TCGA_DIR, "fitted", "{params}", "model.hdf"),
+        pathways=path.join(PWY_JSON_DIR, "ncipid.json")
+    output:
+        plot=path.join(TCGA_VIS_DIR, "pathway_factors", "{params,[_.:=0-9a-zA-Z]+}.html")
+    shell:
+        "python {input.src} {input.fitted} {input.pathways} {output.plot}"
 
 
 rule matfac_embedding_scatter:
@@ -73,9 +94,9 @@ rule matfac_embedding_scatter:
         clinical=path.join(TCGA_DATA_DIR, "tcga_clinical.hdf"),
         src=path.join(SCRIPT_DIR, "vis_embedding_scatter.py")
     output:
-        scatter=path.join(TCGA_VIS_DIR, "embedding_scatter", "{params,[_.=0-9a-z]+}.html")
+        scatter=path.join(TCGA_VIS_DIR, "embedding_scatter", "pltgps={pltgps,[:A-Z]*}_pc={pc,[0-9]+}_{params,[_.:=0-9a-zA-Z]+}.html")
     shell:
-        "python {input.src} {input.fitted} {input.clinical} {output.scatter}"
+        "python {input.src} {input.fitted} {input.clinical} {wildcards.pc} {output.scatter} {wildcards.pltgps}"
 
 
 rule matfac_impute:
@@ -91,14 +112,25 @@ rule matfac_impute:
 rule run_matfac:
     input:
         src=path.join(SCRIPT_DIR, "run_matfac.jl"),
-        hdf=path.join(TCGA_DATA_DIR, "tcga_omic_preprocessed.hdf"),
+        hdf=path.join(TCGA_DATA_DIR, "preprocessed","holdout={holdout}_stdassay={stdassay}.hdf"),
         pwy=path.join(PWY_JSON_DIR, "ncipid.json")
     output:
-        fitted=path.join(TCGA_DIR, "fitted", "lr={lr,[.0-9]+}_instreg={instreg,[.0-9]+}_featreg={featreg,[.0-9]+}", "model.hdf")
+        fitted=path.join(TCGA_DIR, "fitted", "holdout={holdout,[:A-Z]*}_stdassay={stdassay,[:a-z]*}_lr={lr,[.0-9]+}_maxiter={mi,[0-9]+}_instreg={instreg,[.0-9]+}_featreg={featreg,[.0-9]+}", "model.hdf")
     resources:
         nvidia_gpu=1
     shell:
-        "julia --project=.. {input.src} {input.hdf} {input.pwy} {output.fitted} inst_reg_weight={wildcards.instreg} feat_reg_weight={wildcards.featreg} lr={wildcards.lr} max_iter={MAX_ITER}"
+        "julia --project=.. {input.src} {input.hdf} {input.pwy} {output.fitted} inst_reg_weight={wildcards.instreg} feat_reg_weight={wildcards.featreg} lr={wildcards.lr} max_iter={wildcards.mi}"
+
+
+rule matfac_preprocess_tcga_omic:
+    input:
+        src=path.join(SCRIPT_DIR, "preprocess_tcga.py"),
+        omic=path.join(TCGA_DATA_DIR, "tcga_omic.hdf")
+    output:
+        path.join(TCGA_DATA_DIR, "preprocessed", "holdout={holdout,[:A-Z]*}_stdassay={stdassay,[:a-z]*}.hdf")
+    shell:
+        "python {input.src} {input.omic} {output} heldout_ctypes={wildcards.holdout} std_assays={wildcards.stdassay}"
+
 
 rule sim_pynbs_prep_network:
     input:
@@ -142,11 +174,12 @@ rule ncipid_sifs_to_json:
     input:
         src=path.join(SCRIPT_DIR, "sifs_to_json.py"),
     #sifs=get_sifs
-        sifs=expand(path.join(PID_SIF_DIR, "{pwy}.sif"), pwy=NCI_PWY_IDS)
+        sifs=expand(path.join(PID_SIF_DIR, "{pwy}.sif"), pwy=NCI_PWY_IDS),
+        names=path.join(NCI_PID_DIR, "names.tab")
     output:
         json=path.join(PWY_JSON_DIR, "ncipid.json")
     shell:
-        "python {input.src} --sif-files {input.sifs} --out-json {output.json}"
+        "python {input.src} --sif-files {input.sifs} --names-file {input.names} --out-json {output.json}"
 
 
 rule ncipid_to_sif:

@@ -1,16 +1,12 @@
 
-import matplotlib.pyplot as plt
 import numpy as np
 import h5py
 import sys
 import os
-import bokeh
-from bokeh.io import output_file, show
-from bokeh.plotting import figure
-from bokeh.palettes import plasma, Category20
-from bokeh.models import ColumnDataSource, HoverTool, LinearColorMapper, BoxZoomTool,\
-                         CategoricalColorMapper, WheelZoomTool, PanTool
-from bokeh.transform import transform
+
+import chart_studio.plotly as cs
+import plotly.express as px
+import pandas as pd
 
 import script_util as su
 
@@ -44,62 +40,46 @@ def match_clinical_to_omic(clinical_data, clinical_samples, orig_samples):
     return new_clinical_data
 
 
-def embedding_scatter_interactive(X, instance_ids, instance_groups, clinical_data, clinical_cols):
+def embedding_scatter_plotly(X, instance_ids, instance_groups, clinical_data, clinical_cols, pc_idx):
 
     u, s, vh = np.linalg.svd(X, full_matrices=False)
 
     pcs = u * s
 
-    x = pcs[:,0]
-    y = pcs[:,1]
-    group_encoder = {gp:idx for idx, gp in enumerate(np.unique(instance_groups))}
-    colors = np.vectorize(lambda x: Category20[20][group_encoder[x]%20])(instance_groups)
+    x = pcs[:,pc_idx[0]]
+    y = pcs[:,pc_idx[1]]
+    z = pcs[:,pc_idx[2]]
 
-    source_dict = dict(x=x, y=y, desc=instance_groups, pat=instance_ids, color=colors)
+    labels = ["PC {}".format(idx+1) for idx in pc_idx]
+
+    source_df = pd.DataFrame({
+                              labels[0]: x, 
+                              labels[1]: y, 
+                              labels[2]: z, 
+                              "Cancer Type": instance_groups, 
+                              "Patient ID": instance_ids
+                             }
+                            )
+
+    hover_cols = []
+
     for i, col in enumerate(clinical_cols):
-        source_dict[col] = clinical_data[:,i] 
-    source = ColumnDataSource(data=source_dict)
+        col_name = su.NICE_NAMES[col]
+        source_df[col_name] = clinical_data[:,i]
+        hover_cols.append(col_name)
 
-    nice_clinical_cols = [su.NICE_NAMES[col] for col in clinical_cols]
-    tooltips = [('Patient', '@pat'), ('Cancer', '@desc')]
-    for nice_col, col in zip(nice_clinical_cols, clinical_cols):
-        tooltips.append((nice_col, "@"+col))
+    fig = px.scatter_3d(source_df, x=labels[0], y=labels[1], z=labels[2],
+                                   color="Cancer Type",
+                                   hover_data=["Cancer Type"]+hover_cols)
 
-    hover = HoverTool(tooltips=tooltips)
-    mapper = CategoricalColorMapper(factors=np.unique(colors), palette=Category20[20])
+    fig.update_layout(scene={"xaxis":{"range":[x.min(), x.max()]},
+                             "yaxis":{"range":[y.min(), y.max()]},
+                             "zaxis":{"range":[z.min(), z.max()]},
+                            }
+                     )
 
-    p = figure(plot_width=800, plot_height=800, tools=[hover, BoxZoomTool(), PanTool()], title="Pathway Embedding")
-    p.circle('x', 'y', size=8, source=source, fill_color='color', fill_alpha=0.9, line_alpha=0.0)
+    return fig 
 
-    return p 
-
-
-def embedding_scatter(X, instance_groups):
-
-
-    u, s, vh = np.linalg.svd(X, full_matrices=False)
-
-    pcs = u * s
-
-    x = pcs[:,0]
-    y = pcs[:,1]
-    #group_encoder = {gp:idx for idx, gp in enumerate(np.unique(instance_groups))}
-    group_idx = {gp: [] for gp in np.unique(instance_groups)}
-    for i, gp in enumerate(instance_groups):
-        group_idx[gp].append(i)
-    group_idx = {gp: np.array(idx_ls) for (gp, idx_ls) in group_idx.items()}
-
-    markers = ["o", "*", "+"]
-
-    for (i, (gp, idx)) in enumerate(group_idx.items()):
-        print(gp, idx.shape, i)
-        plt.scatter(x[idx],y[idx], s=2.0, c=[float(i%20) for _ in idx], 
-                    marker=markers[i%3], cmap="tab20", label=gp,
-                    vmin=0, vmax=20)
-
-    plt.legend(ncol=2)
-
-    return
 
 
 if __name__=="__main__":
@@ -107,7 +87,8 @@ if __name__=="__main__":
     args = sys.argv
     model_hdf = args[1]
     clinical_hdf = args[2]
-    output_scatter = args[3]
+    first_pc = int(args[3])
+    output_scatter = args[4]
 
     orig_samples,\
     orig_groups, \
@@ -115,6 +96,16 @@ if __name__=="__main__":
     sample_to_idx = su.load_sample_info(model_hdf)
 
     orig_sample_idx = np.vectorize(lambda x: sample_to_idx[x])(orig_samples)
+    
+    if len(args) == 6:
+        groups_to_plot = set(args[5].split(":"))
+    else:
+        groups_to_plot = set(orig_groups) 
+    
+    kept_idx = np.vectorize(lambda x: x in groups_to_plot)(orig_groups)
+    orig_samples = orig_samples[kept_idx]
+    orig_groups = orig_groups[kept_idx]
+    orig_sample_idx = orig_sample_idx[kept_idx]
 
     original_genes,\
     original_assays,\
@@ -127,14 +118,10 @@ if __name__=="__main__":
     clinical_cols = ["gender", "hpv_status"] #, "age_at_pathologic_diagnosis", "tobacco_smoking_history", "race"] 
 
     clinical_data, clinical_samples = load_clinical_data(clinical_hdf, clinical_cols)
-    print("CLINICAL_DATA:")
-    print(clinical_data)
     clinical_data = match_clinical_to_omic(clinical_data, clinical_samples, orig_samples)
 
-    print("NEW_CLINICAL_DATA:")
-    print(clinical_data)
-    p = embedding_scatter_interactive(orig_X, orig_samples, orig_groups, clinical_data, clinical_cols) 
-    output_file(output_scatter)
-    show(p)
+    pcs = list(range(first_pc, first_pc+3))
 
+    fig = embedding_scatter_plotly(orig_X, orig_samples, orig_groups, clinical_data, clinical_cols, pcs)
+    fig.write_html(output_scatter) 
 

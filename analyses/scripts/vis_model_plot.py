@@ -96,7 +96,7 @@ def plot_model(gp_vec, assay_vec, X, Y, sample_offset, feature_offset, omic_valu
 
     # Y factor
     ax2 = fig.add_subplot(gs[1,3])
-    plot_heatmap(ax2, Y)
+    plot_heatmap(ax2, Y, vmin=-2.0, vmax=2.0)
 
     # feature offset
     ax3 = fig.add_subplot(gs[2,3])
@@ -108,7 +108,7 @@ def plot_model(gp_vec, assay_vec, X, Y, sample_offset, feature_offset, omic_valu
 
     # X factor
     ax5 = fig.add_subplot(gs[3,1])
-    plot_heatmap(ax5, np.transpose(X))
+    plot_heatmap(ax5, np.transpose(X), vmin=-0.02, vmax=0.02)
 
     # instance offset
     ax6 = fig.add_subplot(gs[3,2])

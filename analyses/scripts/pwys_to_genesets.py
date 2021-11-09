@@ -1,27 +1,7 @@
 
 import json
 import argparse
-
-
-"""
-Convert a pathway into a list of gene IDs.
-"""
-def pwy_to_geneset(pwy):
-
-    gene_set = set([])
-
-    for edge in pwy:
-        u = edge[0]
-        u_type = edge[1][0]
-        if u_type == "p":
-            gene_set.add(u)
-        
-        v = edge[2]
-        v_type = edge[1][1]
-        if v_type == "p":
-            gene_set.add(v)
-
-    return list(gene_set)
+import script_util as su
 
 
 
@@ -38,7 +18,7 @@ if __name__=="__main__":
         pwy_dict = json.load(f)
         print("PWY_DICT: ", pwy_dict)
 
-    genesets = [pwy_to_geneset(pwy) for pwy in pwy_dict["pathways"]]
+    genesets = [su.pwy_to_geneset(pwy) for pwy in pwy_dict["pathways"]]
     
     result = { "genesets": genesets,
                "names": pwy_dict["names"]

@@ -55,9 +55,10 @@ def inv_logistic(a):
 
 
 def cna_threshold(a, l=-0.5, u=0.5):
+    nan_idx = np.isnan(a)
     l_idx = (a <= l)
     u_idx = (a > u)
-    mid_idx = ( np.logical_not(l_idx) & np.logical_not(u_idx) )
+    mid_idx = np.logical_not( l_idx | u_idx | nan_idx )
 
     a[l_idx] = 0.0
     a[u_idx] = 1.0
@@ -72,20 +73,45 @@ def mut_threshold(a, u=0.0):
     return a
 
 
-def preprocess_features(omic_matrix, feature_assays):
+def standardize_by_gp(a, groups):
 
-    methylation_rows = (feature_assays == "methylation")
-    cna_rows = (feature_assays == "cna")
-    mut_rows = (feature_assays == "mutation")
+    unq_gps = np.unique(groups)
+    for gp in unq_gps:
+        gp_idx = (groups == gp)
+        mu = np.nanmean(a[:,gp_idx], axis=1)[:,np.newaxis]
+        std = np.nanstd(a[:,gp_idx], axis=1)[:,np.newaxis]
+        a[:,gp_idx] = (a[:,gp_idx] - mu)/std
 
-    omic_matrix[methylation_rows,:] = inv_logistic(omic_matrix[methylation_rows,:])
-    print("Transformed methylation data")
-    omic_matrix[cna_rows,:] = cna_threshold(omic_matrix[cna_rows,:])
-    print("Transformed CNA data")
-    omic_matrix[mut_rows,:] = mut_threshold(omic_matrix[mut_rows,:])
-    print("Transformed Mutation data")
+    return a
+
+
+def preprocess_features(omic_matrix, feature_assays, sample_groups, standardized_assays):
+
+    assays = ["methylation", "cna", "mutation", "mrnaseq", "rppa"]
+    assay_rows = {assay: (feature_assays == assay) for assay in assays} 
+
+    print("ASSAY ROWS:", assay_rows)
+
+    omic_matrix[assay_rows["methylation"],:] = inv_logistic(omic_matrix[assay_rows["methylation"],:])
+    omic_matrix[assay_rows["cna"],:] = cna_threshold(omic_matrix[assay_rows["cna"],:])
+    omic_matrix[assay_rows["mutation"],:] = mut_threshold(omic_matrix[assay_rows["mutation"],:])
+
+    for std_assay in standardized_assays:
+        omic_matrix[assay_rows[std_assay],:] = standardize_by_gp(omic_matrix[assay_rows[std_assay],:], sample_groups)
 
     return omic_matrix
+
+
+def parse_opts(opt_ls):
+    
+    opt_kv = [opt.split("=") for opt in opt_ls]
+    opt_k = [kv[0] for kv in opt_kv]
+    opt_v = [kv[1].split(":") for kv in opt_kv]
+    for i, v in enumerate(opt_v):
+        if v == [""]:
+            opt_v[i] = []
+
+    return dict(zip(opt_k, opt_v))
 
 
 if __name__=="__main__":
@@ -95,15 +121,32 @@ if __name__=="__main__":
     input_hdf = args[1]
     output_hdf = args[2]
 
+    opt_dict = parse_opts(args[3:])
+
+    #standardized_assays = []
+    #heldout_ctypes = []
+    heldout_ctypes = opt_dict["heldout_ctypes"]
+    standardized_assays = opt_dict["std_assays"]
+
+    print("STD_ASSAYS:", standardized_assays)
+
     omic_matrix,\
     sample_ids, sample_groups, \
     feature_genes, feature_assays = load_data(input_hdf)
 
-    print(omic_matrix.shape)
-    print(sample_ids.shape)
-    print(feature_genes.shape)
+    good_idx = np.ones(len(sample_groups),dtype=bool)
+    for ct in heldout_ctypes:
+        good_idx = (good_idx & np.logical_not(sample_groups == ct))
 
-    prepped_omics = preprocess_features(omic_matrix, feature_assays)
+    omic_matrix = omic_matrix[:,good_idx]
+    sample_groups = sample_groups[good_idx]
+    sample_ids = sample_ids[good_idx]
+
+    print(omic_matrix.shape)
+    print(sample_groups.shape)
+    print(feature_assays.shape)
+
+    prepped_omics = preprocess_features(omic_matrix, feature_assays, sample_groups, standardized_assays)
     
     output_to_hdf(output_hdf, prepped_omics, 
                               sample_ids, sample_groups,

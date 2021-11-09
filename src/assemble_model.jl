@@ -113,7 +113,7 @@ end
 # Patient groups
 #############################################################
 
-function augment_samples(sample_ids, group_ids; rooted=true)
+function augment_samples(sample_ids, group_ids; rooted=false)
     result = vcat(sample_ids, unique(group_ids))
     if rooted
         push!(result, "ROOT")
@@ -121,7 +121,7 @@ function augment_samples(sample_ids, group_ids; rooted=true)
     return result
 end
 
-function create_sample_edgelist(sample_id_vec, group_vec; rooted=true)
+function create_sample_edgelist(sample_id_vec, group_vec; rooted=false)
     
     m = length(sample_id_vec)
     @assert m == length(group_vec)

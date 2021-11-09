@@ -9,6 +9,26 @@ NICE_NAMES = {"gender": "Sex",
               "race": "Race"
               }
 
+"""
+Convert a pathway into a list of gene IDs.
+"""
+def pwy_to_geneset(pwy):
+
+    gene_set = set([])
+
+    for edge in pwy:
+        u = edge[0]
+        u_type = edge[1][0]
+        if u_type == "p":
+            gene_set.add(u)
+        
+        v = edge[2]
+        v_type = edge[1][1]
+        if v_type == "p":
+            gene_set.add(v)
+
+    return list(gene_set)
+
 
 def load_hdf(dataset_hdf, key, dtype=float):
     
