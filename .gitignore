@@ -1,8 +1,9 @@
-# Julia Manifest.toml file (automatically generated)
-Manifest.toml
 
 # Miscellaneous data files from PARADIGM
 *.tab
 *.list
 *.json
 analyses/data/paradigm-scripts-master/*
+
+# Large data files
+*.hdf

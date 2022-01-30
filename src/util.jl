@@ -1,22 +1,13 @@
 
-using Statistics
-using GPUMatFac
-import GPUMatFac: LogisticLoss, QuadLoss, PoissonLoss, NoLoss
 
 export DEFAULT_ASSAYS, sort_features
 
 
-#DEFAULT_ASSAY_LOSSES = Dict("cna" => LogisticLoss,
-#                           "mutation" => LogisticLoss,
-#                           "methylation" => QuadLoss,
-#                           "mrnaseq" => PoissonLoss, 
-#                           "rppa" => QuadLoss
-#                          )
-DEFAULT_ASSAY_LOSSES = Dict("cna" => LogisticLoss,
-                            "mutation" => LogisticLoss,
-                            "methylation" => QuadLoss,
-                            "mrnaseq" => QuadLoss, 
-                            "rppa" => QuadLoss
+DEFAULT_ASSAY_LOSSES = Dict("cna" => "logistic",
+                            "mutation" => "logistic",
+                            "methylation" => "normal",
+                            "mrnaseq" => "normal", 
+                            "rppa" => "normal"
                             )
 
 
@@ -66,23 +57,19 @@ function keymatch(l_keys, r_keys)
     return l_idx, r_idx
 end
 
+
+function get_assay(feature; assay_set=DEFAULT_ASSAY_SET)
+    return feature[2] 
+end
+
+
 function get_loss(feature; assay_set=DEFAULT_ASSAY_SET, 
                            assay_losses=DEFAULT_ASSAY_LOSSES)
     assay = get_assay(feature; assay_set=assay_set)
     if assay in keys(assay_losses)
         return assay_losses[assay]
     else
-        return NoLoss
-    end
-end
-
-
-function get_assay(feature; assay_set=DEFAULT_ASSAY_SET)
-    assay = feature[2] 
-    if assay in assay_set
-        return assay
-    else
-        return ""
+        return "noloss"
     end
 end
 
@@ -92,7 +79,7 @@ function srt_get_loss(feature; assay_set=DEFAULT_ASSAY_SET,
     assay = get_assay(feature; assay_set=assay_set)
     gene = feature[1]
     if assay in keys(assay_losses)
-        return string(assay_losses[assay]), assay, gene 
+        return assay_losses[assay], assay, gene 
     else
         return "", "", gene
     end
@@ -105,15 +92,19 @@ function sort_features(features; assay_losses=DEFAULT_ASSAY_LOSSES)
     return [(t[end], t[2]) for t in tuple_list]
 end
 
+
 function nansum(x)
     return sum(filter(!isnan, x))
 end
+
 
 function nanmean(x)
     return mean(filter(!isnan, x))
 end
 
+
 function nanvar(x)
     return var(filter(!isnan, x))
 end
+
 

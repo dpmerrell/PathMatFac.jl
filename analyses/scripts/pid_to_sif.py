@@ -32,12 +32,14 @@ def read_pid_file(filename):
 
                 # This line names an entity
                 if len(entries) == 2:
-                    entity_types[entries[1]] = entity_type_map[entries[0]]
+                    entity_types[entries[1].upper()] = entity_type_map[entries[0]]
                 # This line gives an edge
                 elif len(entries) == 3:
-                    assert entries[0] in entity_types.keys()
-                    assert entries[1] in entity_types.keys()
-                    edges.append(entries)
+                    u = entries[0].upper()
+                    v = entries[1].upper()
+                    assert u in entity_types.keys()
+                    assert v in entity_types.keys()
+                    edges.append([u, v, entries[2]])
             except:
                 print("ERROR: ", line)
                 raise ValueError
@@ -46,6 +48,7 @@ def read_pid_file(filename):
                     "edges": edges
                     }
 
+    print("ENTITY TYPES:", entity_types)
     return pathway_info
 
 

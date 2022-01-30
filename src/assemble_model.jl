@@ -1,5 +1,4 @@
 
-using SparseArrays
 
 export assemble_model, assemble_model_from_sifs
 
@@ -215,7 +214,7 @@ function assemble_feature_reg_mats(pathways, feature_genes, feature_assays;
 
     # Assemble the regularizer sparse matrices
     aug_feat_to_idx = value_to_idx(augmented_features)
-    feature_reg_mats = edgelists_to_spmats(augmented_pwys, aug_feat_to_idx)#; verbose=true)
+    feature_reg_mats = edgelists_to_spmats(augmented_pwys, aug_feat_to_idx)
 
     assay_reg_mat = edgelist_to_spmat(assay_edgelist, aug_feat_to_idx)
 
@@ -263,9 +262,9 @@ function assemble_model(pathways, omic_matrix,
     sample_reg_mats = fill(sample_reg_mat, K)
 
     # Assemble the vector of losses
-    loss_vector = Loss[get_loss(feat)(1.0) for feat in augmented_features]
+    loss_vector = String[get_loss(feat) for feat in augmented_features]
 
-    # Initialize the GPUMatFac model
+    # Initialize the matrix factorization model
     matfac_model = MatFacModel(sample_reg_mats, feature_reg_mats, loss_vector;
                                instance_offset_reg=sample_reg_mat,
                                feature_offset_reg=assay_reg_mat,

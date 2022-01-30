@@ -1,5 +1,4 @@
 
-using CSV, DataFrames, HDF5
 
 export load_pathways, load_pathway_sifs
 
@@ -13,7 +12,7 @@ export load_pathways, load_pathway_sifs
     vector of vectors
 """
 function read_sif_file(sif_file::String)
-    df = DataFrame!(CSV.File(sif_file))
+    df = DataFrame!(CSV.File(sif_file; header=0))
     return [ collect(df[i,:]) for i=1:size(df,1) ]
 end
 
@@ -35,7 +34,7 @@ end
 function extend_pathway(pathway)
 
     proteins = Set{String}()
-    new_edges = [] 
+    new_edges = Vector{Any}[] 
 
     # Modify the edges to/from proteins
     for edge in pathway 
@@ -96,7 +95,7 @@ end
 
 
 """
-Tag the nodes of the pathway with empty strings,
+Tag the nodes of the extended pathway with empty strings,
 indicating that they will be virtual/unobserved features
 in the model.
 """
