@@ -57,15 +57,15 @@ function edgelist_to_spmat(edgelist, node_to_idx; epsilon=1e-5, verbose=false)
     # make safe against redundancies.
     # in case of redundancy, keep the latest
     edge_dict = Dict()
-    for e in edgelist
+    for edge in edgelist
         if verbose
-            println(e)
+            println(edge)
         end
-        e1 = node_to_idx[e[1]]
-        e2 = node_to_idx[e[2]]
+        e1 = node_to_idx[edge[1]]
+        e2 = node_to_idx[edge[2]]
         u = max(e1, e2)
         v = min(e1, e2)
-        edge_dict[(u,v)] = e[3]
+        edge_dict[(u,v)] = edge[3]
     end
 
     I = Int64[] 
@@ -172,11 +172,11 @@ end
 function construct_assay_edgelist(features, unique_assays)
     
     unique_assay_set = Set(unique_assays)
-    edgelist = []
+    edgelist = Vector{Any}[]
 
     for feat in features
         if feat[2] in unique_assay_set
-            push!(edgelist, [feat, (feat[2],""), 1])
+            push!(edgelist, [(feat[2],""), feat, 1])
         end
     end
 
@@ -184,11 +184,11 @@ function construct_assay_edgelist(features, unique_assays)
 end
 
 
-function assemble_feature_reg_mats(pathways, feature_genes, feature_assays;
+function assemble_feature_reg_mats(pathway_sif_data, feature_genes, feature_assays;
                                    assay_map=DEFAULT_ASSAY_MAP)
 
     # Extend the pathways to include "central dogma" entities
-    extended_pwys, featuremap = load_pathways(pathways, 
+    extended_pwys, featuremap = load_pathways(pathway_sif_data, 
                                               feature_genes, 
                                               feature_assays)
 
@@ -238,7 +238,7 @@ end
 
 
 
-function assemble_model(pathways, omic_matrix, 
+function assemble_model(pathway_sif_data, omic_matrix, 
                         feature_genes, feature_assays, 
                         sample_ids, sample_groups;
                         sample_covariates=nothing)
@@ -251,14 +251,15 @@ function assemble_model(pathways, omic_matrix,
     feature_reg_mats,
     assay_reg_mat,
     augmented_features, 
-    aug_feat_to_idx = assemble_feature_reg_mats(pathways, feature_genes,
-                                                          feature_assays)
+    aug_feat_to_idx = assemble_feature_reg_mats(pathway_sif_data, 
+                                                feature_genes,
+                                                feature_assays)
 
     # Patient group-based regularizer matrix
     sample_reg_mat, 
     augmented_sample_ids, 
     aug_sample_to_idx = assemble_instance_reg_mat(sample_ids, sample_groups)
-    K = length(pathways)
+    K = length(pathway_sif_data)
     sample_reg_mats = fill(sample_reg_mat, K)
 
     # Assemble the vector of losses
@@ -303,8 +304,8 @@ function assemble_model_from_sifs(sif_filenames, omic_matrix,
                                   feature_genes, feature_assays,
                                   sample_ids, sample_groups)
     
-    pathways = read_all_sif_files(sif_filenames)
-    assemble_model(pathways, omic_matrix,
+    pathway_sif_data = read_all_sif_files(sif_filenames)
+    assemble_model(pathway_sif_data, omic_matrix,
                    feature_genes, feature_assays,
                    sample_ids, sample_groups)
 

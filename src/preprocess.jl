@@ -160,7 +160,7 @@ end
 """
 function initialize_featuremap(all_pwy_proteins, unique_assays)
 
-    result = Dict( (pro, assay) =>  Vector{Int}() 
+    result = Dict( (pro, assay) =>  Int[] 
                                     for assay in unique_assays  
                                         for pro in all_pwy_proteins)
     #result["unmapped"] = Vector{Int}()
@@ -172,9 +172,9 @@ end
     Given an empty featuremap, populate it from the array 
     of features. 
 """
-function populate_featuremap(featuremap, genes, assays)
+function populate_featuremap(featuremap, feature_genes, feature_assays)
 
-    for (idx, (gene, assay)) in enumerate(zip(genes, assays))
+    for (idx, (gene, assay)) in enumerate(zip(feature_genes, feature_assays))
         
         # extract gene names (there may be more than one)
         gene_names = split(gene, " ")
@@ -210,7 +210,7 @@ function load_pathways(pwy_vec, feature_genes, feature_assays)
                                                 feature_genes, 
                                                 feature_assays)
 
-    return (tagged_pwys, populated_feature_map)
+    return tagged_pwys, populated_feature_map
 end
 
 
@@ -221,7 +221,7 @@ function load_pathway_sifs(sif_filenames, feature_genes, feature_assays)
                                                feature_genes,
                                                feature_assays)
  
-    return (extended_pwys, feature_map)
+    return extended_pwys, feature_map
 end 
 
 

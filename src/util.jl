@@ -11,16 +11,15 @@ DEFAULT_ASSAY_LOSSES = Dict("cna" => "logistic",
                             )
 
 
-
 DEFAULT_ASSAYS = collect(keys(DEFAULT_ASSAY_LOSSES))
 DEFAULT_ASSAY_SET = Set(DEFAULT_ASSAYS)
 
 
 DEFAULT_ASSAY_MAP = Dict("cna" => ["dna", 1],
-                        "mutation" => ["dna", -1],
-                        "methylation" => ["mrna", -1],
-                        "mrnaseq" => ["mrna", 1],
-                        "rppa" => ["protein", 1]
+                         "mutation" => ["dna", -1],
+                         "methylation" => ["mrna", -1],
+                         "mrnaseq" => ["mrna", 1],
+                         "rppa" => ["protein", 1]
                         )
 
 
@@ -31,7 +30,6 @@ PWY_SIF_CODE = Dict("a" => "activation",
                     "p" => "protein",
                     "f" => "family"
                    )
-
 
 
 function value_to_idx(values)
