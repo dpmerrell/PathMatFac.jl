@@ -6,22 +6,22 @@ mutable struct MultiomicModel
     # Matrix factorization model
     matfac::MatFacModel
 
-    ## Omic feature/pathway stuff
-    original_genes::Vector
-    original_assays::Vector
-    augmented_genes::Vector
-    augmented_assays::Vector
-    feature_to_idx::Dict   # Maps from features to column indices in the MatFacModel
+    # Information about data samples
+    sample_ids::Vector{String}
 
-    ## Sample stuff
-    original_samples::Vector
-    original_groups::Vector
-    augmented_samples::Vector
-    sample_to_idx::Dict    # Maps from sample IDs to row indices in the MatFacModel
+    # Information about internal samples
+    internal_sample_idx::Vector{Int}
+    aug_sample_ids::Vector{String}
 
-    # Omic dataset
-    omic_matrix::Union{Nothing,AbstractMatrix}
-    sample_covariates::Union{Nothing,AbstractMatrix}
+    # Information about data features
+    feature_genes::Vector{String}
+    feature_assays::Vector{String}
+
+    # Information about internal features
+    internal_feature_idx::Vector{Int}
+    aug_feature_genes::Vector{String}
+    aug_feature_assays::Vector{String}
+
 end
 
 

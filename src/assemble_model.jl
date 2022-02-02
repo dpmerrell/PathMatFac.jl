@@ -141,37 +141,38 @@ function create_sample_edgelist(sample_id_vec, group_vec; rooted=false)
 
     return edgelist
 end
+#
+#
+##############################################################
+## Assemble the data matrix
+##############################################################
+#
+#function augment_omic_matrix(omic_matrix, original_features, augmented_features, 
+#                                          original_samples, augmented_samples)
+#
+#    feat_idx_vec, aug_feat_idx_vec = keymatch(original_features, augmented_features)
+#    sample_idx_vec, aug_sample_idx_vec = keymatch(original_samples, augmented_samples)
+#
+#    M = length(augmented_samples)
+#    N = length(augmented_features)
+#    result = fill(NaN, M, N) 
+#
+#    for (f_idx, aug_f_idx) in zip(feat_idx_vec, aug_feat_idx_vec)
+#        result[aug_sample_idx_vec, aug_f_idx] .= omic_matrix[sample_idx_vec, f_idx] 
+#    end
+#
+#    return result
+#end
+#
+#
+##############################################################
+## Model assembly
+##############################################################
+#
 
-
-#############################################################
-# Assemble the data matrix
-#############################################################
-
-function augment_omic_matrix(omic_matrix, original_features, augmented_features, 
-                                          original_samples, augmented_samples)
-
-    feat_idx_vec, aug_feat_idx_vec = keymatch(original_features, augmented_features)
-    sample_idx_vec, aug_sample_idx_vec = keymatch(original_samples, augmented_samples)
-
-    M = length(augmented_samples)
-    N = length(augmented_features)
-    result = fill(NaN, M, N) 
-
-    for (f_idx, aug_f_idx) in zip(feat_idx_vec, aug_feat_idx_vec)
-        result[aug_sample_idx_vec, aug_f_idx] .= omic_matrix[sample_idx_vec, f_idx] 
-    end
-
-    return result
-end
-
-
-#############################################################
-# Model assembly
-#############################################################
-
-function construct_assay_edgelist(features, unique_assays)
+function construct_assay_edgelist(features, assays)
     
-    unique_assay_set = Set(unique_assays)
+    unique_assay_set = Set(assays)
     edgelist = Vector{Any}[]
 
     for feat in features
@@ -184,8 +185,9 @@ function construct_assay_edgelist(features, unique_assays)
 end
 
 
-function assemble_feature_reg_mats(pathway_sif_data, feature_genes, feature_assays;
-                                   assay_map=DEFAULT_ASSAY_MAP)
+function prep_pathways(pathway_sif_data, feature_genes, feature_assays;
+                       assay_map=DEFAULT_ASSAY_MAP)
+
 
     # Extend the pathways to include "central dogma" entities
     extended_pwys, featuremap = load_pathways(pathway_sif_data, 
@@ -203,22 +205,43 @@ function assemble_feature_reg_mats(pathway_sif_data, feature_genes, feature_assa
     # Assemble the augmented feature set
     augmented_features = collect(get_all_nodes_many(augmented_pwys))
     
+    return augmented_pwys, augmented_features
+end
+
+
+function add_assay_nodes(prepped_features, feature_assays)
+    
+    unique_assays = unique(feature_assays)
+    assay_nodes = [(assay,"") for assay in unique_assays]
+    prepped_features = vcat(prepped_features, assay_nodes) 
+    return prepped_features
+end
+
+
+function assemble_feature_reg_mats(pathway_sif_data, feature_genes, feature_assays;
+                                   assay_map=DEFAULT_ASSAY_MAP)
+
+    prepped_pathways, prepped_features = prep_pathways(pathway_sif_data,
+                                                       feature_genes,
+                                                       feature_assays)
+    
     # Need to add additional virtual nodes for
     # assay-wise regularization
-    assay_nodes = [(assay,"") for assay in unique_assays]
-    augmented_features = vcat(augmented_features, assay_nodes) 
+    prepped_features = add_assay_nodes(prepped_features, feature_assays)
 
-    assay_edgelist = construct_assay_edgelist(augmented_features,
-                                              unique_assays)
-    augmented_features = sort_features(augmented_features)
-
+    # Sort features by loss, assay, and gene
+    prepped_features = sort_features(prepped_features)
+    feat_to_idx = value_to_idx(prepped_features)
+    
     # Assemble the regularizer sparse matrices
-    aug_feat_to_idx = value_to_idx(augmented_features)
-    feature_reg_mats = edgelists_to_spmats(augmented_pwys, aug_feat_to_idx)
+    feature_reg_mats = edgelists_to_spmats(prepped_pwys, feat_to_idx)
+    
+    # Create a graph connecting features of the same assay 
+    assay_edgelist = construct_assay_edgelist(prepped_features, feature_assays)
+    assay_reg_mat = edgelist_to_spmat(assay_edgelist, feat_to_idx)
 
-    assay_reg_mat = edgelist_to_spmat(assay_edgelist, aug_feat_to_idx)
 
-    return feature_reg_mats, assay_reg_mat, augmented_features, aug_feat_to_idx
+    return feature_reg_mats, assay_reg_mat, prepped_features, feat_to_idx
 end
 
 
@@ -236,66 +259,40 @@ function assemble_instance_reg_mat(sample_ids, sample_groups)
 end
 
 
+function assemble_model(pathway_sif_data,  
+                        sample_ids, sample_groups,
+                        feature_genes, feature_assays)
+
+    # Construct the sample regularizer matrix (for X)
+    sample_reg_mat, 
+    internal_samples, 
+    internal_sample_to_idx = assemble_instance_reg_mat(sample_ids, 
+                                                       sample_groups)
 
 
-function assemble_model(pathway_sif_data, omic_matrix, 
-                        feature_genes, feature_assays, 
-                        sample_ids, sample_groups;
-                        sample_covariates=nothing)
-
-    original_features = collect(zip(feature_genes, feature_assays))
-
-    ## Assemble regularizer matrices
-
-    # Regularizer matrices for the feature factors
-    feature_reg_mats,
-    assay_reg_mat,
+    # Construct the pathway-based feature regularizer matrices (for Y)
+    # and the assay-based regularizer matrix (for mu, sigma)
+    feature_reg_mats, 
+    assay_reg_mat, 
     augmented_features, 
     aug_feat_to_idx = assemble_feature_reg_mats(pathway_sif_data, 
-                                                feature_genes,
+                                                feature_genes, 
                                                 feature_assays)
 
-    # Patient group-based regularizer matrix
-    sample_reg_mat, 
-    augmented_sample_ids, 
-    aug_sample_to_idx = assemble_instance_reg_mat(sample_ids, sample_groups)
-    K = length(pathway_sif_data)
-    sample_reg_mats = fill(sample_reg_mat, K)
 
-    # Assemble the vector of losses
-    loss_vector = String[get_loss(feat) for feat in augmented_features]
+    # Construct MatFacModel
+    # TODO: still need sample_groups, feature_groups, feature_loss_names
+    matfac = MatFacModel(sample_reg_mat, feature_reg_mats, 
+                         assay_reg_mat, assay_reg_mat,
+                         sample_groups, feature_groups,
+                         feature_loss_names)
 
-    # Initialize the matrix factorization model
-    matfac_model = MatFacModel(sample_reg_mats, feature_reg_mats, loss_vector;
-                               instance_offset_reg=sample_reg_mat,
-                               feature_offset_reg=assay_reg_mat,
-                               instance_covariate_coeff_reg=assay_reg_mat)
+    # TODO: still need most of these things
+    MultiomicModel(matfac, sample_ids, internal_sample_idx,
+                   aug_sample_ids, feature_genes, feature_assays,
+                   internal_feature_idx, aug_feature_genes,
+                   aug_feature_assays)
 
-    # Assemble the matrix to be factorized
-    augmented_omic_matrix = augment_omic_matrix(omic_matrix, 
-                                                original_features, augmented_features,
-                                                sample_ids, augmented_sample_ids)
-
-    augmented_genes = [feat[1] for feat in augmented_features]
-    augmented_assays = [feat[2] for feat in augmented_features]
-
-
-    # TODO augment covariates for virtual samples
-    if sample_covariates != nothing
-        augmented_sample_covariates = zeros((len(augmented_sample_ids),1))
-    else
-        augmented_sample_covariates = sample_covariates
-    end
-
-
-    return MultiomicModel(matfac_model, feature_genes, feature_assays,
-                                        augmented_genes, augmented_assays,
-                                        aug_feat_to_idx,
-                                        sample_ids, sample_groups,
-                                        augmented_sample_ids, 
-                                        aug_sample_to_idx,
-                                        augmented_omic_matrix,
-                                        augmented_sample_covariates)
 
 end
 
