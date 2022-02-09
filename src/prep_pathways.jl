@@ -1,7 +1,5 @@
 
 
-export load_pathways, load_pathway_sifs
-
 
 ######################################################
 # Pathway IO
@@ -31,7 +29,7 @@ end
     extend the pathway to include dna and mrna as suggested
     by the "central dogma". 
 """
-function extend_pathway(pathway)
+function extend_pathway(pathway::Vector)
 
     proteins = Set{String}()
     new_edges = Vector{Any}[] 
@@ -101,7 +99,7 @@ in the model.
 """
 function tag_pathway(pathway)
 
-    result = []
+    result = Vector{Any}[]
     for edge in pathway
         new_edge = [(edge[1],""), (edge[2],""), edge[3]]
         push!(result, new_edge)
@@ -192,12 +190,85 @@ function populate_featuremap(featuremap, feature_genes, feature_assays)
 end
 
 
+##############################################################
+# Add data nodes to the pathways
+##############################################################
+
+function add_data_nodes_sparse_latent(pathway,
+                                      feature_map::Dict, 
+                                      unique_assays, 
+                                      assay_map::Dict)
+
+    # Get all of the proteins from this pathway
+    proteins = get_all_proteins([pathway])
+
+    # for each protein, add edges from data nodes to
+    # to the correct parts of the graph
+    for protein in proteins
+        for assay in unique_assays
+            for idx in feature_map[(protein, assay)]
+                data_node = (protein, assay) 
+                v = assay_map[assay]
+                pwy_node = (string(protein, "_", v[1]), "")
+                push!(pathway, [pwy_node, data_node, v[2]])
+            end
+        end
+    end
+
+    return pathway
+end
+
+
+function add_data_nodes_to_pathway(pathway, featuremap, unique_assays, assay_map;
+                                   strategy="sparse_latent")
+    
+    if strategy == "sparse_latent"
+        pwy = add_data_nodes_sparse_latent(pathway, featuremap, 
+                                           unique_assays, assay_map)
+    else
+        throw(DomainError(strategy, "not a valid option for `strategy`"))
+    end
+
+    return pwy
+
+end
+
+#######################################################
+# ASSAY GRAPH
+#######################################################
+
+function construct_assay_edgelist(features, assays)
+    
+    unique_assay_set = Set(assays)
+    edgelist = Vector{Any}[]
+
+    for feat in features
+        if feat[2] in unique_assay_set
+            push!(edgelist, [(feat[2],""), feat, 1])
+        end
+    end
+
+    return edgelist
+end
+
+
+function add_assay_nodes(prepped_features, feature_assays)
+    
+    unique_assays = unique(feature_assays)
+    assay_nodes = [(assay,"") for assay in unique_assays]
+    prepped_features = vcat(prepped_features, assay_nodes) 
+    return prepped_features
+end
+
+
 
 ####################################################
 # Putting it all together...
 ####################################################
 
-function load_pathways(pwy_vec, feature_genes, feature_assays)
+
+
+function load_pathways(pwy_vec::Vector{Vector{T}} where T, feature_genes, feature_assays)
 
     extended_pwys = [extend_pathway(pwy) for pwy in pwy_vec]
     tagged_pwys = [tag_pathway(pwy) for pwy in extended_pwys]
@@ -214,7 +285,7 @@ function load_pathways(pwy_vec, feature_genes, feature_assays)
 end
 
 
-function load_pathway_sifs(sif_filenames, feature_genes, feature_assays)
+function load_pathways(sif_filenames::Vector{String}, feature_genes, feature_assays)
 
     pathways = read_all_sif_files(sif_filenames)
     extended_pwys, feature_map = load_pathways(pathways, 
@@ -225,3 +296,52 @@ function load_pathway_sifs(sif_filenames, feature_genes, feature_assays)
 end 
 
 
+function prep_pathways(pathway_data, feature_genes, feature_assays;
+                       assay_map=DEFAULT_ASSAY_MAP)
+
+
+    # Extend the pathways to include "central dogma" entities
+    extended_pwys, featuremap = load_pathways(pathway_data, 
+                                              feature_genes, 
+                                              feature_assays)
+
+    unique_assays = unique(feature_assays)
+
+    # Add data nodes to the pathways
+    augmented_pwys = Vector{Any}[add_data_nodes_to_pathway(pwy, featuremap, 
+                                                           unique_assays, 
+                                                           assay_map) 
+                      for pwy in extended_pwys] 
+
+    # Assemble the augmented feature set
+    augmented_features = collect(get_all_nodes_many(augmented_pwys))
+    
+    return augmented_pwys, augmented_features
+end
+
+
+function assemble_feature_reg_mats(pathway_sif_data, feature_genes, feature_assays;
+                                   assay_map=DEFAULT_ASSAY_MAP)
+
+    prepped_pathways, prepped_features = prep_pathways(pathway_sif_data,
+                                                       feature_genes,
+                                                       feature_assays)
+    
+    # Need to add additional virtual nodes for
+    # assay-wise regularization
+    prepped_features = add_assay_nodes(prepped_features, feature_assays)
+
+    # Sort features by loss, assay, and gene
+    prepped_features = sort_features(prepped_features)
+    feat_to_idx = value_to_idx(prepped_features)
+    
+    # Assemble the regularizer sparse matrices
+    feature_reg_mats = edgelists_to_spmats(prepped_pathways, feat_to_idx)
+    
+    # Create a graph connecting features of the same assay 
+    assay_edgelist = construct_assay_edgelist(prepped_features, feature_assays)
+    assay_reg_mat = edgelist_to_spmat(assay_edgelist, feat_to_idx)
+
+
+    return feature_reg_mats, assay_reg_mat, prepped_features, feat_to_idx
+end

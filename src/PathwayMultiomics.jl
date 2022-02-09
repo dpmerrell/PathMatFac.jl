@@ -6,7 +6,7 @@ using BatchMatFac, CUDA, SparseArrays, Statistics,
 
 include("typedefs.jl")
 include("util.jl")
-include("preprocess.jl")
+include("prep_pathways.jl")
 include("assemble_model.jl")
 include("model.jl")
 include("model_io.jl")

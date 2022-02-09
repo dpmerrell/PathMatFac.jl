@@ -55,6 +55,9 @@ function keymatch(l_keys, r_keys)
     return l_idx, r_idx
 end
 
+function get_gene(feature)
+    return feature[1]
+end
 
 function get_assay(feature; assay_set=DEFAULT_ASSAY_SET)
     return feature[2] 
@@ -105,4 +108,62 @@ function nanvar(x)
     return var(filter(!isnan, x))
 end
 
+
+function edgelist_to_spmat(edgelist, node_to_idx; epsilon=1e-5, verbose=false)
+
+    N = length(node_to_idx)
+
+    # make safe against redundancies.
+    # in case of redundancy, keep the latest
+    edge_dict = Dict()
+    for edge in edgelist
+        if verbose
+            println(edge)
+        end
+        e1 = node_to_idx[edge[1]]
+        e2 = node_to_idx[edge[2]]
+        u = max(e1, e2)
+        v = min(e1, e2)
+        edge_dict[(u,v)] = edge[3]
+    end
+
+    I = Int64[] 
+    J = Int64[] 
+    V = Float64[] 
+    diagonal = fill(epsilon, N)
+
+    # Off-diagonal entries
+    for (idx, value) in edge_dict
+        # below the diagonal
+        push!(I, idx[1])
+        push!(J, idx[2])
+        push!(V, -value)
+        
+        # above the diagonal
+        push!(I, idx[2])
+        push!(J, idx[1])
+        push!(V, -value)
+
+        # increment diagonal entries
+        # (maintain positive definite-ness)
+        av = abs(value)
+        diagonal[idx[1]] += av
+        diagonal[idx[2]] += av
+    end
+
+    # diagonal entries
+    for i=1:N
+        push!(I, i)
+        push!(J, i)
+        push!(V, diagonal[i])
+    end
+
+    result = sparse(I, J, V)
+
+    return PMRegMat(result)
+end
+
+function edgelists_to_spmats(edgelists, node_to_idx; verbose=false)
+    return [edgelist_to_spmat(el, node_to_idx; verbose=verbose) for el in edgelists]
+end
 

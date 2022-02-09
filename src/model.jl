@@ -4,7 +4,7 @@ export MultiomicModel
 mutable struct MultiomicModel
 
     # Matrix factorization model
-    matfac::MatFacModel
+    matfac::BatchMatFacModel
 
     # Information about data samples
     sample_ids::Vector{String}

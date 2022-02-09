@@ -47,7 +47,7 @@ uuid = "2a0f44e3-6c83-55bd-87e4-b1978d98bd5f"
 
 [[BatchMatFac]]
 deps = ["CUDA", "ChainRules", "HDF5", "LinearAlgebra", "ScikitLearnBase", "SparseArrays", "Zygote"]
-git-tree-sha1 = "9ef256f72b25fad571c46c384fdcfca003827b94"
+git-tree-sha1 = "c36edbb2f6bae7ad306fe1887c4c9c4cfeb1c5d9"
 repo-rev = "main"
 repo-url = "../BatchMatFac"
 uuid = "23734cf9-4c0e-45d4-b5ff-f416ac13e898"

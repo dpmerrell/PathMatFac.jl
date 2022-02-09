@@ -48,6 +48,17 @@ function util_tests()
         # nanvar
         @test PM.nanvar([1.0, NaN, 2.0, NaN, 3.0]) == 1.0
 
+        # edgelist_to_spmat
+        node_to_idx = Dict([string(c)=>idx for (idx,c) in enumerate("abcd")])
+        edgelist = [["a","b",1], ["b","c",1], ["c","d",-1], ["d","a",-1]]
+        test_spmat = SparseMatrixCSC([ 2.1 -1   0  1; 
+                                      -1   2.1 -1  0; 
+                                       0   -1  2.1 1;
+                                       1    0   1 2.1])
+        spmat = PM.edgelist_to_spmat(edgelist, node_to_idx; epsilon=0.1)
+
+        @test isapprox(SparseMatrixCSC(spmat), test_spmat)
+
     end
 
 end
@@ -103,8 +114,37 @@ function preprocess_tests()
                       "SGOL1_protein", "SGOL1_activation"])
     test_nodes = Set([(n,"") for n in test_nodes])
 
+    
+    test_datanode_pwy = [[("MOL:GTP_chemical",""), ("GRASP65/GM130/RAB1/GTP/PLK1_compound",""), 1],
+                         [("METAPHASE_abstract",""), ("PLK1_activation",""), 1],
+                         [("PAK1_activation",""), ("PLK1_activation",""), 1],
+                         [("RAB1A_activation",""), ("GRASP65/GM130/RAB1/GTP/PLK1_compound",""), 1],
+                         [("PLK1_activation",""), ("SGOL1_activation",""), 1],
+                         [("PLK1_activation",""), ("GRASP65/GM130/RAB1/GTP/PLK1_compound",""), 1],
+                         [("PP2A-ALPHA B56_compound",""), ("SGOL1_activation",""), -1],
+                         [("PLK1_dna",""), ("PLK1","cna"), 1],
+                         [("PLK1_dna",""), ("PLK1","mutation"), -1],
+                         [("PLK1_mrna",""), ("PLK1","mrnaseq"),  1],
+                         [("PLK1_dna",""), ("PLK1_mrna",""), 1],
+                         [("PLK1_mrna",""), ("PLK1_protein",""), 1],
+                         [("PLK1_protein",""), ("PLK1_activation",""), 1],
+                         [("PAK1_dna",""), ("PAK1","mutation"),  -1],
+                         #[("PAK1_mrna",""),("PAK1","mrnaseq"),  1],
+                         [("PAK1_mrna",""),("PAK1","methylation"),  -1],
+                         [("PAK1_protein",""), ("PAK1","rppa"),  1],
+                         [("PAK1_dna",""), ("PAK1_mrna",""), 1],
+                         [("PAK1_mrna",""), ("PAK1_protein",""), 1],
+                         [("PAK1_protein",""), ("PAK1_activation",""), 1],
+                         [("RAB1A_dna",""), ("RAB1A_mrna",""), 1],
+                         [("RAB1A_mrna",""), ("RAB1A_protein",""), 1],
+                         [("RAB1A_protein",""), ("RAB1A_activation",""), 1],
+                         [("SGOL1_mrna",""), ("SGOL1","mrnaseq"),  1],
+                         [("SGOL1_dna",""), ("SGOL1_mrna",""), 1],
+                         [("SGOL1_mrna",""), ("SGOL1_protein",""), 1],
+                         [("SGOL1_protein",""), ("SGOL1_activation",""), 1],
+                        ]
 
-    @testset "Preprocessing" begin
+    @testset "Prep Pathways" begin
 
         # read_sif_file
         sif_data = PM.read_sif_file(test_sif_path)
@@ -173,11 +213,47 @@ function preprocess_tests()
         @test loaded_fmap == test_featuremap
 
         # load_pathway_sifs
-        loaded_pwys, loaded_fmap = PM.load_pathway_sifs([test_sif_path], 
-                                                        feature_genes, 
-                                                        feature_assays)
+        loaded_pwys, loaded_fmap = PM.load_pathways([test_sif_path], 
+                                                     feature_genes, 
+                                                     feature_assays)
         @test loaded_pwys == [tagged_pwy] 
         @test loaded_fmap == test_featuremap
+
+        
+        # add_data_nodes_sparse_latent
+        unique_assays = unique(feature_assays)
+        loaded_pathway = loaded_pwys[1]
+        pathway = PM.add_data_nodes_sparse_latent(loaded_pathway,
+                                                  loaded_fmap, 
+                                                  unique_assays, 
+                                                  PM.DEFAULT_ASSAY_MAP)
+        @test Set(pathway) == Set(test_datanode_pwy)
+
+        
+        # prep_pathways
+        prepped_pwys, prepped_features = PM.prep_pathways([test_sif_path],
+                                                          feature_genes,
+                                                          feature_assays)
+        @test Set(prepped_pwys[1]) == Set(test_datanode_pwy)
+
+        
+        # assemble_feature_reg_mats
+        feature_reg_mats, 
+        assay_reg_mat, 
+        augmented_features, 
+        aug_feat_to_idx = PM.assemble_feature_reg_mats([test_sif_path], 
+                                                       feature_genes, 
+                                                       feature_assays)
+
+        test_aug_features = Set([node for edge in pathway for node in edge[1:2]])
+        union!(test_aug_features, [(assay,"") for assay in unique_assays])
+        @test Set(augmented_features) == test_aug_features
+
+        feat_mat = SparseMatrixCSC(feature_reg_mats[1])
+        @test all([feat_mat[aug_feat_to_idx[edge[1]], 
+                            aug_feat_to_idx[edge[2]]] != 0 for edge in test_datanode_pwy])
+        @test issymmetric(feat_mat) 
+              
 
     end
 
@@ -196,61 +272,15 @@ function assemble_model_tests()
                       "mrnaseq",
                       "mrnaseq", "methylation"]
     N = length(feature_genes)
-    loaded_pwys, feature_map = PM.load_pathway_sifs([test_sif_path], 
-                                                    feature_genes, 
-                                                    feature_assays)
-    pathway = loaded_pwys[1]
+    loaded_pwys, feature_map = PM.load_pathways([test_sif_path], 
+                                                 feature_genes, 
+                                                 feature_assays)
+    loaded_pathway = loaded_pwys[1]
 
     pwy_sif_data = PM.read_sif_file(test_sif_path)
     
-    test_datanode_pwy = [[("MOL:GTP_chemical",""), ("GRASP65/GM130/RAB1/GTP/PLK1_compound",""), 1],
-                         [("METAPHASE_abstract",""), ("PLK1_activation",""), 1],
-                         [("PAK1_activation",""), ("PLK1_activation",""), 1],
-                         [("RAB1A_activation",""), ("GRASP65/GM130/RAB1/GTP/PLK1_compound",""), 1],
-                         [("PLK1_activation",""), ("SGOL1_activation",""), 1],
-                         [("PLK1_activation",""), ("GRASP65/GM130/RAB1/GTP/PLK1_compound",""), 1],
-                         [("PP2A-ALPHA B56_compound",""), ("SGOL1_activation",""), -1],
-                         [("PLK1_dna",""), ("PLK1","cna"), 1],
-                         [("PLK1_dna",""), ("PLK1","mutation"), -1],
-                         [("PLK1_mrna",""), ("PLK1","mrnaseq"),  1],
-                         [("PLK1_dna",""), ("PLK1_mrna",""), 1],
-                         [("PLK1_mrna",""), ("PLK1_protein",""), 1],
-                         [("PLK1_protein",""), ("PLK1_activation",""), 1],
-                         [("PAK1_dna",""), ("PAK1","mutation"),  -1],
-                         [("PAK1_mrna",""),("PAK1","mrnaseq"),  1],
-                         [("PAK1_protein",""), ("PAK1","rppa"),  1],
-                         [("PAK1_dna",""), ("PAK1_mrna",""), 1],
-                         [("PAK1_mrna",""), ("PAK1_protein",""), 1],
-                         [("PAK1_protein",""), ("PAK1_activation",""), 1],
-                         [("RAB1A_dna",""), ("RAB1A_mrna",""), 1],
-                         [("RAB1A_mrna",""), ("RAB1A_protein",""), 1],
-                         [("RAB1A_protein",""), ("RAB1A_activation",""), 1],
-                         [("SGOL1_mrna",""), ("SGOL1","mrnaseq"),  1],
-                         [("SGOL1_dna",""), ("SGOL1_mrna",""), 1],
-                         [("SGOL1_mrna",""), ("SGOL1_protein",""), 1],
-                         [("SGOL1_protein",""), ("SGOL1_activation",""), 1],
-                        ]
 
     @testset "Model Assembly" begin
-
-        # add_data_nodes_sparse_latent
-        unique_assays = unique(feature_assays)
-        pathway = PM.add_data_nodes_sparse_latent(pathway,
-                                                  feature_map, 
-                                                  unique_assays, 
-                                                  PM.DEFAULT_ASSAY_MAP)
-        @test Set(pathway) == Set(test_datanode_pwy)
-
-        # edgelist_to_spmat
-        node_to_idx = Dict([string(c)=>idx for (idx,c) in enumerate("abcd")])
-        edgelist = [["a","b",1], ["b","c",1], ["c","d",-1], ["d","a",-1]]
-        test_spmat = SparseMatrixCSC([ 2.1 -1   0  1; 
-                                      -1   2.1 -1  0; 
-                                       0   -1  2.1 1;
-                                       1    0   1 2.1])
-        spmat = PM.edgelist_to_spmat(edgelist, node_to_idx; epsilon=0.1)
-
-        @test spmat == test_spmat
 
         M = 10
         m_groups = 2
@@ -274,62 +304,47 @@ function assemble_model_tests()
         test_edgelist = [[gp, samp, 1] for (samp, gp) in zip(sample_ids, group_ids)]
         @test edgelist == test_edgelist 
 
-        # augment_omic_matrix
-        omic_matrix = randn(M, sim_N) 
-        augmented_data = PM.augment_omic_matrix(omic_matrix, sim_features, 
-                                                sim_augmented_features, 
-                                                sample_ids, 
-                                                augmented_samples)
-        @test size(augmented_data) == (length(augmented_samples),
-                                       length(sim_augmented_features))
+        ## augment_omic_matrix
+        #omic_matrix = randn(M, sim_N) 
+        #augmented_data = PM.augment_omic_matrix(omic_matrix, sim_features, 
+        #                                        sim_augmented_features, 
+        #                                        sample_ids, 
+        #                                        augmented_samples)
+        #@test size(augmented_data) == (length(augmented_samples),
+        #                               length(sim_augmented_features))
 
-        @test augmented_data[1:M,1:length(sim_feature_genes)] == omic_matrix
-        @test all(isnan.(augmented_data[(M+1):end,:]))
-        @test all(isnan.(augmented_data[:,(N+1):end]))
+        #@test augmented_data[1:M,1:length(sim_feature_genes)] == omic_matrix
+        #@test all(isnan.(augmented_data[(M+1):end,:]))
+        #@test all(isnan.(augmented_data[:,(N+1):end]))
 
-        # construct_assay_edgelist
-        assay_edgelist = PM.construct_assay_edgelist(sim_features, ["assay1","assay2"])
-        @test assay_edgelist == [[("assay1",""),("gene1","assay1"),1],
-                                 [("assay1",""),("gene2","assay1"),1],
-                                 [("assay1",""),("gene3","assay1"),1],
-                                 [("assay2",""),("gene2","assay2"),1],
-                                 [("assay2",""),("gene3","assay2"),1]]
-
-        # assemble_feature_reg_mats
-        feature_reg_mats, 
-        assay_reg_mat, 
-        augmented_features, 
-        aug_feat_to_idx = PM.assemble_feature_reg_mats([pwy_sif_data], 
-                                                       feature_genes, 
-                                                       feature_assays)
-
-        test_aug_features = Set([node for edge in pathway for node in edge[1:2]])
-        union!(test_aug_features, [(assay,"") for assay in unique_assays])
-        @test Set(augmented_features) == test_aug_features
-
-        feat_mat = feature_reg_mats[1]
-        @test all([feat_mat[aug_feat_to_idx[edge[1]], 
-                            aug_feat_to_idx[edge[2]]] != 0 for edge in test_datanode_pwy])
-        @test issymmetric(feat_mat) 
-              
-        
-
-        # assemble_instance_reg_mat
+        # assemble_sample_reg_mat
         sample_reg_mat, 
         augmented_samples, 
-        aug_sample_to_idx = PM.assemble_instance_reg_mat(sample_ids, group_ids) 
+        aug_sample_to_idx = PM.assemble_sample_reg_mat(sample_ids, group_ids)
+        sample_reg_mat = SparseMatrixCSC(sample_reg_mat)
         @test all([sample_reg_mat[aug_sample_to_idx[sample_id], 
                             aug_sample_to_idx[group_id]] != 0 for (sample_id, group_id) in zip(sample_ids,group_ids)])
-        @test issymmetric(sample_reg_mat) 
+        @test issymmetric(sample_reg_mat)
         
+        # update_sample_batch_dict 
+        sample_batch_dict = Dict([k => copy(group_ids) for k in unique(sim_feature_assays)])
+        
+        new_batch_dict = PM.update_sample_batch_dict(sample_batch_dict,
+                                                     sample_ids, augmented_samples,
+                                                     aug_sample_to_idx)
+
+        test_new_batch_dict = Dict("assay1" => [group_ids; ["",""]],
+                                   "assay2" => [group_ids; ["",""]],
+                                   "" => repeat([""], inner=M + m_groups))
+
+        @test new_batch_dict == test_new_batch_dict
+
         # assemble_model
-        omic_matrix = randn(M,N)
-        model = PM.assemble_model([pwy_sif_data], omic_matrix, 
-                                  feature_genes, feature_assays, 
-                                  sample_ids, sample_groups;
-                                  sample_covariates=nothing)
-        
-        # assemble_model_from_sifs
+        sample_batch_dict = Dict([k => copy(group_ids) for k in unique(feature_assays)])
+        model = assemble_model([test_sif_path, test_sif_path, test_sif_path],  
+                               sample_ids, group_ids,
+                               sample_batch_dict,
+                               feature_genes, feature_assays)
         
     end
 end
@@ -337,8 +352,8 @@ end
 
 function main()
 
-    #util_tests()
-    #preprocess_tests()
+    util_tests()
+    preprocess_tests()
     assemble_model_tests()
 
 end
