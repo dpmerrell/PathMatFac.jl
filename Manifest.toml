@@ -47,7 +47,7 @@ uuid = "2a0f44e3-6c83-55bd-87e4-b1978d98bd5f"
 
 [[BatchMatFac]]
 deps = ["CUDA", "ChainRules", "HDF5", "LinearAlgebra", "ScikitLearnBase", "SparseArrays", "Zygote"]
-git-tree-sha1 = "c36edbb2f6bae7ad306fe1887c4c9c4cfeb1c5d9"
+git-tree-sha1 = "fdeed23b429a9044074a232eff85a6b53f018f45"
 repo-rev = "main"
 repo-url = "../BatchMatFac"
 uuid = "23734cf9-4c0e-45d4-b5ff-f416ac13e898"
@@ -266,14 +266,6 @@ deps = ["DataStructures", "ExprTools", "InteractiveUtils", "LLVM", "Libdl", "Log
 git-tree-sha1 = "6eadd2321dc3ac0fc9d530ab01c2caa7fe5d74c6"
 uuid = "61eb1bfa-7361-4325-ad38-22787b887f55"
 version = "0.11.4"
-
-[[GPUMatFac]]
-deps = ["CUDA", "HDF5", "LinearAlgebra", "ScikitLearnBase", "SparseArrays", "Statistics"]
-git-tree-sha1 = "55b81e2ecc8aa0c08512a6c78948c1234922298e"
-repo-rev = "main"
-repo-url = "../GPUMatFac.jl"
-uuid = "0d497686-3bbd-4a30-a1ed-2f1451808b27"
-version = "0.1.0"
 
 [[Gen]]
 deps = ["Compat", "DataStructures", "Distributions", "ForwardDiff", "FunctionalCollections", "JSON", "LinearAlgebra", "MacroTools", "Parameters", "Random", "ReverseDiff", "SpecialFunctions"]

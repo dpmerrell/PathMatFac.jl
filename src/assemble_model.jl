@@ -1,7 +1,5 @@
 
 
-export assemble_model, assemble_model_from_sifs
-
 
 #############################################################
 # Patient groups
@@ -39,11 +37,11 @@ function create_sample_edgelist(sample_id_vec, group_vec; rooted=false)
 end
 
 
-function assemble_sample_reg_mat(sample_ids, sample_groups)
+function assemble_sample_reg_mat(sample_ids, sample_conditions)
     
     # build the sample edge list from the "sample groups" vector
-    augmented_samples = augment_samples(sample_ids, sample_groups) 
-    sample_edgelist = create_sample_edgelist(sample_ids, sample_groups)
+    augmented_samples = augment_samples(sample_ids, sample_conditions) 
+    sample_edgelist = create_sample_edgelist(sample_ids, sample_conditions)
     aug_sample_to_idx = value_to_idx(augmented_samples)
 
     # translate the sample edge list to a sparse matrix
@@ -87,28 +85,6 @@ end
 
 
 ##############################################################
-## Assemble the data matrix
-##############################################################
-#
-#function augment_omic_matrix(omic_matrix, original_features, augmented_features, 
-#                                          original_samples, augmented_samples)
-#
-#    feat_idx_vec, aug_feat_idx_vec = keymatch(original_features, augmented_features)
-#    sample_idx_vec, aug_sample_idx_vec = keymatch(original_samples, augmented_samples)
-#
-#    M = length(augmented_samples)
-#    N = length(augmented_features)
-#    result = fill(NaN, M, N) 
-#
-#    for (f_idx, aug_f_idx) in zip(feat_idx_vec, aug_feat_idx_vec)
-#        result[aug_sample_idx_vec, aug_f_idx] .= omic_matrix[sample_idx_vec, f_idx] 
-#    end
-#
-#    return result
-#end
-#
-#
-##############################################################
 ## Model assembly
 ##############################################################
 
@@ -116,11 +92,9 @@ end
 
 
 function assemble_model(pathway_sif_data,  
-                        sample_ids, sample_groups,
+                        sample_ids, sample_conditions,
                         sample_batch_dict,
                         feature_genes, feature_assays)
-
-    println(sample_ids)
 
     K = length(pathway_sif_data)
 
@@ -128,7 +102,7 @@ function assemble_model(pathway_sif_data,
     sample_reg_mat, 
     internal_samples, 
     internal_sample_to_idx = assemble_sample_reg_mat(sample_ids, 
-                                                     sample_groups)
+                                                     sample_conditions)
     sample_reg_mats = PMRegMat[copy(sample_reg_mat) for _=1:K]
 
     internal_sample_batch_dict = update_sample_batch_dict(sample_batch_dict,
@@ -164,14 +138,16 @@ function assemble_model(pathway_sif_data,
 
 
     ## TODO: still need most of these things
-    model = MultiomicModel(matfac, 
-                           sample_ids, internal_sample_idx, internal_samples, 
+    model = MultiomicModel(matfac, sample_ids, sample_conditions, 
+                           internal_sample_idx, internal_samples, 
                            feature_genes, feature_assays,
                            internal_feature_idx, 
                            internal_feature_genes, internal_feature_assays)
 
     return model
 end
+
+
 
 
 
