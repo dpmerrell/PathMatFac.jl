@@ -345,6 +345,8 @@ function assemble_model_tests()
                                sample_ids, group_ids,
                                sample_batch_dict,
                                feature_genes, feature_assays)
+
+        @test PM.is_contiguous(model.matfac.feature_batch_ids)
         
     end
 end
@@ -393,8 +395,8 @@ end
 
 function main()
 
-    util_tests()
-    preprocess_tests()
+    #util_tests()
+    #preprocess_tests()
     assemble_model_tests()
     model_io_tests()
 

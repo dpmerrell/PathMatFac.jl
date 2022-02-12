@@ -2,13 +2,19 @@
 
 export DEFAULT_ASSAYS, sort_features
 
+import BatchMatFac: is_contiguous
 
-DEFAULT_ASSAY_LOSSES = Dict("cna" => "logistic",
+DEFAULT_ASSAY_LOSSES = Dict("" => "noloss",
+                            "cna" => "logistic",
                             "mutation" => "logistic",
                             "methylation" => "normal",
                             "mrnaseq" => "normal", 
                             "rppa" => "normal"
                             )
+
+LOSS_ORDER = Dict("noloss" => 1,
+                  "logistic" => 2,
+                  "normal" => 3)
 
 
 DEFAULT_ASSAYS = collect(keys(DEFAULT_ASSAY_LOSSES))
@@ -59,31 +65,21 @@ function get_gene(feature)
     return feature[1]
 end
 
-function get_assay(feature; assay_set=DEFAULT_ASSAY_SET)
+function get_assay(feature)
     return feature[2] 
 end
 
 
-function get_loss(feature; assay_set=DEFAULT_ASSAY_SET, 
-                           assay_losses=DEFAULT_ASSAY_LOSSES)
-    assay = get_assay(feature; assay_set=assay_set)
-    if assay in keys(assay_losses)
-        return assay_losses[assay]
-    else
-        return "noloss"
-    end
+function get_loss(feature; assay_losses=DEFAULT_ASSAY_LOSSES)
+    assay = get_assay(feature)
+    return assay_losses[assay]
 end
 
 
-function srt_get_loss(feature; assay_set=DEFAULT_ASSAY_SET,
-                               assay_losses=DEFAULT_ASSAY_LOSSES)
-    assay = get_assay(feature; assay_set=assay_set)
-    gene = feature[1]
-    if assay in keys(assay_losses)
-        return assay_losses[assay], assay, gene 
-    else
-        return "", "", gene
-    end
+function srt_get_loss(feature; assay_losses=DEFAULT_ASSAY_LOSSES)
+    assay = get_assay(feature)
+    gene = get_gene(feature) 
+    return LOSS_ORDER[assay_losses[assay]], assay, gene 
 end
 
 

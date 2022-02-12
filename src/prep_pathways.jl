@@ -342,6 +342,7 @@ function assemble_feature_reg_mats(pathway_sif_data, feature_genes, feature_assa
     assay_edgelist = construct_assay_edgelist(prepped_features, feature_assays)
     assay_reg_mat = edgelist_to_spmat(assay_edgelist, feat_to_idx)
 
-
     return feature_reg_mats, assay_reg_mat, prepped_features, feat_to_idx
 end
+
+
