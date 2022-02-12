@@ -5,6 +5,7 @@ include("script_util.jl")
 using PathwayMultiomics
 using JSON
 using Statistics
+using ScikitLearnBase
 
 function parse_opts!(defaults, opt_list)
 
@@ -38,14 +39,31 @@ function parse_opts!(defaults, opt_list)
 end
 
 
+function barcode_to_batch(barcode::String)
+
+    if barcode == ""
+        return ""
+    end
+
+    terms = split(barcode,"-")
+    n_terms = length(terms)
+
+    return join(terms[(n_terms-1):n_terms], "-")
+end
+
+
+function barcodes_to_batches(barcode_dict::Dict{String,Vector{String}})
+    return Dict{String,Vector{String}}(k=>map(barcode_to_batch, v) for (k,v) in barcode_dict)
+end
+
+
 function main(args)
    
     omic_hdf_filename = args[1]
     pwy_json = args[2]
     out_hdf = args[3]
 
-    opts = Dict(:method =>"adagrad", 
-                :max_iter =>1000, 
+    opts = Dict(:max_iter => Inf, 
                 :rel_tol =>1e-9, 
                 :inst_reg_weight =>0.1, 
                 :feat_reg_weight =>0.1,
@@ -63,27 +81,38 @@ function main(args)
     feature_assays = get_omic_feature_assays(omic_hdf_filename)
 
     sample_names = get_omic_instances(omic_hdf_filename)
-    sample_groups = get_omic_groups(omic_hdf_filename)
+    sample_conditions = get_cancer_types(omic_hdf_filename)
 
     omic_data = get_omic_data(omic_hdf_filename)
+    barcodes = get_barcodes(omic_hdf_filename)
+    batch_dict = barcodes_to_batches(barcodes) 
 
     println("Assembling model...")
     
     pwy_dict = JSON.parsefile(pwy_json) 
     pwys = pwy_dict["pathways"]
+    pwys = convert(Vector{Vector{Vector{Any}}}, pwys)
+    println(pwys[1])
 
-    model = assemble_model(pwys, omic_data, 
-                           feature_genes, feature_assays,
-                           sample_names, sample_groups)
+    model = MultiomicModel(pwys,  
+                           sample_names, sample_conditions,
+                           batch_dict,
+                           feature_genes, feature_assays)
 
-    M = size(model.omic_matrix,1)
-    N = size(model.omic_matrix,2)
-    println("OMIC DATA: ", M, " x ", N) 
+    #function MultiomicModel(pathway_sif_data,  
+    #                    sample_ids::Vector{String}, 
+    #                    sample_conditions::Vector{String},
+    #                    sample_batch_dict::Dict{T,Vector{U}},
+    #                    feature_genes::Vector{String}, 
+    #                    feature_assays::Vector{T}) where T where U
+
+    M, N = size(omic_data)
+    #println("OMIC DATA: ", M, " x ", N) 
 
     println("Fitting model...")
-    fit!(model; opts...)
+    fit!(model, omic_data)
 
-    save_hdf(out_hdf, model; save_omic_matrix=true)
+    save_hdf(model, out_hdf)
 
 end
 
