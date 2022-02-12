@@ -46,8 +46,8 @@ version = "0.1.0"
 uuid = "2a0f44e3-6c83-55bd-87e4-b1978d98bd5f"
 
 [[BatchMatFac]]
-deps = ["CUDA", "ChainRules", "HDF5", "LinearAlgebra", "ScikitLearnBase", "SparseArrays", "Zygote"]
-git-tree-sha1 = "9e075f24736357f73d14e89e79254057b94ac703"
+deps = ["CUDA", "ChainRules", "ChainRulesCore", "HDF5", "LinearAlgebra", "ScikitLearnBase", "SparseArrays", "Zygote"]
+git-tree-sha1 = "eb381fc77da6e32c3195c7b15b19bfda56f9aeca"
 repo-rev = "main"
 repo-url = "../BatchMatFac"
 uuid = "23734cf9-4c0e-45d4-b5ff-f416ac13e898"
@@ -299,9 +299,9 @@ version = "1.23.2"
 
 [[IRTools]]
 deps = ["InteractiveUtils", "MacroTools", "Test"]
-git-tree-sha1 = "006127162a51f0effbdfaab5ac0c83f8eb7ea8f3"
+git-tree-sha1 = "7f43342f8d5fd30ead0ba1b49ab1a3af3b787d24"
 uuid = "7869d1d1-7146-5819-86e3-90919afe41df"
-version = "0.4.4"
+version = "0.4.5"
 
 [[IfElse]]
 git-tree-sha1 = "28e837ff3e7a6c3cdb252ce49fb412c8eb3caeef"
