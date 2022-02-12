@@ -6,11 +6,11 @@ function augment_data_matrix(omic_matrix,
                              original_samples, internal_samples,
                              original_features, internal_features)
 
-    feat_idx_vec, aug_feat_idx_vec = keymatch(original_features, augmented_features)
-    sample_idx_vec, aug_sample_idx_vec = keymatch(original_samples, augmented_samples)
+    feat_idx_vec, aug_feat_idx_vec = keymatch(original_features, internal_features)
+    sample_idx_vec, aug_sample_idx_vec = keymatch(original_samples, internal_samples)
 
-    M = length(augmented_samples)
-    N = length(augmented_features)
+    M = length(internal_samples)
+    N = length(internal_features)
     result = fill(NaN, M, N) 
 
     for (f_idx, aug_f_idx) in zip(feat_idx_vec, aug_feat_idx_vec)
