@@ -1,6 +1,6 @@
 
 
-using Test, PathwayMultiomics, SparseArrays, LinearAlgebra
+using Test, PathwayMultiomics, SparseArrays, LinearAlgebra, ScikitLearnBase
 
 
 PM = PathwayMultiomics
@@ -352,6 +352,47 @@ function assemble_model_tests()
 end
 
 
+function fit_tests()
+    
+    test_sif_path = "test_pathway.sif"
+    
+    feature_genes = ["PLK1","PLK1","PLK1", 
+                     "PAK1", "PAK1", "PAK1",
+                     "SGOL1", 
+                     "BRCA", "BRCA"]
+    feature_assays = ["cna", "mutation","mrnaseq", 
+                      "rppa", "mrnaseq", "mutation",
+                      "mrnaseq",
+                      "mrnaseq", "methylation"]
+    M = 10
+    N = length(feature_genes)
+    m_groups = 2
+
+    sample_ids = [string("patient_",i) for i=1:M]
+    sample_conditions = repeat([string("group_",i) for i=1:m_groups], inner=5)
+        
+    sample_batch_dict = Dict([k => copy(sample_conditions) for k in unique(feature_assays)])
+
+    omic_data = randn(M,N)
+    logistic_cols = Int[i for (i, a) in enumerate(feature_assays) if a in ("cna","mutation")]
+    n_logistic = length(logistic_cols)
+    omic_data[:,logistic_cols] .= rand([0.0,1.0], M, n_logistic)
+   
+    @testset "Fit" begin
+
+        model = MultiomicModel([test_sif_path, test_sif_path, test_sif_path],  
+                               sample_ids, sample_conditions,
+                               sample_batch_dict,
+                               feature_genes, feature_assays)
+
+        fit!(model, omic_data)
+
+        @test true
+    end
+
+end
+
+
 function model_io_tests()
 
     test_sif_path = "test_pathway.sif"
@@ -395,9 +436,10 @@ end
 
 function main()
 
-    #util_tests()
-    #preprocess_tests()
+    util_tests()
+    preprocess_tests()
     assemble_model_tests()
+    fit_tests()
     model_io_tests()
 
 end

@@ -13,8 +13,11 @@ function augment_data_matrix(omic_matrix,
     N = length(internal_features)
     result = fill(NaN, M, N) 
 
-    for (f_idx, aug_f_idx) in zip(feat_idx_vec, aug_feat_idx_vec)
-        result[aug_sample_idx_vec, aug_f_idx] .= omic_matrix[sample_idx_vec, f_idx] 
+    n = length(sample_idx_vec)
+    Threads.@threads for i=1:n 
+        @inbounds s_idx = sample_idx_vec[i]
+        @inbounds aug_s_idx = sample_idx_vec[i]
+        @inbounds result[aug_s_idx, aug_feat_idx_vec] .= omic_matrix[s_idx, feat_idx_vec] 
     end
 
     return result
@@ -32,6 +35,7 @@ function fit!(model::MultiomicModel, X::AbstractMatrix; kwargs...)
                                         model.internal_sample_ids,
                                         orig_features, 
                                         internal_features)
+
 
     fit!(model.matfac, internal_X; kwargs...)
 

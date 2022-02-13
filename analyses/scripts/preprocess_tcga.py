@@ -16,10 +16,10 @@ def load_data(input_hdf):
 
     with h5py.File(input_hdf, "r") as f:
 
-        omic_matrix = f["data"][:,:]
-        sample_ids = f["instances"][:].astype(str)
-        sample_groups = f["cancer_types"][:].astype(str)
-        feature_names = f["features"][:].astype(str)
+        omic_matrix = f["omic_data"]["data"][:,:]
+        sample_ids = f["omic_data"]["instances"][:].astype(str)
+        sample_groups = f["omic_data"]["cancer_types"][:].astype(str)
+        feature_names = f["omic_data"]["features"][:].astype(str)
 
     feature_genes, feature_assays = parse_feature_names(feature_names)
 
@@ -27,25 +27,39 @@ def load_data(input_hdf):
     return omic_matrix, sample_ids, sample_groups, feature_genes, feature_assays
 
 
-def hdf_write_string_vector(f_out, path, array):
+def load_barcodes(input_hdf):
+
+    barcodes = {}
+    with h5py.File(input_hdf, "r") as f:
+        for k in ("data", "features", "instances"):
+            barcodes[k] = f["barcodes"][k][...]
+
+    return barcodes
+
+
+def hdf_write_string_arr(f_out, path, array):
     dataset = f_out.create_dataset(path, shape=array.shape,
                                    dtype=h5py.string_dtype("utf-8"))
-    dataset[:] = array
+    dataset[...] = array
     return
 
 
 def output_to_hdf(output_hdf, omic_matrix, sample_ids, sample_groups, 
-                                           feature_genes, feature_assays):
+                  feature_genes, feature_assays, barcodes):
 
     with h5py.File(output_hdf, "w") as f:
-        hdf_write_string_vector(f, "instances", sample_ids)
-        hdf_write_string_vector(f, "instance_groups", sample_groups)
-        hdf_write_string_vector(f, "feature_genes", feature_genes)
-        hdf_write_string_vector(f, "feature_assays", feature_assays)
+        hdf_write_string_arr(f, "omic_data/instances", sample_ids)
+        hdf_write_string_arr(f, "omic_data/instance_groups", sample_groups)
+        hdf_write_string_arr(f, "omic_data/feature_genes", feature_genes)
+        hdf_write_string_arr(f, "omic_data/feature_assays", feature_assays)
        
-        dataset = f.create_dataset("data", shape=omic_matrix.shape,
+        dataset = f.create_dataset("omic_data/data", shape=omic_matrix.shape,
                                            dtype=float)
         dataset[:,:] = omic_matrix
+
+        for k in barcodes.keys():
+            hdf_write_string_arr(f, f"barcodes/{k}", barcodes[k])
+
 
     return
 
@@ -123,8 +137,6 @@ if __name__=="__main__":
 
     opt_dict = parse_opts(args[3:])
 
-    #standardized_assays = []
-    #heldout_ctypes = []
     heldout_ctypes = opt_dict["heldout_ctypes"]
     standardized_assays = opt_dict["std_assays"]
 
@@ -134,6 +146,8 @@ if __name__=="__main__":
     sample_ids, sample_groups, \
     feature_genes, feature_assays = load_data(input_hdf)
 
+    barcodes = load_barcodes(input_hdf)
+
     good_idx = np.ones(len(sample_groups),dtype=bool)
     for ct in heldout_ctypes:
         good_idx = (good_idx & np.logical_not(sample_groups == ct))
@@ -141,6 +155,9 @@ if __name__=="__main__":
     omic_matrix = omic_matrix[:,good_idx]
     sample_groups = sample_groups[good_idx]
     sample_ids = sample_ids[good_idx]
+
+    barcodes["instances"] = barcodes["instances"][good_idx]
+    barcodes["data"] = barcodes["data"][:,good_idx]
 
     print(omic_matrix.shape)
     print(sample_groups.shape)
@@ -150,7 +167,8 @@ if __name__=="__main__":
     
     output_to_hdf(output_hdf, prepped_omics, 
                               sample_ids, sample_groups,
-                              feature_genes, feature_assays)
+                              feature_genes, feature_assays,
+                              barcodes)
 
     
 

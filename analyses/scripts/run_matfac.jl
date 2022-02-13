@@ -6,6 +6,8 @@ using PathwayMultiomics
 using JSON
 using Statistics
 using ScikitLearnBase
+using Profile
+using ProfileSVG
 
 function parse_opts!(defaults, opt_list)
 
@@ -92,25 +94,26 @@ function main(args)
     pwy_dict = JSON.parsefile(pwy_json) 
     pwys = pwy_dict["pathways"]
     pwys = convert(Vector{Vector{Vector{Any}}}, pwys)
-    println(pwys[1])
 
     model = MultiomicModel(pwys,  
                            sample_names, sample_conditions,
                            batch_dict,
                            feature_genes, feature_assays)
 
-    #function MultiomicModel(pathway_sif_data,  
-    #                    sample_ids::Vector{String}, 
-    #                    sample_conditions::Vector{String},
-    #                    sample_batch_dict::Dict{T,Vector{U}},
-    #                    feature_genes::Vector{String}, 
-    #                    feature_assays::Vector{T}) where T where U
 
-    M, N = size(omic_data)
-    #println("OMIC DATA: ", M, " x ", N) 
+    #println("One iteration (for precompilation)")
+    #fit!(model, omic_data; verbose=true, max_epochs=1, capacity=Int(5e7))
+    
+    #println("Multiple iterations (for profiling)")
+    #Profile.init(delay=0.01)
+    start_time = time()
+    fit!(model, omic_data; verbose=true, max_epochs=500, capacity=Int(5e7))
+    end_time = time()
 
-    println("Fitting model...")
-    fit!(model, omic_data)
+    println("ELAPSED TIME (s):")
+    println(end_time - start_time)
+
+    #ProfileSVG.save("fit_profile.svg", maxframes=5000)
 
     save_hdf(model, out_hdf)
 

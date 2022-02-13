@@ -57,7 +57,6 @@ function get_barcodes(omic_hdf)
     end
 
     result = Dict(k[1:(end-1)]=>barcodes[:,i] for (i,k) in enumerate(feature_groups))
-    println(keys(result))
     return result
 end
 
