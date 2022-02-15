@@ -163,3 +163,13 @@ function edgelists_to_spmats(edgelists, node_to_idx; verbose=false)
     return [edgelist_to_spmat(el, node_to_idx; verbose=verbose) for el in edgelists]
 end
 
+
+function rescale!(spmat::CuSparseMatrixCSC, scalar::Number)
+    spmat.nzVal .*= scalar 
+end
+
+function rescale!(spmat::SparseMatrixCSC, scalar::Number)
+    spmat.nzval .*= scalar 
+end
+
+

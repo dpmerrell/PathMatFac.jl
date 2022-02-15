@@ -94,7 +94,8 @@ end
 function assemble_model(pathway_sif_data,  
                         sample_ids, sample_conditions,
                         sample_batch_dict,
-                        feature_genes, feature_assays)
+                        feature_genes, feature_assays,
+                        lambda_X, lambda_Y)
 
     K = length(pathway_sif_data)
 
@@ -103,6 +104,7 @@ function assemble_model(pathway_sif_data,
     internal_samples, 
     internal_sample_to_idx = assemble_sample_reg_mat(sample_ids, 
                                                      sample_conditions)
+    rescale!(sample_reg_mat, lambda_X)
     sample_reg_mats = PMRegMat[copy(sample_reg_mat) for _=1:K]
 
     internal_sample_batch_dict = update_sample_batch_dict(sample_batch_dict,
@@ -120,6 +122,10 @@ function assemble_model(pathway_sif_data,
     internal_feat_to_idx = assemble_feature_reg_mats(pathway_sif_data, 
                                                      feature_genes, 
                                                      feature_assays)
+    for mat in feature_reg_mats
+        rescale!(mat, lambda_Y)
+    end
+    rescale!(assay_reg_mat, lambda_Y)
 
     internal_feature_genes = String[get_gene(feat) for feat in internal_features]
     internal_feature_losses = String[get_loss(feat) for feat in internal_features]

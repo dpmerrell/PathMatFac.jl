@@ -31,23 +31,52 @@ function MultiomicModel(pathway_sif_data,
                         sample_conditions::Vector{String},
                         sample_batch_dict::Dict{T,Vector{U}},
                         feature_genes::Vector{String}, 
-                        feature_assays::Vector{T}) where T where U
+                        feature_assays::Vector{T};
+                        lambda_X::Float32=1.f0,
+                        lambda_Y::Float32=1.f0) where T where U
         
     return assemble_model(pathway_sif_data,  
                           sample_ids, sample_conditions,
                           sample_batch_dict,
-                          feature_genes, feature_assays)
+                          feature_genes, feature_assays,
+                          lambda_X, lambda_Y)
 
 end
 
 
 function Base.:(==)(model_a::MultiomicModel, model_b::MultiomicModel)
     for fn in fieldnames(MultiomicModel)
-        if !(getproperty(model_a, fn) == getproperty(model_b, fn)) 
+        if !(getfield(model_a, fn) == getfield(model_b, fn)) 
             return false
         end
     end
     return true
+end
+
+
+function Base.getproperty(model::MultiomicModel, sym::Symbol)
+
+    if sym == :X
+        return model.matfac.X[:,model.internal_sample_idx]
+    elseif sym == :Y
+        return model.matfac.Y[:,model.internal_feature_idx]
+    elseif sym == :mu
+         return model.matfac.mu[model.internal_feature_idx]
+    elseif sym == :sigma
+         return exp.(model.matfac.log_sigma[model.internal_feature_idx])
+    elseif sym == :delta
+        log_delta = BMF.batch_matrix(model.matfac.log_delta_values,
+                                     model.matfac.sample_batch_ids,
+                                     model.matfac.feature_batch_ids)
+
+        return exp(model.matfac.log_delta)
+    elseif sym == :theta
+        return BMF.batch_matrix(model.matfac.theta_values,
+                                model.matfac.sample_batch_ids,
+                                model.matfac.feature_batch_ids)
+    else
+        return getfield(model, sym)
+    end
 end
 
 

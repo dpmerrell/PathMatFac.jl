@@ -4,6 +4,8 @@ module PathwayMultiomics
 using BatchMatFac, CUDA, SparseArrays, Statistics, 
       HDF5, CSV, DataFrames
 
+BMF = BatchMatFac
+
 include("typedefs.jl")
 include("util.jl")
 include("prep_pathways.jl")

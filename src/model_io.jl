@@ -13,8 +13,8 @@ export save_hdf, load_hdf
 function Base.write(hdf_file::Union{HDF5.File,HDF5.Group}, path::String, 
                     obj::MultiomicModel)
     
-    for prop in propertynames(obj)
-        write(hdf_file, string(path, "/", prop), getproperty(obj, prop))
+    for fieldname in fieldnames(MultiomicModel)
+        write(hdf_file, string(path, "/", fieldname), getfield(obj, fieldname))
     end
 end
 

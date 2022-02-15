@@ -25,19 +25,19 @@ end
 
 
 
-function fit!(model::MultiomicModel, X::AbstractMatrix; kwargs...)
+function fit!(model::MultiomicModel, D::AbstractMatrix; kwargs...)
 
     orig_features = collect(zip(model.feature_genes, model.feature_assays))
     internal_features = collect(zip(model.internal_feature_genes, 
                                     model.internal_feature_assays))
 
-    internal_X = augment_data_matrix(X, model.sample_ids, 
+    internal_D = augment_data_matrix(D, model.sample_ids, 
                                         model.internal_sample_ids,
                                         orig_features, 
                                         internal_features)
 
 
-    fit!(model.matfac, internal_X; kwargs...)
+    fit!(model.matfac, internal_D; kwargs...)
 
 end
 

@@ -7,5 +7,5 @@ PMRegMat = BMF.BMFRegMat
 PMVec = BMF.BMFVec 
 PMData = BMF.BMFData 
 
-CuMatrix = CUDA.CUSPARSE.CuSparseMatrixCSC
+CuSparseMatrixCSC = CUDA.CUSPARSE.CuSparseMatrixCSC
 
