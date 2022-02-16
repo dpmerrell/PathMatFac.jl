@@ -15,6 +15,7 @@ mutable struct MultiomicModel
     internal_sample_ids::Vector{String}
 
     # Information about data features
+    feature_idx::Vector{Int}
     feature_genes::Vector{String}
     feature_assays::Vector{String}
 
@@ -23,10 +24,15 @@ mutable struct MultiomicModel
     internal_feature_genes::Vector{String}
     internal_feature_assays::Vector{String}
 
+    # Pathway information
+    pathway_names::Vector{String}
+    pathway_weights::Vector{Float64}
+
 end
 
 
-function MultiomicModel(pathway_sif_data,  
+function MultiomicModel(pathway_sif_data, 
+                        pathway_names::Vector{String},
                         sample_ids::Vector{String}, 
                         sample_conditions::Vector{String},
                         sample_batch_dict::Dict{T,Vector{U}},
@@ -35,7 +41,8 @@ function MultiomicModel(pathway_sif_data,
                         lambda_X::Real=1.0,
                         lambda_Y::Real=1.0) where T where U
         
-    return assemble_model(pathway_sif_data,  
+    return assemble_model(pathway_sif_data, 
+                          pathway_names,
                           sample_ids, sample_conditions,
                           sample_batch_dict,
                           feature_genes, feature_assays,
@@ -57,19 +64,18 @@ end
 function Base.getproperty(model::MultiomicModel, sym::Symbol)
 
     if sym == :X
-        return model.matfac.X[:,model.internal_sample_idx]
+        return view(model.matfac.X, :, model.internal_sample_idx)
     elseif sym == :Y
-        return model.matfac.Y[:,model.internal_feature_idx]
+        return view(model.matfac.Y, :, model.internal_feature_idx)
     elseif sym == :mu
-         return model.matfac.mu[model.internal_feature_idx]
-    elseif sym == :sigma
-         return exp.(model.matfac.log_sigma[model.internal_feature_idx])
-    elseif sym == :delta
-        log_delta = BMF.batch_matrix(model.matfac.log_delta_values,
-                                     model.matfac.sample_batch_ids,
-                                     model.matfac.feature_batch_ids)
+         return view(model.matfac.mu, model.internal_feature_idx)
+    elseif sym == :log_sigma
+         return view(model.matfac.log_sigma, model.internal_feature_idx)
+    elseif sym == :log_delta
+        return BMF.batch_matrix(model.matfac.log_delta_values,
+                                model.matfac.sample_batch_ids,
+                                model.matfac.feature_batch_ids)
 
-        return exp(model.matfac.log_delta)
     elseif sym == :theta
         return BMF.batch_matrix(model.matfac.theta_values,
                                 model.matfac.sample_batch_ids,

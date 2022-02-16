@@ -3,26 +3,37 @@ import ScikitLearnBase: fit!
 
 
 function augment_data_matrix(omic_matrix, 
-                             original_samples, internal_samples,
-                             original_features, internal_features)
+                             M, sample_idx, internal_sample_idx,
+                             N, feature_idx, internal_feature_idx)
 
-    feat_idx_vec, aug_feat_idx_vec = keymatch(original_features, internal_features)
-    sample_idx_vec, aug_sample_idx_vec = keymatch(original_samples, internal_samples)
-
-    M = length(internal_samples)
-    N = length(internal_features)
     result = fill(NaN, M, N) 
 
-    n = length(sample_idx_vec)
-    Threads.@threads for i=1:n 
-        @inbounds s_idx = sample_idx_vec[i]
-        @inbounds aug_s_idx = sample_idx_vec[i]
-        @inbounds result[aug_s_idx, aug_feat_idx_vec] .= omic_matrix[s_idx, feat_idx_vec] 
+    Threads.@threads for i=1:length(sample_idx) 
+        s_idx = sample_idx[i]
+        aug_s_idx = internal_sample_idx[i]
+        result[aug_s_idx, internal_feature_idx] .= omic_matrix[s_idx, feature_idx] 
     end
 
     return result
 end
 
+
+function normalize_factors!(model::MultiomicModel)
+
+    X = model.X
+    Y = model.Y
+
+    X_norms = sqrt.(sum(X .* X; dims=2))
+    target_X_norm = size(X,2)/100
+    model.matfac.X .*= (target_X_norm ./ X_norms)
+
+    Y_norms = sqrt.(sum(Y .* Y; dims=2))
+    target_Y_norm = size(Y,2)/100
+    model.matfac.Y .*= (target_Y_norm ./ Y_norms)
+
+    model.pathway_weights .= dropdims(Matrix(X_norms .* Y_norms); dims=2) ./ (target_X_norm*target_Y_norm) 
+
+end
 
 
 function fit!(model::MultiomicModel, D::AbstractMatrix; kwargs...)
@@ -30,12 +41,18 @@ function fit!(model::MultiomicModel, D::AbstractMatrix; kwargs...)
     orig_features = collect(zip(model.feature_genes, model.feature_assays))
     internal_features = collect(zip(model.internal_feature_genes, 
                                     model.internal_feature_assays))
+    
+    M = length(model.internal_sample_ids)
+    N = length(model.internal_feature_genes)
 
-    internal_D = augment_data_matrix(D, model.sample_ids, 
-                                        model.internal_sample_ids,
-                                        orig_features, 
-                                        internal_features)
+    n_samples = length(model.sample_ids)
 
+    internal_D = augment_data_matrix(D, M, collect(1:n_samples), 
+                                        model.internal_sample_idx,
+                                        N,  model.feature_idx, 
+                                        model.internal_feature_idx)
+
+    normalize_factors!(model)
 
     fit!(model.matfac, internal_D; kwargs...)
 

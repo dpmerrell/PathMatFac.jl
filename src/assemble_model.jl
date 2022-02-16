@@ -91,7 +91,8 @@ end
 
 
 
-function assemble_model(pathway_sif_data,  
+function assemble_model(pathway_sif_data,
+                        pathway_names,
                         sample_ids, sample_conditions,
                         sample_batch_dict,
                         feature_genes, feature_assays,
@@ -134,9 +135,9 @@ function assemble_model(pathway_sif_data,
     internal_feature_assays = String[get_assay(feat) for feat in internal_features]
 
     orig_features = collect(zip(feature_genes, feature_assays))
-    internal_feature_set = Set(keys(internal_feat_to_idx))
-    int_feat_to_idx = feat -> (feat in internal_feature_set) ? internal_feat_to_idx[feat] : -1
-    internal_feature_idx = map(int_feat_to_idx, orig_features) 
+   
+    feature_idx, internal_feature_idx = keymatch(orig_features, 
+                                                 internal_features)
 
     # Construct MatFacModel
     matfac = BatchMatFacModel(sample_reg_mats, feature_reg_mats, 
@@ -144,13 +145,15 @@ function assemble_model(pathway_sif_data,
                               internal_sample_batch_dict, internal_feature_assays,
                               internal_feature_losses)
 
+    pathway_weights = ones(K)
 
-    ## TODO: still need most of these things
     model = MultiomicModel(matfac, sample_ids, sample_conditions, 
                            internal_sample_idx, internal_samples, 
-                           feature_genes, feature_assays,
+                           feature_idx, feature_genes, feature_assays,
                            internal_feature_idx, 
-                           internal_feature_genes, internal_feature_assays)
+                           internal_feature_genes, 
+                           internal_feature_assays,
+                           pathway_names, pathway_weights)
 
     return model
 end

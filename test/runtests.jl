@@ -263,6 +263,7 @@ end
 function assemble_model_tests()
 
     test_sif_path = "test_pathway.sif"
+    test_pwy_name = "test_pathway"
     feature_genes = ["PLK1","PLK1","PLK1", 
                      "PAK1", "PAK1", "PAK1",
                      "SGOL1", 
@@ -341,7 +342,8 @@ function assemble_model_tests()
 
         # assemble_model
         sample_batch_dict = Dict([k => copy(group_ids) for k in unique(feature_assays)])
-        model = MultiomicModel([test_sif_path, test_sif_path, test_sif_path],  
+        model = MultiomicModel([test_sif_path, test_sif_path, test_sif_path],
+                               [string(test_pwy_name,"_",i) for i=1:3],
                                sample_ids, group_ids,
                                sample_batch_dict,
                                feature_genes, feature_assays)
@@ -355,7 +357,7 @@ end
 function fit_tests()
     
     test_sif_path = "test_pathway.sif"
-    
+    test_pwy_name = "test_pathway" 
     feature_genes = ["PLK1","PLK1","PLK1", 
                      "PAK1", "PAK1", "PAK1",
                      "SGOL1", 
@@ -381,6 +383,7 @@ function fit_tests()
     @testset "Fit" begin
 
         model = MultiomicModel([test_sif_path, test_sif_path, test_sif_path],  
+                               [string(test_pwy_name,"_",i) for i=1:3],
                                sample_ids, sample_conditions,
                                sample_batch_dict,
                                feature_genes, feature_assays)
@@ -396,7 +399,7 @@ end
 function model_io_tests()
 
     test_sif_path = "test_pathway.sif"
-    
+    test_pwy_name = "test_pathway" 
     feature_genes = ["PLK1","PLK1","PLK1", 
                      "PAK1", "PAK1", "PAK1",
                      "SGOL1", 
@@ -419,6 +422,7 @@ function model_io_tests()
 
 
         model = MultiomicModel([test_sif_path, test_sif_path, test_sif_path],  
+                               [string(test_pwy_name,"_",i) for i=1:3],
                                sample_ids, sample_conditions,
                                sample_batch_dict,
                                feature_genes, feature_assays)
@@ -436,9 +440,9 @@ end
 
 function main()
 
-    util_tests()
-    preprocess_tests()
-    assemble_model_tests()
+    #util_tests()
+    #preprocess_tests()
+    #assemble_model_tests()
     fit_tests()
     model_io_tests()
 
