@@ -25,6 +25,7 @@ def load_clinical_data(clinical_hdf, cols):
     return clinical_data[:,idx].astype(str), sample_ids
 
 
+
 def match_clinical_to_omic(clinical_data, clinical_samples, orig_samples):
 
     M = orig_samples.shape[0]
@@ -40,8 +41,11 @@ def match_clinical_to_omic(clinical_data, clinical_samples, orig_samples):
     return new_clinical_data
 
 
-def embedding_scatter_plotly(X, instance_ids, instance_groups, clinical_data, clinical_cols, pc_idx):
 
+def embedding_scatter_plotly(X, instance_ids, instance_groups, 
+                             clinical_data, clinical_cols, pc_idx):
+
+    print(X)
     u, s, vh = np.linalg.svd(X, full_matrices=False)
 
     pcs = u * s
@@ -90,30 +94,9 @@ if __name__=="__main__":
     first_pc = int(args[3])
     output_scatter = args[4]
 
-    orig_samples,\
-    orig_groups, \
-    aug_samples, \
-    sample_to_idx = su.load_sample_info(model_hdf)
-
-    orig_sample_idx = np.vectorize(lambda x: sample_to_idx[x])(orig_samples)
-    
-    if len(args) == 6:
-        groups_to_plot = set(args[5].split(":"))
-    else:
-        groups_to_plot = set(orig_groups) 
-    
-    kept_idx = np.vectorize(lambda x: x in groups_to_plot)(orig_groups)
-    orig_samples = orig_samples[kept_idx]
-    orig_groups = orig_groups[kept_idx]
-    orig_sample_idx = orig_sample_idx[kept_idx]
-
-    original_genes,\
-    original_assays,\
-    augmented_genes,\
-    augmented_assays, feat_to_idx = su.load_feature_info(model_hdf)
-    
-    X = su.load_embedding(model_hdf)
-    orig_X = X[orig_sample_idx,:]
+    orig_X = su.load_embedding(model_hdf)
+    orig_samples = su.load_sample_ids(model_hdf)
+    orig_groups = su.load_sample_groups(model_hdf)
 
     clinical_cols = ["gender", "hpv_status"] #, "age_at_pathologic_diagnosis", "tobacco_smoking_history", "race"] 
 

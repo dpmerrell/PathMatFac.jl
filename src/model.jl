@@ -32,8 +32,8 @@ function MultiomicModel(pathway_sif_data,
                         sample_batch_dict::Dict{T,Vector{U}},
                         feature_genes::Vector{String}, 
                         feature_assays::Vector{T};
-                        lambda_X::Float32=1.f0,
-                        lambda_Y::Float32=1.f0) where T where U
+                        lambda_X::Real=1.0,
+                        lambda_Y::Real=1.0) where T where U
         
     return assemble_model(pathway_sif_data,  
                           sample_ids, sample_conditions,

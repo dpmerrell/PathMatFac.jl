@@ -98,6 +98,8 @@ function assemble_model(pathway_sif_data,
                         lambda_X, lambda_Y)
 
     K = length(pathway_sif_data)
+    lambda_X = BMF.BMFFloat(lambda_X)
+    lambda_Y = BMF.BMFFloat(lambda_Y)
 
     # Construct the sample regularizer matrix (for X)
     sample_reg_mat, 
