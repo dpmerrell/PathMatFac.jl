@@ -67,8 +67,8 @@ function main(args)
 
     opts = Dict(:max_iter => Inf, 
                 :rel_tol =>1e-9, 
-                :inst_reg_weight =>0.1, 
-                :feat_reg_weight =>0.1,
+                :lambda_X =>0.1, 
+                :lambda_Y =>0.1,
                 :lr => 0.01
                )
     if length(args) > 3
@@ -77,6 +77,8 @@ function main(args)
 
     println("OPTS:")
     println(opts)
+    lambda_X = opts[:lambda_X]
+    lambda_Y = opts[:lambda_Y]
 
     println("Loading data...")
     feature_genes = get_omic_feature_genes(omic_hdf_filename)
@@ -93,12 +95,16 @@ function main(args)
     
     pwy_dict = JSON.parsefile(pwy_json) 
     pwys = pwy_dict["pathways"]
+    pwy_names = pwy_dict["names"]
+    pwy_names = convert(Vector{String}, pwy_names)
     pwys = convert(Vector{Vector{Vector{Any}}}, pwys)
 
-    model = MultiomicModel(pwys,  
+    model = MultiomicModel(pwys, pwy_names, 
                            sample_names, sample_conditions,
                            batch_dict,
-                           feature_genes, feature_assays)
+                           feature_genes, feature_assays;
+                           lambda_X=lambda_X, 
+                           lambda_Y=lambda_Y)
 
 
     #println("One iteration (for precompilation)")
@@ -107,7 +113,7 @@ function main(args)
     #println("Multiple iterations (for profiling)")
     #Profile.init(delay=0.01)
     start_time = time()
-    fit!(model, omic_data; verbose=true, max_epochs=500, capacity=Int(5e7))
+    fit!(model, omic_data; verbose=true, max_epochs=500, capacity=Int(5e7), lr=0.02)
     end_time = time()
 
     println("ELAPSED TIME (s):")

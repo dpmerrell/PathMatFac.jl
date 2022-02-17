@@ -33,64 +33,39 @@ def pwy_to_geneset(pwy):
 def load_hdf(dataset_hdf, key, dtype=float):
     
     with h5py.File(dataset_hdf, "r") as f:
-        dataset = f[key][:]
+        dataset = f[key][...]
     
     return dataset.astype(dtype) 
-
-
-def load_features(dataset_hdf):
-    return load_hdf(dataset_hdf, "features", dtype=str)
-
-def load_instances(dataset_hdf):
-    return load_hdf(dataset_hdf, "instances", dtype=str)    
-
-def load_data(dataset_hdf):
-    return load_hdf(dataset_hdf, "data")
-
-
-def load_true(truth_hdf):
-    true_data = load_data(truth_hdf)
-    true_instances = load_instances(truth_hdf)
-    true_features = load_features(truth_hdf)
-
-    print("TRUE DATA:", true_data.shape)
-
-    return true_data, true_instances, true_features
 
 
 def load_embedding(model_hdf):
 
     with h5py.File(model_hdf, "r") as f:
-        X = f["matfac"]["X"][:,:]
+        internal_X = f["matfac"]["X"][:,:]
+        sample_idx = f["internal_sample_idx"][:]
+        X = internal_X[sample_idx,:]
 
     return X
 
 
-def load_sample_info(model_hdf):
-
-    with h5py.File(model_hdf, "r") as f:
-        original_samples = f["original_samples"][:].astype(str)
-        augmented_samples = f["augmented_samples"][:].astype(str)
-        
-        original_groups = f["original_groups"][:].astype(str)
-
-    sample_to_idx = {samp: idx for (idx, samp) in enumerate(augmented_samples)}
-
-    return original_samples, original_groups, augmented_samples, sample_to_idx
+def load_sample_ids(model_hdf):
+    return load_hdf(model_hdf, "sample_ids", dtype=str)
 
 
-def load_feature_info(model_hdf):
+def load_sample_groups(model_hdf):
+    return load_hdf(model_hdf, "sample_conditions", dtype=str)
 
-    with h5py.File(model_hdf, "r") as f:
-        original_genes = f["original_genes"][:].astype(str)
-        augmented_genes = f["augmented_genes"][:].astype(str)
-        
-        original_assays = f["original_assays"][:].astype(str)
-        augmented_assays = f["augmented_assays"][:].astype(str)
 
-    feat_to_idx = {pair: idx for (idx, pair) in enumerate(zip(augmented_genes, augmented_assays))}
+def load_features(model_hdf):
+    feature_genes = load_hdf(model_hdf, "feature_genes", dtype=str)
+    feature_assays = load_hdf(model_hdf, "feature_assays", dtype=str)
+    return list("{}_{}".format(g,a) for (g,a) in zip(feature_genes, feature_assays))
 
-    return original_genes, original_assays, augmented_genes, augmented_assays, feat_to_idx
+
+def load_feature_factors(model_hdf):
+    factors = load_hdf(model_hdf, "matfac/Y")
+    feature_idx = load_hdf(model_hdf, "internal_feature_idx")
+    return factors[feature_idx, :]
 
 
 def load_instance_offset(model_hdf):
