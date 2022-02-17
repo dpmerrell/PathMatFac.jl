@@ -20,18 +20,13 @@ end
 
 function normalize_factors!(model::MultiomicModel)
 
-    X = model.X
     Y = model.Y
-
-    X_norms = sqrt.(sum(X .* X; dims=2))
-    target_X_norm = size(X,2)/100
-    model.matfac.X .*= (target_X_norm ./ X_norms)
 
     Y_norms = sqrt.(sum(Y .* Y; dims=2))
     target_Y_norm = size(Y,2)/100
     model.matfac.Y .*= (target_Y_norm ./ Y_norms)
 
-    model.pathway_weights .= dropdims(Matrix(X_norms .* Y_norms); dims=2) ./ (target_X_norm*target_Y_norm) 
+    model.pathway_weights .= dropdims(Matrix(Y_norms); dims=2) ./ (target_Y_norm) 
 
 end
 

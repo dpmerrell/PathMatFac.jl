@@ -440,9 +440,9 @@ end
 
 function main()
 
-    #util_tests()
-    #preprocess_tests()
-    #assemble_model_tests()
+    util_tests()
+    preprocess_tests()
+    assemble_model_tests()
     fit_tests()
     model_io_tests()
 
