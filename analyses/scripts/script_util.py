@@ -55,16 +55,23 @@ def load_sample_ids(model_hdf):
 def load_sample_groups(model_hdf):
     return load_hdf(model_hdf, "sample_conditions", dtype=str)
 
+def load_pathway_names(model_hdf):
+    return load_hdf(model_hdf, "pathway_names", dtype=str)
 
 def load_features(model_hdf):
     feature_genes = load_hdf(model_hdf, "feature_genes", dtype=str)
     feature_assays = load_hdf(model_hdf, "feature_assays", dtype=str)
-    return list("{}_{}".format(g,a) for (g,a) in zip(feature_genes, feature_assays))
+    f_l = np.array(list("{}_{}".format(g,a) for (g,a) in zip(feature_genes, feature_assays)))
+
+    feature_idx = load_hdf(model_hdf, "feature_idx", dtype=int)
+    feature_idx -= 1
+    return f_l[feature_idx]
 
 
 def load_feature_factors(model_hdf):
     factors = load_hdf(model_hdf, "matfac/Y")
-    feature_idx = load_hdf(model_hdf, "internal_feature_idx")
+    feature_idx = load_hdf(model_hdf, "internal_feature_idx", dtype=int)
+    feature_idx -= 1 # convert from Julia to Python indexing!
     return factors[feature_idx, :]
 
 
