@@ -9,6 +9,7 @@ NICE_NAMES = {"gender": "Sex",
               "race": "Race"
               }
 
+
 """
 Convert a pathway into a list of gene IDs.
 """
@@ -51,7 +52,8 @@ def load_hdf_dict(dataset_hdf, key, keytype=str, dtype=float):
 
 def ids_to_idx_dict(id_vec):
 
-    unq_ids = np.unique(id_vec)
+    _, unq_idx = np.unique(id_vec, return_index=True)
+    unq_ids = id_vec[np.sort(unq_idx)]
     idx_dict = {ui:[] for ui in unq_ids}
     for i, name in enumerate(id_vec):
         idx_dict[name].append(i)
@@ -60,14 +62,17 @@ def ids_to_idx_dict(id_vec):
 
 
 
-def load_batch_matrix(model_hdf, root_key, values_key, keytype=str, dtype=float):
+def load_batch_matrix(model_hdf, bmf_key, values_key, keytype=str, dtype=float):
 
-    feature_batch_ids = load_hdf(model_hdf, f"{root_key}/feature_batch_ids", dtype=str)
-    feature_batch_ids = np.unique(feature_batch_ids)
+    feature_batch_ids = load_hdf(model_hdf, f"{bmf_key}/feature_batch_ids", dtype=str)
+    #feature_idx = load_hdf(model_hdf, "internal_feature_idx", dtype=int)
+    #feature_batch_ids = feature_batch_ids[feature_idx-1] 
+    _, unq_idx = np.unique(feature_batch_ids, return_index=True)
+    feature_batch_ids = feature_batch_ids[np.sort(unq_idx)]
 
     nfb = len(feature_batch_ids)
 
-    sample_batch_ids = [load_hdf(model_hdf, f"{root_key}/sample_batch_ids/{idx+1}", dtype=str) for idx in range(nfb)]
+    sample_batch_ids = [load_hdf(model_hdf, f"{bmf_key}/sample_batch_ids/{idx+1}", dtype=str) for idx in range(nfb)]
 
     batch_value_dicts = [load_hdf_dict(model_hdf, f"{values_key}/{idx+1}", keytype=str, dtype=float) for idx in range(nfb)]
 
@@ -114,15 +119,17 @@ def load_feature_factors(model_hdf):
     return factors[feature_idx, :]
 
 
-def load_instance_offset(model_hdf):
-    with h5py.File(model_hdf, "r") as f:
-        offset = f["matfac"]["instance_offset"][:]
-    return offset
+def load_col_param(model_hdf, key):
+    raw_param = load_hdf(model_hdf, key)
+    internal_idx = load_hdf(model_hdf, "internal_feature_idx", dtype=int)
+    internal_idx -= 1
+    return raw_param[internal_idx]
 
-def load_feature_offset(model_hdf):
-    with h5py.File(model_hdf, "r") as f:
-        offset = f["matfac"]["feature_offset"][:]
-    return offset
+def load_mu(model_hdf):
+    return load_col_param(model_hdf, "matfac/mu")
+
+def load_log_sigma(model_hdf):
+    return load_col_param(model_hdf, "matfac/log_sigma")
 
 def value_to_idx(ls):
     return {k: idx for idx, k in enumerate(ls)}

@@ -10,7 +10,6 @@ import pandas as pd
 
 import script_util as su
 
-
 def load_clinical_data(clinical_hdf, cols):
     
     with h5py.File(clinical_hdf, "r") as f:
@@ -150,8 +149,16 @@ def combine_figs(scatter_fig, explained_var_fig, line_fig):
     return fig
 
 
-def parse_groups(gp_str):
-    return gp_str.split(",")
+def parse_opts(opts, args):
+
+    for arg in args:
+        tok = arg.split("=")
+        k = tok[0]
+        v = tok[1]
+        ls = v.split(",")
+        opts[k] = ls
+
+    return opts
 
 
 
@@ -163,9 +170,14 @@ if __name__=="__main__":
     first_pc = int(args[3])
     output_scatter = args[4]
 
-    exclude_groups = []
+    opts = {"exclude": [],
+            "keep": []
+           }
     if len(args) > 5:
-        exclude_groups = parse_groups(args[5])
+        opts = parse_opts(opts, args[5:])
+
+    exclude_groups = opts["exclude"]
+    keep_groups = opts["keep"]
 
     # Load information stored in the model
     orig_X = su.load_embedding(model_hdf)
@@ -174,7 +186,11 @@ if __name__=="__main__":
     pathways = su.load_pathway_names(model_hdf)
 
     # Filter out the excluded groups
-    kept_idx = np.vectorize(lambda x: x not in exclude_groups)(orig_groups)
+    if len(keep_groups) > 0:
+        kept_idx = np.vectorize(lambda x: x in keep_groups)(orig_groups)
+    else:
+        kept_idx = np.vectorize(lambda x: x not in exclude_groups)(orig_groups)
+
     X = orig_X[kept_idx,:]
     samples = orig_samples[kept_idx]
     groups = orig_groups[kept_idx]

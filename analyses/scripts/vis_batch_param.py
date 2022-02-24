@@ -28,25 +28,24 @@ def make_batch_heatmap(batch_df, value_df, cancer_types, color_scale="RdBu_r", c
     return fig
 
 
-def col_param_plot(param_df):
-    fig = px.line(param_df)
+def col_param_plot(param, col_names):
+    
+    fig = px.line(param)
+    fig.data[0].customdata = col_names
+    fig.data[0].hovertemplate = "column: %{customdata}<br>value: %{y}<extra></extra>"
 
     return fig
 
 
-#def restrict_idx_array(idx_array, restriction):
-#    
-#    restriction_set = set(restriction)
-#    return [idx for idx in idx_array if idx not in restriction_set]
-#
-#
-#def restrict_idx_dict(idx_dict, restriction):
-#    return {k: restrict_idx_array(arr, restriction) for k, arr in idx_dict.items()}
+
+assay_ordering = ["methylation", "mrnaseq", "rppa", "cna", "mutation"]
+assay_to_order = {a:idx for idx, a in enumerate(assay_ordering)}
 
 
 def make_batch_dfs(feature_batch_ids, sample_batch_ids, value_dicts, internal_sample_idx):
 
-    valid_fb_idx = [idx for idx, fb in enumerate(feature_batch_ids) if fb != ""]
+    fb_to_idx = {fb:idx for idx, fb in enumerate(feature_batch_ids)} 
+    valid_fb_idx = [fb_to_idx[assay] for assay in assay_ordering]
     valid_fb = [feature_batch_ids[i] for i in valid_fb_idx]
     valid_sb = [sample_batch_ids[i][internal_sample_idx] for i in valid_fb_idx]
     valid_vd = [value_dicts[i] for i in valid_fb_idx]
@@ -67,27 +66,34 @@ def make_batch_dfs(feature_batch_ids, sample_batch_ids, value_dicts, internal_sa
     return batch_df, values_df
 
 
-def combine_figs(theta_fig, delta_fig):
+def combine_figs(theta_fig, delta_fig, mu_fig, sigma_fig):
 
-    fig = make_subplots(rows=1,cols=2,
-                        subplot_titles=["Batch Shift",
-                                        "Batch Scale"],
-                        ) 
-    fig.add_traces(theta_fig.data, rows=1, cols=1)
-    fig.add_traces(delta_fig.data, rows=1, cols=2)
+    fig = make_subplots(rows=2,cols=2,
+                        row_heights=[0.2, 0.8],
+                        vertical_spacing=0.1,
+                        horizontal_spacing=0.05,
+                        subplot_titles=["Column Shift","Column Scale",
+                                        "Batch Shift","Batch Scale"],
+                        )
+ 
+    fig.add_traces(mu_fig.data, rows=1, cols=1)
+    fig.add_traces(sigma_fig.data, rows=1, cols=2)
+    fig.add_traces(theta_fig.data, rows=2, cols=1)
+    fig.add_traces(delta_fig.data, rows=2, cols=2)
 
     fig.layout["coloraxis1"] = theta_fig.layout["coloraxis"]
     fig.layout["coloraxis1"]["colorbar_x"] = -0.1
+    fig.layout["coloraxis1"]["colorbar_y"] = 0.4
+    fig.layout["coloraxis1"]["colorbar_len"] = 0.8
     fig.layout["coloraxis2"] = delta_fig.layout["coloraxis"]
     fig.layout["coloraxis2"]["colorbar_x"] = 1.02
+    fig.layout["coloraxis2"]["colorbar_y"] = 0.4
+    fig.layout["coloraxis2"]["colorbar_len"] = 0.8
     
-    #fig.layout["coloraxis2"]["colorbar"]["tickvals"] = [-3,-2,-1,0,1,2,3]
-    #fig.layout["coloraxis2"]["colorbar"]["ticktext"] = ["0.125","0.25",
-    #                                                    "0.5", "1.0",
-    #                                                    "2.0", "4.0", "8.0"]
+    fig.data[2]["coloraxis"] = "coloraxis1"
+    fig.data[3]["coloraxis"] = "coloraxis2"
 
-    fig.data[0]["coloraxis"] = "coloraxis1"
-    fig.data[1]["coloraxis"] = "coloraxis2"
+    print(fig)
    
     return fig 
 
@@ -99,23 +105,21 @@ if __name__=="__main__":
 
     cancer_types = su.load_sample_groups(model_hdf)
 
-
     ################################
     # THETA PLOT
     feature_batch_ids,\
     sample_batch_ids, \
     theta_value_dicts,\
     internal_sample_idx = su.load_batch_matrix(model_hdf, "matfac", 
-                                             "matfac/theta_values", 
-                                             keytype=str, dtype=float)
-
+                                               "matfac/theta_values", 
+                                               keytype=str, dtype=float)
+    print(feature_batch_ids)
     batch_df, theta_df = make_batch_dfs(feature_batch_ids,
                                         sample_batch_ids,
                                         theta_value_dicts,
                                         internal_sample_idx)
     
     theta_fig = make_batch_heatmap(batch_df, theta_df, cancer_types)
-    print(theta_fig)
  
     ################################
     # LOG DELTA PLOT 
@@ -132,13 +136,28 @@ if __name__=="__main__":
                                             internal_sample_idx)
     
     delta_df = log_delta_df.apply(np.exp)
-    #delta_df = log_delta_df.apply(np.log2)
     delta_fig = make_batch_heatmap(batch_df, delta_df, cancer_types, 
                                    color_scale="puor_r", zmin=0.0, zmax=2.0)
 
-    fig = combine_figs(theta_fig, delta_fig)
+    ################################
+    # Mu plot
 
-    print(fig)
+    features = su.load_features(model_hdf)
+    mu = su.load_mu(model_hdf)
+  
+    mu_fig = col_param_plot(mu, features)
+
+
+    ################################
+    # Sigma plot
+    log_sigma = su.load_log_sigma(model_hdf)
+    sigma_fig = col_param_plot(np.exp(log_sigma), features)
+
+
+    ################################
+    # Combine figures
+    fig = combine_figs(theta_fig, delta_fig,
+                       mu_fig, sigma_fig)
 
     fig.write_html(out_html)
 
