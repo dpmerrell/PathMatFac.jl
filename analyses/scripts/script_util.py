@@ -38,6 +38,45 @@ def load_hdf(dataset_hdf, key, dtype=float):
     return dataset.astype(dtype) 
 
 
+def load_hdf_dict(dataset_hdf, key, keytype=str, dtype=float):
+
+    with h5py.File(dataset_hdf, "r") as f:
+        keys = f[key]["keys"][:].astype(keytype)
+        values = f[key]["values"][:].astype(dtype)
+
+        my_dict = dict(zip(keys,values))
+
+    return my_dict
+
+
+def ids_to_idx_dict(id_vec):
+
+    unq_ids = np.unique(id_vec)
+    idx_dict = {ui:[] for ui in unq_ids}
+    for i, name in enumerate(id_vec):
+        idx_dict[name].append(i)
+
+    return idx_dict
+
+
+
+def load_batch_matrix(model_hdf, root_key, values_key, keytype=str, dtype=float):
+
+    feature_batch_ids = load_hdf(model_hdf, f"{root_key}/feature_batch_ids", dtype=str)
+    feature_batch_ids = np.unique(feature_batch_ids)
+
+    nfb = len(feature_batch_ids)
+
+    sample_batch_ids = [load_hdf(model_hdf, f"{root_key}/sample_batch_ids/{idx+1}", dtype=str) for idx in range(nfb)]
+
+    batch_value_dicts = [load_hdf_dict(model_hdf, f"{values_key}/{idx+1}", keytype=str, dtype=float) for idx in range(nfb)]
+
+    internal_sample_idx = load_hdf(model_hdf, "internal_sample_idx", dtype=int) 
+
+    return feature_batch_ids, sample_batch_ids, batch_value_dicts, internal_sample_idx
+
+
+
 def load_embedding(model_hdf):
 
     with h5py.File(model_hdf, "r") as f:
