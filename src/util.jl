@@ -112,6 +112,7 @@ function edgelist_to_spmat(edgelist, node_to_idx; epsilon=1e-5, verbose=false)
     # make safe against redundancies.
     # in case of redundancy, keep the latest
     edge_dict = Dict()
+    pwy_nodes = Set()
     for edge in edgelist
         if verbose
             println(edge)
@@ -121,12 +122,23 @@ function edgelist_to_spmat(edgelist, node_to_idx; epsilon=1e-5, verbose=false)
         u = max(e1, e2)
         v = min(e1, e2)
         edge_dict[(u,v)] = edge[3]
+        push!(pwy_nodes, u)
+        push!(pwy_nodes, v)
     end
 
+    # Store indices and nonzero values
     I = Int64[] 
     J = Int64[] 
     V = Float64[] 
+
+    # Store values for the diagonal
     diagonal = fill(epsilon, N)
+    # Need to add 1 to the nodes that aren't in this pathway
+    for i=1:N
+        if !in(i, pwy_nodes)
+            diagonal[i] += 1
+        end
+    end
 
     # Off-diagonal entries
     for (idx, value) in edge_dict
@@ -146,6 +158,7 @@ function edgelist_to_spmat(edgelist, node_to_idx; epsilon=1e-5, verbose=false)
         diagonal[idx[1]] += av
         diagonal[idx[2]] += av
     end
+    
 
     # diagonal entries
     for i=1:N

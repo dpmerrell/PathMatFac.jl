@@ -65,11 +65,13 @@ function main(args)
     pwy_json = args[2]
     out_hdf = args[3]
 
-    opts = Dict(:max_iter => Inf, 
-                :rel_tol =>1e-9, 
+    opts = Dict(:max_epochs => Inf, 
+                :rel_tol =>1e-8, 
                 :lambda_X =>0.1, 
                 :lambda_Y =>0.1,
-                :lr => 0.01
+                :lr => 0.05,
+                :capacity => Int(5e7),
+                :verbose => true
                )
     if length(args) > 3
         parse_opts!(opts, args[4:end])
@@ -77,8 +79,8 @@ function main(args)
 
     println("OPTS:")
     println(opts)
-    lambda_X = opts[:lambda_X]
-    lambda_Y = opts[:lambda_Y]
+    lambda_X = pop!(opts, :lambda_X)
+    lambda_Y = pop!(opts, :lambda_Y)
 
     println("Loading data...")
     feature_genes = get_omic_feature_genes(omic_hdf_filename)
@@ -107,19 +109,12 @@ function main(args)
                            lambda_Y=lambda_Y)
 
 
-    #println("One iteration (for precompilation)")
-    #fit!(model, omic_data; verbose=true, max_epochs=1, capacity=Int(5e7))
-    
-    #println("Multiple iterations (for profiling)")
-    #Profile.init(delay=0.01)
     start_time = time()
-    fit!(model, omic_data; verbose=true, max_epochs=500, capacity=Int(5e7), lr=0.02)
+    fit!(model, omic_data; opts...)
     end_time = time()
 
     println("ELAPSED TIME (s):")
     println(end_time - start_time)
-
-    #ProfileSVG.save("fit_profile.svg", maxframes=5000)
 
     save_hdf(model, out_hdf)
 
