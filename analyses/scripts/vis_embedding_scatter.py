@@ -4,12 +4,11 @@ import h5py
 import sys
 import os
 
-import chart_studio.plotly as cs
 import plotly.express as px
+from plotly.subplots import make_subplots
 import pandas as pd
 
 import script_util as su
-
 
 def load_clinical_data(clinical_hdf, cols):
     
@@ -41,29 +40,28 @@ def match_clinical_to_omic(clinical_data, clinical_samples, orig_samples):
     return new_clinical_data
 
 
+def compute_pca(X):
+    mu = np.mean(X, axis=0)
+    sigma = np.std(X, axis=0)
+    X = (X - mu)/sigma
 
-def embedding_scatter_plotly(X, instance_ids, instance_groups, 
-                             clinical_data, clinical_cols, pc_idx):
-
-    print(X)
     u, s, vh = np.linalg.svd(X, full_matrices=False)
 
-    pcs = u * s
+    return u, s, vh
 
-    x = pcs[:,pc_idx[0]]
-    y = pcs[:,pc_idx[1]]
-    z = pcs[:,pc_idx[2]]
 
-    labels = ["PC {}".format(idx+1) for idx in pc_idx]
+def get_pc_names(n_pc):
+    return np.array(["PC {}".format(idx+1) for idx in range(U.shape[1])])
 
-    source_df = pd.DataFrame({
-                              labels[0]: x, 
-                              labels[1]: y, 
-                              labels[2]: z, 
-                              "Cancer Type": instance_groups, 
-                              "Patient ID": instance_ids
-                             }
-                            )
+
+def embedding_scatter(U, instance_ids, instance_groups, 
+                      clinical_data, clinical_cols, pc_idx):
+
+    labels = get_pc_names(U.shape[1])
+
+    source_df = pd.DataFrame(data=U, columns=labels)
+    source_df["Cancer Type"] = instance_groups
+    source_df["Patient ID"] = instance_ids
 
     hover_cols = []
 
@@ -72,17 +70,95 @@ def embedding_scatter_plotly(X, instance_ids, instance_groups,
         source_df[col_name] = clinical_data[:,i]
         hover_cols.append(col_name)
 
-    fig = px.scatter_3d(source_df, x=labels[0], y=labels[1], z=labels[2],
+    fig = px.scatter_3d(source_df, x=labels[pc_idx[0]], 
+                                   y=labels[pc_idx[1]], 
+                                   z=labels[pc_idx[2]],
                                    color="Cancer Type",
-                                   hover_data=["Cancer Type"]+hover_cols)
+                                   hover_data=["Cancer Type"]+hover_cols,
+                                   title="Pathway Embedding",
+                       )
+    print(fig.layout)
 
-    fig.update_layout(scene={"xaxis":{"range":[x.min(), x.max()]},
-                             "yaxis":{"range":[y.min(), y.max()]},
-                             "zaxis":{"range":[z.min(), z.max()]},
-                            }
-                     )
+    return fig
 
-    return fig 
+
+def pc_line_plot(Vh, pathways, pc_idx):
+    
+    pc_names = get_pc_names(Vh.shape[0])
+    Vh = Vh.transpose()
+
+    used_pcs = pc_names[pc_idx]
+    df = pd.DataFrame(data=Vh[:,pc_idx], columns=used_pcs)
+    df["Pathway"] = pathways
+    df.sort_values(["Pathway"], inplace=True)
+    df.index = list(range(Vh.shape[0]))
+    fig = px.line(data_frame=df, y=used_pcs, hover_data=["Pathway"],
+                      labels={"index": "Pathway ID",
+                              "variable": "Principal Component",
+                              "value": "Weight"
+                             },
+                      title="Principal Components"
+                 )
+    return fig
+
+
+def explained_var_plot(s):
+    pc_names = get_pc_names(len(s))
+
+    df = pd.DataFrame(data=s.reshape((len(s),1)),columns=["Singular Value"])
+    df["Principal Component"] = pc_names
+
+    fig = px.line(data_frame=df, y=["Singular Value"],
+                  labels={"index": "Principal Component",
+                          "variable": "Singular Value",
+                          }
+                 )
+
+    return fig
+
+
+
+def combine_figs(scatter_fig, explained_var_fig, line_fig):
+    fig = make_subplots(
+        rows=2,
+        cols=2,
+        row_heights=[0.8, 0.2],
+        column_widths=[0.2, 0.8],
+        vertical_spacing=0.05,
+        horizontal_spacing=0.05,
+        subplot_titles=["Embedding Scatterplot",
+                        "Explained Variance",
+                        "Top Principal Components"],
+        specs=[[{"type": "scatter3d", "colspan":2}, None], 
+               [{"type": "scatter"}, {"type": "scatter"}]]
+    )
+
+    fig.add_traces(scatter_fig.data, rows=1, cols=1) 
+    fig.add_traces(explained_var_fig.data, rows=2, cols=1)
+    fig.add_traces(line_fig.data, rows=2, cols=2) 
+
+    fig.update_layout({'scene': {
+                                'xaxis': {'title': {'text': 'PC 1'}},
+                                'yaxis': {'title': {'text': 'PC 2'}},
+                                'zaxis': {'title': {'text': 'PC 3'}}
+                               }
+                      })
+
+    print(fig.layout)
+
+    return fig
+
+
+def parse_opts(opts, args):
+
+    for arg in args:
+        tok = arg.split("=")
+        k = tok[0]
+        v = tok[1]
+        ls = v.split(",")
+        opts[k] = ls
+
+    return opts
 
 
 
@@ -94,17 +170,44 @@ if __name__=="__main__":
     first_pc = int(args[3])
     output_scatter = args[4]
 
+    opts = {"exclude": [],
+            "keep": []
+           }
+    if len(args) > 5:
+        opts = parse_opts(opts, args[5:])
+
+    exclude_groups = opts["exclude"]
+    keep_groups = opts["keep"]
+
+    # Load information stored in the model
     orig_X = su.load_embedding(model_hdf)
     orig_samples = su.load_sample_ids(model_hdf)
     orig_groups = su.load_sample_groups(model_hdf)
+    pathways = su.load_pathway_names(model_hdf)
 
-    clinical_cols = ["gender", "hpv_status"] #, "age_at_pathologic_diagnosis", "tobacco_smoking_history", "race"] 
+    # Filter out the excluded groups
+    if len(keep_groups) > 0:
+        kept_idx = np.vectorize(lambda x: x in keep_groups)(orig_groups)
+    else:
+        kept_idx = np.vectorize(lambda x: x not in exclude_groups)(orig_groups)
 
+    X = orig_X[kept_idx,:]
+    samples = orig_samples[kept_idx]
+    groups = orig_groups[kept_idx]
+
+    # Compute principal components
+    U, s, Vh = compute_pca(X)
+
+    clinical_cols = ["gender", "hpv_status"] 
     clinical_data, clinical_samples = load_clinical_data(clinical_hdf, clinical_cols)
-    clinical_data = match_clinical_to_omic(clinical_data, clinical_samples, orig_samples)
+    clinical_data = match_clinical_to_omic(clinical_data, clinical_samples, samples)
+    pc_idx = list(range(first_pc, first_pc+3))
 
-    pcs = list(range(first_pc, first_pc+3))
+    scatter_fig = embedding_scatter(U, samples, groups, clinical_data, clinical_cols, pc_idx)
+    explained_var_fig = explained_var_plot(s)
+    line_fig = pc_line_plot(Vh, pathways, pc_idx)
 
-    fig = embedding_scatter_plotly(orig_X, orig_samples, orig_groups, clinical_data, clinical_cols, pcs)
+    fig = combine_figs(scatter_fig, explained_var_fig, line_fig)
     fig.write_html(output_scatter) 
+
 
