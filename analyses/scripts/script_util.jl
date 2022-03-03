@@ -62,7 +62,7 @@ end
 
 
 function save_omic_data(output_hdf, feature_names, instance_names, 
-                    instance_groups, omic_matrix)
+                        instance_groups, omic_matrix)
 
     @assert size(omic_matrix,2) == length(feature_names)
     @assert size(omic_matrix,1) == length(instance_names)
@@ -78,3 +78,33 @@ function save_omic_data(output_hdf, feature_names, instance_names,
 end
 
 
+function parse_opts!(defaults, opt_list)
+
+    opts_k = [Symbol(split(opt,"=")[1]) for opt in opt_list]
+    opts_v = [split(opt,"=")[end] for opt in opt_list]
+
+    parsed_v = []
+    for v in opts_v
+        new_v = v
+        try
+            new_v = parse(Int64, v)
+        catch ArgumentError
+            try
+                new_v = parse(Float64, v)
+            catch ArgumentError
+                new_v = v
+            end
+        finally
+            push!(parsed_v, new_v)
+        end
+    end
+
+    opt_d = Dict([ opts_k[i] => parsed_v[i] for i=1:length(opts_k)])
+
+    for (opt_k, opt_v) in opt_d
+        defaults[opt_k] = opt_v
+    end
+
+    return defaults
+
+end

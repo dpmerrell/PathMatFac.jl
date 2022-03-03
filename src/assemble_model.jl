@@ -84,9 +84,9 @@ function update_sample_batch_dict(sample_batch_dict::Dict{T,Vector{U}},
 end
 
 
-##############################################################
-## Model assembly
-##############################################################
+#############################################################
+# Model assembly
+#############################################################
 
 
 
@@ -143,7 +143,8 @@ function assemble_model(pathway_sif_data,
     matfac = BatchMatFacModel(sample_reg_mats, feature_reg_mats, 
                               assay_reg_mat, assay_reg_mat,
                               internal_sample_batch_dict, internal_feature_assays,
-                              internal_feature_losses)
+                              internal_feature_losses;
+                              theta_reg=lambda_X, log_delta_reg=lambda_X)
 
     pathway_weights = ones(K)
 

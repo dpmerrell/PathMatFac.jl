@@ -9,36 +9,6 @@ using ScikitLearnBase
 using Profile
 using ProfileSVG
 
-function parse_opts!(defaults, opt_list)
-
-    opts_k = [Symbol(split(opt,"=")[1]) for opt in opt_list]
-    opts_v = [split(opt,"=")[end] for opt in opt_list]
-
-    parsed_v = []
-    for v in opts_v
-        new_v = v
-        try
-            new_v = parse(Int64, v)
-        catch ArgumentError
-            try
-                new_v = parse(Float64, v)
-            catch ArgumentError
-                new_v = v
-            end
-        finally
-            push!(parsed_v, new_v)
-        end
-    end
-
-    opt_d = Dict([ opts_k[i] => parsed_v[i] for i=1:length(opts_k)])
-
-    for (opt_k, opt_v) in opt_d
-        defaults[opt_k] = opt_v
-    end
-
-    return defaults
-
-end
 
 
 function barcode_to_batch(barcode::String)
@@ -67,8 +37,8 @@ function main(args)
 
     opts = Dict(:max_epochs => Inf, 
                 :rel_tol =>1e-8, 
-                :lambda_X =>0.1, 
-                :lambda_Y =>0.1,
+                :lambda_X =>0.0, 
+                :lambda_Y =>0.0,
                 :lr => 0.05,
                 :capacity => Int(5e7),
                 :verbose => true
