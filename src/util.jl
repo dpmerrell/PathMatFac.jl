@@ -105,7 +105,7 @@ function nanvar(x)
 end
 
 
-function edgelist_to_spmat(edgelist, node_to_idx; epsilon=1e-5, verbose=false)
+function edgelist_to_spmat(edgelist, node_to_idx; epsilon=0.0, verbose=false)
 
     N = length(node_to_idx)
 
@@ -132,13 +132,13 @@ function edgelist_to_spmat(edgelist, node_to_idx; epsilon=1e-5, verbose=false)
     V = Float64[] 
 
     # Store values for the diagonal
-    diagonal = fill(epsilon, N)
-    # Need to add 1 to the nodes that aren't in this pathway
-    for i=1:N
-        if !in(i, pwy_nodes)
-            diagonal[i] += 1
-        end
-    end
+    diagonal = fill(1.0 + epsilon, N)
+    ## Need to add 1 to the nodes that aren't in this pathway
+    #for i=1:N
+    #    if !in(i, pwy_nodes)
+    #        diagonal[i] += 1
+    #    end
+    #end
 
     # Off-diagonal entries
     for (idx, value) in edge_dict

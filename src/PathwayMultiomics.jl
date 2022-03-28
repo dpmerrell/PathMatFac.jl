@@ -14,6 +14,6 @@ include("model.jl")
 include("model_io.jl")
 include("postprocess.jl")
 include("fit.jl")
-
+include("simulate.jl")
 
 end

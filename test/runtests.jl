@@ -51,10 +51,10 @@ function util_tests()
         # edgelist_to_spmat
         node_to_idx = Dict([string(c)=>idx for (idx,c) in enumerate("abcd")])
         edgelist = [["a","b",1], ["b","c",1], ["c","d",-1], ["d","a",-1]]
-        test_spmat = SparseMatrixCSC([ 2.1 -1   0  1; 
-                                      -1   2.1 -1  0; 
-                                       0   -1  2.1 1;
-                                       1    0   1 2.1])
+        test_spmat = SparseMatrixCSC([ 3.1 -1   0  1; 
+                                      -1   3.1 -1  0; 
+                                       0   -1  3.1 1;
+                                       1    0   1 3.1])
         spmat = PM.edgelist_to_spmat(edgelist, node_to_idx; epsilon=0.1)
 
         @test isapprox(SparseMatrixCSC(spmat), test_spmat)
@@ -438,13 +438,65 @@ function model_io_tests()
 
 end
 
+function simulation_tests()
+    
+    test_sif_path = "test_pathway.sif"
+    test_pwy_name = "test_pathway" 
+    feature_genes = ["PLK1","PLK1","PLK1", 
+                     "PAK1", "PAK1", "PAK1",
+                     "SGOL1", 
+                     "BRCA", "BRCA"]
+    feature_assays = ["cna", "mutation","mrnaseq", 
+                      "rppa", "mrnaseq", "mutation",
+                      "mrnaseq",
+                      "mrnaseq", "methylation"]
+    M = 10
+    m_groups = 2
+    N = 7 # (the number of features that actually occur in our pathways) 
+
+    sample_ids = [string("patient_",i) for i=1:M]
+    sample_conditions = repeat([string("group_",i) for i=1:m_groups], inner=5)
+        
+    sample_batch_dict = Dict([k => copy(sample_conditions) for k in unique(feature_assays)])
+
+    @testset "Data Simulation" begin
+
+        n_pwys = 3
+        pathway_sif_data = repeat([test_sif_path], n_pwys)
+        pathway_names = [string("test_pwy_",i) for i=1:n_pwys]
+
+        assay_moments_dict = Dict("mrnaseq"=>(5.0, 14.0),
+                                  "rppa"=>(0.0, 1.0),
+                                  "cna"=>(0.01,),
+                                  "methylation"=>(3.0,10.0),
+                                  "mutation"=>(0.001,)
+                                 )
+
+        model, params, D = PM.simulate_data(pathway_sif_data, 
+                                            pathway_names,
+                                            sample_ids, 
+                                            sample_conditions,
+                                            sample_batch_dict,
+                                            feature_genes, 
+                                            feature_assays,
+                                            assay_moments_dict;
+                                            mu_snr=10.0,
+                                            delta_snr=10.0,
+                                            logistic_mtv=10.0,
+                                            sample_snr=10.0
+                                           )
+        @test size(D) == (M,N)
+    end
+end
+
 function main()
 
-    util_tests()
-    preprocess_tests()
-    assemble_model_tests()
-    fit_tests()
-    model_io_tests()
+    #util_tests()
+    #preprocess_tests()
+    #assemble_model_tests()
+    #fit_tests()
+    #model_io_tests()
+    simulation_tests()
 
 end
 
