@@ -482,7 +482,7 @@ function simulation_tests()
                                             assay_moments_dict;
                                             mu_snr=10.0,
                                             delta_snr=10.0,
-                                            logistic_mtv=10.0,
+                                            logistic_snr=100.0,
                                             sample_snr=10.0
                                            )
         @test size(D) == (M,N)
@@ -491,11 +491,11 @@ end
 
 function main()
 
-    #util_tests()
-    #preprocess_tests()
-    #assemble_model_tests()
-    #fit_tests()
-    #model_io_tests()
+    util_tests()
+    preprocess_tests()
+    assemble_model_tests()
+    fit_tests()
+    model_io_tests()
     simulation_tests()
 
 end

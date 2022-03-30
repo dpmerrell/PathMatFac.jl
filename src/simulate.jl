@@ -11,7 +11,7 @@ function simulate_data(pathway_sif_data,
                        mu_snr=10.0,
                        delta_snr=10.0,
                        theta_snr=10.0,
-                       logistic_mtv=10.0,
+                       logistic_snr=100.0,
                        sample_snr=10.0
                       ) where T where U
 
@@ -38,7 +38,7 @@ function simulate_data(pathway_sif_data,
                                                         mu_snr=mu_snr,
                                                         delta_snr=delta_snr,
                                                         theta_snr=theta_snr,
-                                                        logistic_mtv=logistic_mtv,
+                                                        logistic_snr=logistic_snr,
                                                         sample_snr=sample_snr)
 
     # Assemble vectors of batch moments for each model parameter 
