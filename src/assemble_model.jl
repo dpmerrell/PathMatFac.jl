@@ -89,8 +89,6 @@ end
 #############################################################
 
 
-
-
 function assemble_model(pathway_sif_data,
                         pathway_names,
                         sample_ids, sample_conditions,
@@ -99,8 +97,6 @@ function assemble_model(pathway_sif_data,
                         lambda_X, lambda_Y)
 
     K = length(pathway_sif_data)
-    lambda_X = BMF.BMFFloat(lambda_X)
-    lambda_Y = BMF.BMFFloat(lambda_Y)
 
     # Construct the sample regularizer matrix (for X)
     sample_reg_mat, 
@@ -108,7 +104,7 @@ function assemble_model(pathway_sif_data,
     internal_sample_to_idx = assemble_sample_reg_mat(sample_ids, 
                                                      sample_conditions)
     rescale!(sample_reg_mat, lambda_X)
-    sample_reg_mats = PMRegMat[copy(sample_reg_mat) for _=1:K]
+    sample_reg_mats = [copy(sample_reg_mat) for _=1:K]
 
     internal_sample_batch_dict = update_sample_batch_dict(sample_batch_dict,
                                                           sample_ids,

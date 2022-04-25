@@ -78,25 +78,25 @@ function preprocess_tests()
                         ]
 
     test_extended_pwy = [["MOL:GTP_chemical", "GRASP65/GM130/RAB1/GTP/PLK1_compound", 1],
-                    ["METAPHASE_abstract", "PLK1_activation", 1],
-                    ["PAK1_activation", "PLK1_activation", 1],
-                    ["RAB1A_activation", "GRASP65/GM130/RAB1/GTP/PLK1_compound", 1],
-                    ["PLK1_activation", "SGOL1_activation", 1],
-                    ["PLK1_activation", "GRASP65/GM130/RAB1/GTP/PLK1_compound", 1],
-                    ["PP2A-ALPHA B56_compound", "SGOL1_activation", -1],
-                    ["PLK1_dna", "PLK1_mrna", 1],
-                    ["PLK1_mrna", "PLK1_protein", 1],
-                    ["PLK1_protein", "PLK1_activation", 1],
-                    ["PAK1_dna", "PAK1_mrna", 1],
-                    ["PAK1_mrna", "PAK1_protein", 1],
-                    ["PAK1_protein", "PAK1_activation", 1],
-                    ["RAB1A_dna", "RAB1A_mrna", 1],
-                    ["RAB1A_mrna", "RAB1A_protein", 1],
-                    ["RAB1A_protein", "RAB1A_activation", 1],
-                    ["SGOL1_dna", "SGOL1_mrna", 1],
-                    ["SGOL1_mrna", "SGOL1_protein", 1],
-                    ["SGOL1_protein", "SGOL1_activation", 1],
-                   ]
+                         ["METAPHASE_abstract", "PLK1_activation", 1],
+                         ["PAK1_activation", "PLK1_activation", 1],
+                         ["RAB1A_activation", "GRASP65/GM130/RAB1/GTP/PLK1_compound", 1],
+                         ["PLK1_activation", "SGOL1_activation", 1],
+                         ["PLK1_activation", "GRASP65/GM130/RAB1/GTP/PLK1_compound", 1],
+                         ["PP2A-ALPHA B56_compound", "SGOL1_activation", -1],
+                         ["PLK1_dna", "PLK1_mrna", 1],
+                         ["PLK1_mrna", "PLK1_protein", 1],
+                         ["PLK1_protein", "PLK1_activation", 1],
+                         ["PAK1_dna", "PAK1_mrna", 1],
+                         ["PAK1_mrna", "PAK1_protein", 1],
+                         ["PAK1_protein", "PAK1_activation", 1],
+                         ["RAB1A_dna", "RAB1A_mrna", 1],
+                         ["RAB1A_mrna", "RAB1A_protein", 1],
+                         ["RAB1A_protein", "RAB1A_activation", 1],
+                         ["SGOL1_dna", "SGOL1_mrna", 1],
+                         ["SGOL1_mrna", "SGOL1_protein", 1],
+                         ["SGOL1_protein", "SGOL1_activation", 1],
+                        ]
 
     test_nodes = Set(["MOL:GTP_chemical", "GRASP65/GM130/RAB1/GTP/PLK1_compound",
                       "METAPHASE_abstract", "PP2A-ALPHA B56_compound",
@@ -129,7 +129,6 @@ function preprocess_tests()
                          [("PLK1_mrna",""), ("PLK1_protein",""), 1],
                          [("PLK1_protein",""), ("PLK1_activation",""), 1],
                          [("PAK1_dna",""), ("PAK1","mutation"),  -1],
-                         #[("PAK1_mrna",""),("PAK1","mrnaseq"),  1],
                          [("PAK1_mrna",""),("PAK1","methylation"),  -1],
                          [("PAK1_protein",""), ("PAK1","rppa"),  1],
                          [("PAK1_dna",""), ("PAK1_mrna",""), 1],
@@ -304,19 +303,6 @@ function assemble_model_tests()
         edgelist = PM.create_sample_edgelist(sample_ids, group_ids)
         test_edgelist = [[gp, samp, 1] for (samp, gp) in zip(sample_ids, group_ids)]
         @test edgelist == test_edgelist 
-
-        ## augment_omic_matrix
-        #omic_matrix = randn(M, sim_N) 
-        #augmented_data = PM.augment_omic_matrix(omic_matrix, sim_features, 
-        #                                        sim_augmented_features, 
-        #                                        sample_ids, 
-        #                                        augmented_samples)
-        #@test size(augmented_data) == (length(augmented_samples),
-        #                               length(sim_augmented_features))
-
-        #@test augmented_data[1:M,1:length(sim_feature_genes)] == omic_matrix
-        #@test all(isnan.(augmented_data[(M+1):end,:]))
-        #@test all(isnan.(augmented_data[:,(N+1):end]))
 
         # assemble_sample_reg_mat
         sample_reg_mat, 
@@ -493,10 +479,10 @@ function main()
 
     util_tests()
     preprocess_tests()
-    assemble_model_tests()
-    fit_tests()
-    model_io_tests()
-    simulation_tests()
+    #assemble_model_tests()
+    #fit_tests()
+    #model_io_tests()
+    #simulation_tests()
 
 end
 

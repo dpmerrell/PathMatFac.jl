@@ -133,12 +133,6 @@ function edgelist_to_spmat(edgelist, node_to_idx; epsilon=0.0, verbose=false)
 
     # Store values for the diagonal
     diagonal = fill(1.0 + epsilon, N)
-    ## Need to add 1 to the nodes that aren't in this pathway
-    #for i=1:N
-    #    if !in(i, pwy_nodes)
-    #        diagonal[i] += 1
-    #    end
-    #end
 
     # Off-diagonal entries
     for (idx, value) in edge_dict
@@ -169,17 +163,19 @@ function edgelist_to_spmat(edgelist, node_to_idx; epsilon=0.0, verbose=false)
 
     result = sparse(I, J, V)
 
-    return PMRegMat(result)
+    return result 
 end
+
 
 function edgelists_to_spmats(edgelists, node_to_idx; verbose=false)
     return [edgelist_to_spmat(el, node_to_idx; verbose=verbose) for el in edgelists]
 end
 
 
-function rescale!(spmat::CuSparseMatrixCSC, scalar::Number)
-    spmat.nzVal .*= scalar 
-end
+
+#function rescale!(spmat::CuSparseMatrixCSC, scalar::Number)
+#    spmat.nzVal .*= scalar 
+#end
 
 function rescale!(spmat::SparseMatrixCSC, scalar::Number)
     spmat.nzval .*= scalar 
