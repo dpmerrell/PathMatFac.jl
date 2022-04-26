@@ -75,7 +75,8 @@ function simulate_data(pathway_sif_data,
 
     D_gpu = D_gpu[:,model.internal_feature_idx]
     D_gpu = D_gpu[model.internal_sample_idx,:]
-    D[:, model.feature_idx] .= Matrix(D_gpu)
+    #D[:, model.feature_idx] .= Matrix(D_gpu)
+    D .= Matrix(D_gpu)
 
     return model, sim_params, D
 end

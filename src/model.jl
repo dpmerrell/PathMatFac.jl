@@ -10,19 +10,10 @@ mutable struct MultiomicModel
     sample_ids::Vector{String}
     sample_conditions::Vector{String}
 
-    # Information about internal samples
-    internal_sample_idx::Vector{Int}
-    internal_sample_ids::Vector{String}
-
     # Information about data features
     feature_idx::Vector{Int}
     feature_genes::Vector{String}
     feature_assays::Vector{String}
-
-    # Information about internal features
-    internal_feature_idx::Vector{Int}
-    internal_feature_genes::Vector{String}
-    internal_feature_assays::Vector{String}
 
     # Pathway information
     pathway_names::Vector{String}
@@ -51,38 +42,38 @@ function MultiomicModel(pathway_sif_data,
 end
 
 
-function Base.:(==)(model_a::MultiomicModel, model_b::MultiomicModel)
-    for fn in fieldnames(MultiomicModel)
-        if !(getfield(model_a, fn) == getfield(model_b, fn)) 
-            return false
-        end
-    end
-    return true
-end
-
-
-function Base.getproperty(model::MultiomicModel, sym::Symbol)
-
-    if sym == :X
-        return view(model.matfac.X, :, model.internal_sample_idx)
-    elseif sym == :Y
-        return view(model.matfac.Y, :, model.internal_feature_idx)
-    elseif sym == :mu
-         return view(model.matfac.mu, model.internal_feature_idx)
-    elseif sym == :log_sigma
-         return view(model.matfac.log_sigma, model.internal_feature_idx)
-    elseif sym == :log_delta
-        return BMF.batch_matrix(model.matfac.log_delta_values,
-                                model.matfac.sample_batch_ids,
-                                model.matfac.feature_batch_ids)
-
-    elseif sym == :theta
-        return BMF.batch_matrix(model.matfac.theta_values,
-                                model.matfac.sample_batch_ids,
-                                model.matfac.feature_batch_ids)
-    else
-        return getfield(model, sym)
-    end
-end
+#function Base.:(==)(model_a::MultiomicModel, model_b::MultiomicModel)
+#    for fn in fieldnames(MultiomicModel)
+#        if !(getfield(model_a, fn) == getfield(model_b, fn)) 
+#            return false
+#        end
+#    end
+#    return true
+#end
+#
+#
+#function Base.getproperty(model::MultiomicModel, sym::Symbol)
+#
+#    if sym == :X
+#        return view(model.matfac.X, :, model.internal_sample_idx)
+#    elseif sym == :Y
+#        return view(model.matfac.Y, :, model.internal_feature_idx)
+#    elseif sym == :mu
+#         return view(model.matfac.mu, model.internal_feature_idx)
+#    elseif sym == :log_sigma
+#         return view(model.matfac.log_sigma, model.internal_feature_idx)
+#    elseif sym == :log_delta
+#        return BMF.batch_matrix(model.matfac.log_delta_values,
+#                                model.matfac.sample_batch_ids,
+#                                model.matfac.feature_batch_ids)
+#
+#    elseif sym == :theta
+#        return BMF.batch_matrix(model.matfac.theta_values,
+#                                model.matfac.sample_batch_ids,
+#                                model.matfac.feature_batch_ids)
+#    else
+#        return getfield(model, sym)
+#    end
+#end
 
 

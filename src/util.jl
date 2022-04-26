@@ -4,17 +4,20 @@ export DEFAULT_ASSAYS, sort_features
 
 import BatchMatFac: is_contiguous
 
-DEFAULT_ASSAY_LOSSES = Dict("" => "noloss",
-                            "cna" => "logistic",
-                            "mutation" => "logistic",
+DEFAULT_ASSAY_LOSSES = Dict("cna" => "ordinal3",
+                            "mutation" => "bernoulli",
                             "methylation" => "normal",
                             "mrnaseq" => "normal", 
-                            "rppa" => "normal"
+                            "rppa" => "normal",
+                            "" => "noloss"
                             )
 
-LOSS_ORDER = Dict("noloss" => 1,
-                  "logistic" => 2,
-                  "normal" => 3)
+LOSS_ORDER = Dict("normal" => 1,
+                  "poisson" => 2,
+                  "bernoulli" => 3,
+                  "ordinal3" => 4,
+                  "noloss" => 5
+                  )
 
 
 DEFAULT_ASSAYS = collect(keys(DEFAULT_ASSAY_LOSSES))
@@ -105,7 +108,7 @@ function nanvar(x)
 end
 
 
-function edgelist_to_spmat(edgelist, node_to_idx; epsilon=0.0, verbose=false)
+function edgelist_to_spmat(edgelist, node_to_idx; epsilon=0.0)
 
     N = length(node_to_idx)
 
@@ -114,9 +117,6 @@ function edgelist_to_spmat(edgelist, node_to_idx; epsilon=0.0, verbose=false)
     edge_dict = Dict()
     pwy_nodes = Set()
     for edge in edgelist
-        if verbose
-            println(edge)
-        end
         e1 = node_to_idx[edge[1]]
         e2 = node_to_idx[edge[2]]
         u = max(e1, e2)
@@ -148,9 +148,9 @@ function edgelist_to_spmat(edgelist, node_to_idx; epsilon=0.0, verbose=false)
 
         # increment diagonal entries
         # (maintain positive definite-ness)
-        av = abs(value)
-        diagonal[idx[1]] += av
-        diagonal[idx[2]] += av
+        ab = abs(value)
+        diagonal[idx[1]] += ab
+        diagonal[idx[2]] += ab
     end
     
 
@@ -167,8 +167,8 @@ function edgelist_to_spmat(edgelist, node_to_idx; epsilon=0.0, verbose=false)
 end
 
 
-function edgelists_to_spmats(edgelists, node_to_idx; verbose=false)
-    return [edgelist_to_spmat(el, node_to_idx; verbose=verbose) for el in edgelists]
+function edgelists_to_spmats(edgelists, node_to_idx)
+    return [edgelist_to_spmat(el, node_to_idx) for el in edgelists]
 end
 
 

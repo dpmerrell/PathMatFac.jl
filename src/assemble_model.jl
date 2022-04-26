@@ -5,25 +5,16 @@
 # Patient groups
 #############################################################
 
-function augment_samples(sample_ids, group_ids; rooted=false)
-    result = vcat(sample_ids, unique(group_ids))
-    if rooted
-        push!(result, "ROOT")
-    end
-    return result
-end
-
-
-function create_sample_edgelist(sample_id_vec, group_vec; rooted=false)
+function create_group_edgelist(id_vec, group_vec; rooted=false)
     
-    m = length(sample_id_vec)
+    m = length(id_vec)
     @assert m == length(group_vec)
 
     edgelist = Vector{Any}[]
 
     # Tie samples to their groups
     for i=1:m
-        push!(edgelist, [group_vec[i], sample_id_vec[i], 1])
+        push!(edgelist, [group_vec[i], id_vec[i], 1])
     end
 
     # If we're rooted, then tie the groups to a root node
@@ -36,52 +27,6 @@ function create_sample_edgelist(sample_id_vec, group_vec; rooted=false)
     return edgelist
 end
 
-
-function assemble_sample_reg_mat(sample_ids, sample_conditions)
-    
-    # build the sample edge list from the "sample groups" vector
-    augmented_samples = augment_samples(sample_ids, sample_conditions) 
-    sample_edgelist = create_sample_edgelist(sample_ids, sample_conditions)
-    aug_sample_to_idx = value_to_idx(augmented_samples)
-
-    # translate the sample edge list to a sparse matrix
-    sample_reg_mat = edgelist_to_spmat(sample_edgelist, aug_sample_to_idx)
-
-    return sample_reg_mat, augmented_samples, aug_sample_to_idx
-end
-
-
-function update_sample_batch_dict(sample_batch_dict::Dict{T,Vector{U}}, 
-                                  sample_ids, internal_samples,
-                                  internal_sample_to_idx) where T where U
-  
-    old_samples_set = Set(sample_ids)
-    new_M = length(internal_samples)
-
-    new_dict = Dict{T,Vector{U}}()
-
-
-    for k in keys(sample_batch_dict)
-        
-        old_batches_lookup = Dict(zip(sample_ids, sample_batch_dict[k]))
-
-        new_batches = Vector{T}(undef, new_M)
-
-        for (idx, i_samp) in enumerate(internal_samples)
-            if i_samp in old_samples_set
-                new_batches[idx] = old_batches_lookup[i_samp] 
-            else
-                new_batches[idx] = ""
-            end
-        end
-
-        new_dict[k] = new_batches
-    end
-
-    new_dict[""] = repeat([""], new_M)
-
-    return new_dict 
-end
 
 
 #############################################################
@@ -96,60 +41,60 @@ function assemble_model(pathway_sif_data,
                         feature_genes, feature_assays,
                         lambda_X, lambda_Y)
 
+    # Sort the features
+    features = zip(feature_genes, feature_assays)
+    srt_features = sort_features(features)
+    srt_genes = [get_gene(feat) for feat in srt_features]
+    srt_assays = [get_assay(feat) for feat in srt_features]
+
+    # Track the feature permutation imposed by sorting
+    _, perm_idx = keymatch(srt_features, features)
+
+    # Collect the batch ids
+    unq_assays = unique(srt_assays)
+    sample_batch_ids = [sample_batch_dict[ua] for ua in unq_assays]
+
+    # Get the loss model for each feature
+    feature_losses = String[get_loss(feat) for feat in srt_features]
+
+    # Compute dimensions of the matrix factorization
+    M = length(sample_ids)
+    N = length(feature_genes)
     K = length(pathway_sif_data)
 
-    # Construct the sample regularizer matrix (for X)
-    sample_reg_mat, 
-    internal_samples, 
-    internal_sample_to_idx = assemble_sample_reg_mat(sample_ids, 
-                                                     sample_conditions)
-    rescale!(sample_reg_mat, lambda_X)
-    sample_reg_mats = [copy(sample_reg_mat) for _=1:K]
+    # Construct a regularizer for X
+    sample_edgelist = create_group_edgelist(sample_ids, sample_conditions)
+    X_reg = NetworkRegularizer(fill(sample_edgelist, K); observed=sample_ids,
+                                                         weight=lambda_X)
 
-    internal_sample_batch_dict = update_sample_batch_dict(sample_batch_dict,
-                                                          sample_ids,
-                                                          internal_samples,
-                                                          internal_sample_to_idx)
-    internal_sample_idx = Int[internal_sample_to_idx[s] for s in sample_ids]
-
-
-    # Construct the pathway-based feature regularizer matrices (for Y)
-    # and the assay-based regularizer matrix (for mu, sigma)
-    feature_reg_mats, 
-    assay_reg_mat, 
-    internal_features, 
-    internal_feat_to_idx = assemble_feature_reg_mats(pathway_sif_data, 
-                                                     feature_genes, 
+    # Construct the pathway regularizer for Y
+    pathway_edgelists, pathway_nodes = prep_pathways(pathway_sif_data,
+                                                     feature_genes,
                                                      feature_assays)
-    for mat in feature_reg_mats
-        rescale!(mat, lambda_Y)
-    end
-    rescale!(assay_reg_mat, lambda_Y)
+    Y_reg = NetworkRegularizer(pathway_edgelists; observed=srt_features,
+                                                  weight=lambda_Y)
 
-    internal_feature_genes = String[get_gene(feat) for feat in internal_features]
-    internal_feature_losses = String[get_loss(feat) for feat in internal_features]
-    internal_feature_assays = String[get_assay(feat) for feat in internal_features]
-
-    orig_features = collect(zip(feature_genes, feature_assays))
-   
-    feature_idx, internal_feature_idx = keymatch(orig_features, 
-                                                 internal_features)
+    # Construct regularizers for sigma and mu
+    feature_group_edgelist = create_group_edgelist(srt_features, srt_assays)
+    logsigma_reg = NetworkRegularizer([feature_group_edgelist]; observed=srt_features,
+                                                                weight=lambda_Y)
+    mu_reg = NetworkRegularizer([feature_group_edgelist]; observed=srt_features,
+                                                          weight=lambda_Y)
 
     # Construct MatFacModel
-    matfac = BatchMatFacModel(sample_reg_mats, feature_reg_mats, 
-                              assay_reg_mat, assay_reg_mat,
-                              internal_sample_batch_dict, internal_feature_assays,
-                              internal_feature_losses;
-                              theta_reg=lambda_X, log_delta_reg=lambda_X)
+    matfac = BatchMatFacModel(M, N, K, srt_assays, 
+                              sample_batch_ids, 
+                              feature_losses;
+                              X_reg=X_reg, Y_reg=Y_reg, 
+                              logsigma_reg=logsigma_reg, 
+                              mu_reg=mu_reg)
 
-    pathway_weights = ones(K)
+    pathway_weights = zeros(K)
 
-    model = MultiomicModel(matfac, sample_ids, sample_conditions, 
-                           internal_sample_idx, internal_samples, 
-                           feature_idx, feature_genes, feature_assays,
-                           internal_feature_idx, 
-                           internal_feature_genes, 
-                           internal_feature_assays,
+    model = MultiomicModel(matfac, 
+                           sample_ids, sample_conditions, 
+                           perm_idx,
+                           srt_genes, srt_assays,
                            pathway_names, pathway_weights)
 
     return model

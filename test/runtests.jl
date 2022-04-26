@@ -31,12 +31,13 @@ function util_tests()
 
         # get_loss
         @test PM.get_loss(("BRCA","mrnaseq")) == "normal"
-        @test PM.get_loss(("BRCA","mutation")) == "logistic"
+        @test PM.get_loss(("BRCA","mutation")) == "bernoulli"
 
         # sort_features
-        @test PM.sort_features(feature_list) == [("VIRTUAL1", ""), ("GENE3","cna"),
-                                                 ("GENE4", "mutation"), ("GENE2","methylation"),
-                                                 ("GENE1", "mrnaseq")]
+        @test PM.sort_features(feature_list) == [("GENE2","methylation"), ("GENE1", "mrnaseq"),
+                                                 ("GENE4", "mutation"), ("GENE3","cna"), 
+                                                 ("VIRTUAL1", "")
+                                                 ]
 
         # nansum
         @test PM.nansum([1.0, NaN, 2.0, NaN, 3.0]) == 6.0
@@ -235,28 +236,75 @@ function preprocess_tests()
                                                           feature_assays)
         @test Set(prepped_pwys[1]) == Set(test_datanode_pwy)
 
-        
-        # assemble_feature_reg_mats
-        feature_reg_mats, 
-        assay_reg_mat, 
-        augmented_features, 
-        aug_feat_to_idx = PM.assemble_feature_reg_mats([test_sif_path], 
-                                                       feature_genes, 
-                                                       feature_assays)
-
-        test_aug_features = Set([node for edge in pathway for node in edge[1:2]])
-        union!(test_aug_features, [(assay,"") for assay in unique_assays])
-        @test Set(augmented_features) == test_aug_features
-
-        feat_mat = SparseMatrixCSC(feature_reg_mats[1])
-        @test all([feat_mat[aug_feat_to_idx[edge[1]], 
-                            aug_feat_to_idx[edge[2]]] != 0 for edge in test_datanode_pwy])
-        @test issymmetric(feat_mat) 
-              
-
     end
 
 end
+
+
+function network_reg_tests()
+
+    test_sif_path = "test_pathway.sif"
+        
+    feature_genes = ["PLK1","PLK1","PLK1", 
+                     "PAK1", "PAK1", "PAK1",
+                     "SGOL1", 
+                     "BRCA", "BRCA"]
+    feature_assays = ["cna", "mutation","mrnaseq", 
+                      "rppa", "methylation", "mutation",
+                      "mrnaseq",
+                      "mrnaseq", "methylation"]
+
+    @testset "Network regularizers" begin
+
+        #############################################
+        # Test on synthetic network
+        edgelists = [[[1, 2, 1.0],[2, 3, 1.0],[3, 4, 1.0]],
+                     [[1, 3, -1.0],[2, 4, -1.0]]
+                    ]
+        observed = [1,2,3]
+        nr = PM.NetworkRegularizer(edgelists; observed=observed)
+        @test length(nr.AA) == 2
+        @test size(nr.AA[1]) == (3,3)
+        @test nr.AA[1] == sparse([2. -1. 0.;# 0;
+                                  -1. 3. -1.;# 0;
+                                  0. -1. 3.])# 1;
+                                  #0 0 1 2])
+        @test size(nr.AB[1]) == (3,1)
+        @test nr.AB[1] == sparse(reshape([0.;
+                                          0.;
+                                          -1.], (3,1)))
+        @test size(nr.BB[1]) == (1,1)
+        @test nr.BB[1] == sparse(ones(1,1)*2)
+        @test size(nr.B_matrix) == (2, 1)
+
+
+
+        nr = PM.NetworkRegularizer(edgelists)
+        @test length(nr.AA) == 2
+        @test size(nr.AA[1]) == (4,4)
+        @test size(nr.AB[1]) == (4,0)
+        @test size(nr.BB[1]) == (0,0)
+        @test size(nr.B_matrix) == (2, 0)
+
+        ##############################################
+        # Test on "real pathway"
+        prepped_pwys, prepped_features = PM.prep_pathways([test_sif_path],
+                                                          feature_genes,
+                                                          feature_assays)
+        observed = sort([feat for feat in prepped_features if feat[2] != ""])
+        netreg = PM.NetworkRegularizer(prepped_pwys; observed=observed)
+       
+        n_unobs = length(prepped_features) - length(observed)
+        @test length(netreg.AA) == 1
+        @test size(netreg.AA[1]) == (7,7)
+        @test size(netreg.AB[1]) == (7,n_unobs)
+        @test size(netreg.BB[1]) == (n_unobs, n_unobs)
+
+        @test size(netreg.B_matrix) == (1, n_unobs)
+
+    end
+end
+
 
 
 function assemble_model_tests()
@@ -277,54 +325,17 @@ function assemble_model_tests()
                                                  feature_assays)
     loaded_pathway = loaded_pwys[1]
 
+    sample_ids = [string("sample_",i) for i=1:20]
+    group_ids = repeat(["group_1","group_2"], inner=10)
+
     pwy_sif_data = PM.read_sif_file(test_sif_path)
     
-
     @testset "Model Assembly" begin
 
-        M = 10
-        m_groups = 2
-
-        sim_feature_genes = ["gene1", "gene2", "gene3", "gene2", "gene3"]
-        sim_feature_assays = ["assay1", "assay1", "assay1", "assay2", "assay2"]
-        sim_features = collect(zip(sim_feature_genes,sim_feature_assays))
-        sim_virtual_features = [("gene1_dna",""), ("gene1_mrna",""), ("gene1_protein","")] 
-        sim_augmented_features = [sim_features; sim_virtual_features]
-
-        sim_N = length(sim_features)
-
-        # augment_samples
-        sample_ids = [string("patient_",i) for i=1:M]
-        group_ids = repeat([string("group_",i) for i=1:m_groups], inner=5)
-        augmented_samples = PM.augment_samples(sample_ids, group_ids; rooted=false)
-        @test augmented_samples == [sample_ids; [string("group_",i) for i=1:m_groups]]
-
-        # create_sample_edgelist
-        edgelist = PM.create_sample_edgelist(sample_ids, group_ids)
+        # create_group_edgelist
+        edgelist = PM.create_group_edgelist(sample_ids, group_ids)
         test_edgelist = [[gp, samp, 1] for (samp, gp) in zip(sample_ids, group_ids)]
         @test edgelist == test_edgelist 
-
-        # assemble_sample_reg_mat
-        sample_reg_mat, 
-        augmented_samples, 
-        aug_sample_to_idx = PM.assemble_sample_reg_mat(sample_ids, group_ids)
-        sample_reg_mat = SparseMatrixCSC(sample_reg_mat)
-        @test all([sample_reg_mat[aug_sample_to_idx[sample_id], 
-                            aug_sample_to_idx[group_id]] != 0 for (sample_id, group_id) in zip(sample_ids,group_ids)])
-        @test issymmetric(sample_reg_mat)
-        
-        # update_sample_batch_dict 
-        sample_batch_dict = Dict([k => copy(group_ids) for k in unique(sim_feature_assays)])
-        
-        new_batch_dict = PM.update_sample_batch_dict(sample_batch_dict,
-                                                     sample_ids, augmented_samples,
-                                                     aug_sample_to_idx)
-
-        test_new_batch_dict = Dict("assay1" => [group_ids; ["",""]],
-                                   "assay2" => [group_ids; ["",""]],
-                                   "" => repeat([""], inner=M + m_groups))
-
-        @test new_batch_dict == test_new_batch_dict
 
         # assemble_model
         sample_batch_dict = Dict([k => copy(group_ids) for k in unique(feature_assays)])
@@ -334,7 +345,8 @@ function assemble_model_tests()
                                sample_batch_dict,
                                feature_genes, feature_assays)
 
-        @test PM.is_contiguous(model.matfac.feature_batch_ids)
+        @test feature_genes[model.feature_idx] == model.feature_genes
+        @test feature_assays[model.feature_idx] == model.feature_assays
         
     end
 end
@@ -479,7 +491,8 @@ function main()
 
     util_tests()
     preprocess_tests()
-    #assemble_model_tests()
+    network_reg_tests()
+    assemble_model_tests()
     #fit_tests()
     #model_io_tests()
     #simulation_tests()

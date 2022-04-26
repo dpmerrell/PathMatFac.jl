@@ -320,29 +320,29 @@ function prep_pathways(pathway_data, feature_genes, feature_assays;
 end
 
 
-function assemble_feature_reg_mats(pathway_sif_data, feature_genes, feature_assays;
-                                   assay_map=DEFAULT_ASSAY_MAP)
-
-    prepped_pathways, prepped_features = prep_pathways(pathway_sif_data,
-                                                       feature_genes,
-                                                       feature_assays)
-    
-    # Need to add additional virtual nodes for
-    # assay-wise regularization
-    prepped_features = add_assay_nodes(prepped_features, feature_assays)
-
-    # Sort features by loss, assay, and gene
-    prepped_features = sort_features(prepped_features)
-    feat_to_idx = value_to_idx(prepped_features)
-    
-    # Assemble the regularizer sparse matrices
-    feature_reg_mats = edgelists_to_spmats(prepped_pathways, feat_to_idx)
-    
-    # Create a graph connecting features of the same assay 
-    assay_edgelist = construct_assay_edgelist(prepped_features, feature_assays)
-    assay_reg_mat = edgelist_to_spmat(assay_edgelist, feat_to_idx)
-
-    return feature_reg_mats, assay_reg_mat, prepped_features, feat_to_idx
-end
+#function assemble_feature_reg_mats(pathway_sif_data, feature_genes, feature_assays;
+#                                   assay_map=DEFAULT_ASSAY_MAP)
+#
+#    prepped_pathways, prepped_features = prep_pathways(pathway_sif_data,
+#                                                       feature_genes,
+#                                                       feature_assays)
+#    
+#    # Need to add additional virtual nodes for
+#    # assay-wise regularization
+#    prepped_features = add_assay_nodes(prepped_features, feature_assays)
+#
+#    # Sort features by loss, assay, and gene
+#    prepped_features = sort_features(prepped_features)
+#    feat_to_idx = value_to_idx(prepped_features)
+#    
+#    # Assemble the regularizer sparse matrices
+#    feature_reg_mats = edgelists_to_spmats(prepped_pathways, feat_to_idx)
+#    
+#    # Create a graph connecting features of the same assay 
+#    assay_edgelist = construct_assay_edgelist(prepped_features, feature_assays)
+#    assay_reg_mat = edgelist_to_spmat(assay_edgelist, feat_to_idx)
+#
+#    return feature_reg_mats, assay_reg_mat, prepped_features, feat_to_idx
+#end
 
 

@@ -1,53 +1,19 @@
 
 
-import Base: write
-import BatchMatFac: readtype
+import BSON
 
-export save_hdf, load_hdf
+export save_model, load_model
 
 
-###################################
-# Write
-###################################
-
-function Base.write(hdf_file::Union{HDF5.File,HDF5.Group}, path::String, 
-                    obj::MultiomicModel)
-    
-    for fieldname in fieldnames(MultiomicModel)
-        write(hdf_file, string(path, "/", fieldname), getfield(obj, fieldname))
-    end
+function save_model(filename, model::MultiomicModel)
+    BSON.@save filename model
 end
 
-
-function save_hdf(model::MultiomicModel, file_path::String; hdf_path::String="/")
-    h5open(file_path, "w") do file
-        write(file, hdf_path, model)
-    end
-end
-
-
-###################################
-# Read 
-###################################
-
-function readtype(hdf_file, path::String, t::Type{MultiomicModel})
-
-    field_values = []
-    for (fn, ft) in zip(fieldnames(t), fieldtypes(t))
-        push!(field_values, readtype(hdf_file, string(path, "/", fn), ft))
-    end
-
-    return t(field_values...)
-end
-
-
-function load_hdf(file_path::String; hdf_path::String="/")
-
-    model = h5open(file_path, "r") do file
-        readtype(file, hdf_path, MultiomicModel)
-    end
+function load_model(filename::MultiomicModel)
+    BSON.@load filename model
     return model
-
 end
+
+
 
 
