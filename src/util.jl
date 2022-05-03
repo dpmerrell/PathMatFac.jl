@@ -24,11 +24,11 @@ DEFAULT_ASSAYS = collect(keys(DEFAULT_ASSAY_LOSSES))
 DEFAULT_ASSAY_SET = Set(DEFAULT_ASSAYS)
 
 
-DEFAULT_ASSAY_MAP = Dict("cna" => ["dna", 1],
-                         "mutation" => ["dna", -1],
-                         "methylation" => ["mrna", -1],
-                         "mrnaseq" => ["mrna", 1],
-                         "rppa" => ["protein", 1]
+DEFAULT_ASSAY_MAP = Dict("cna" => ("dna", 1),
+                         "mutation" => ("dna", -1),
+                         "methylation" => ("mrna", -1),
+                         "mrnaseq" => ("mrna", 1),
+                         "rppa" => ("protein", 1)
                         )
 
 
@@ -37,7 +37,10 @@ PWY_SIF_CODE = Dict("a" => "activation",
                     "c" => "compound",
                     "h" => "chemical",
                     "p" => "protein",
-                    "f" => "family"
+                    "f" => "family",
+                    "t" => "transcription",
+                    ">" => 1,
+                    "|" => -1
                    )
 
 
@@ -115,15 +118,15 @@ function edgelist_to_spmat(edgelist, node_to_idx; epsilon=0.0)
     # make safe against redundancies.
     # in case of redundancy, keep the latest
     edge_dict = Dict()
-    pwy_nodes = Set()
+    pwy_idx = Set()
     for edge in edgelist
         e1 = node_to_idx[edge[1]]
         e2 = node_to_idx[edge[2]]
         u = max(e1, e2)
         v = min(e1, e2)
         edge_dict[(u,v)] = edge[3]
-        push!(pwy_nodes, u)
-        push!(pwy_nodes, v)
+        push!(pwy_idx, e1)
+        push!(pwy_idx, e2)
     end
 
     # Store indices and nonzero values
@@ -132,7 +135,7 @@ function edgelist_to_spmat(edgelist, node_to_idx; epsilon=0.0)
     V = Float64[] 
 
     # Store values for the diagonal
-    diagonal = fill(1.0 + epsilon, N)
+    diagonal = zeros(N)
 
     # Off-diagonal entries
     for (idx, value) in edge_dict
@@ -153,32 +156,98 @@ function edgelist_to_spmat(edgelist, node_to_idx; epsilon=0.0)
         diagonal[idx[2]] += ab
     end
     
-
-    # diagonal entries
+    for idx in pwy_idx
+        diagonal[idx] += epsilon 
+    end
+    
+    # Diagonal entries
     for i=1:N
         push!(I, i)
         push!(J, i)
         push!(V, diagonal[i])
     end
 
-    result = sparse(I, J, V)
-
-    return result 
+    return sparse(I, J, V)
 end
 
 
-function edgelists_to_spmats(edgelists, node_to_idx)
-    return [edgelist_to_spmat(el, node_to_idx) for el in edgelists]
+function edgelists_to_spmats(edgelists, node_to_idx; epsilon=0.0)
+    return [edgelist_to_spmat(el, node_to_idx; epsilon=epsilon) for el in edgelists]
 end
 
-
-
-#function rescale!(spmat::CuSparseMatrixCSC, scalar::Number)
-#    spmat.nzVal .*= scalar 
-#end
 
 function rescale!(spmat::SparseMatrixCSC, scalar::Number)
     spmat.nzval .*= scalar 
 end
 
+
+function edgelist_to_dict(edgelist)
+    result = Dict()
+
+    for edge in edgelist
+        u, v, w = edge
+
+        if haskey(result, u)
+            result[u][v] = w
+        else
+            result[u] = Dict(v=>w)
+        end
+        if haskey(result, v)
+            result[v][u] = w
+        else
+            result[v] = Dict(u=>w)
+        end
+    end
+    return result
+end
+
+
+function dict_to_edgelist(graph_dict)
+    result = Vector{Any}[]
+    for (u,d) in graph_dict
+        for (v,w) in d
+            push!(result, [u,v,w])
+            # Skip redundant edges
+            delete!(graph_dict[v], u)
+        end
+    end
+    return result
+end
+
+
+"""
+    Remove all leaf nodes (degree=1), except those
+    specified by `except`
+"""
+function prune_leaves!(edgelist; except=nothing)
+
+    if except == nothing
+        except_set=Set()
+    else
+        except_set = Set(except)
+    end
+
+    graph = edgelist_to_dict(edgelist)
+
+    while true
+        finished = true
+
+        for (u,d) in graph
+            degree = length(d)
+            if (degree == 1) & !in(u, except_set)
+                finished = false
+                for (v,w) in d
+                    delete!(graph[u],v)
+                    delete!(graph[v],u)
+                end
+            end
+        end
+
+        if finished
+            break
+        end
+    end
+
+    edgelist = dict_to_edgelist(graph)
+end
 

@@ -11,24 +11,6 @@ using ProfileSVG
 
 
 
-function barcode_to_batch(barcode::String)
-
-    if barcode == ""
-        return ""
-    end
-
-    terms = split(barcode,"-")
-    n_terms = length(terms)
-
-    return join(terms[(n_terms-1):n_terms], "-")
-end
-
-
-function barcodes_to_batches(barcode_dict::Dict{String,Vector{String}})
-    return Dict{String,Vector{String}}(k=>map(barcode_to_batch, v) for (k,v) in barcode_dict)
-end
-
-
 function main(args)
    
     omic_hdf_filename = args[1]
@@ -39,8 +21,8 @@ function main(args)
                 :rel_tol =>1e-8, 
                 :lambda_X =>0.0, 
                 :lambda_Y =>0.0,
-                :lr => 0.05,
-                :capacity => Int(5e7),
+                :lr => 0.07,
+                :capacity => Int(1e8),
                 :verbose => true
                )
     if length(args) > 3
@@ -80,15 +62,17 @@ function main(args)
 
 
     start_time = time()
-    fit!(model, omic_data; opts...)
+    ScikitLearnBase.fit!(model, omic_data; opts...)
     end_time = time()
 
     println("ELAPSED TIME (s):")
     println(end_time - start_time)
 
-    save_hdf(model, out_hdf)
+    save_model(out_hdf, model)
 
 end
 
 
 main(ARGS)
+
+

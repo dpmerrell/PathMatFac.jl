@@ -3,7 +3,7 @@ module PathwayMultiomics
 
 using BatchMatFac, CUDA, SparseArrays, Statistics, 
       HDF5, CSV, DataFrames, BSON, ChainRules, ChainRulesCore,
-      Flux, Functors
+      Flux, Functors, LinearAlgebra
 
 BMF = BatchMatFac
 

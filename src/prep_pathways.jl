@@ -2,7 +2,7 @@
 
 
 ######################################################
-# Pathway IO
+# Pathway SIF file input
 ######################################################
 
 """
@@ -23,26 +23,27 @@ function read_all_sif_files(sif_files::Vector{String})
     return [read_sif_file(sp) for sp in sif_files]
 end
 
+######################################################
+# Construct the edgelists
+######################################################
 
 """
-    For each protein in a pathway (vector of vectors),
-    extend the pathway to include dna and mrna as suggested
-    by the "central dogma". 
+    Convert a SIF pathway description to a
+    list of edges in a more useful format.
 """
-function extend_pathway(pathway::Vector)
+function sif_to_edgelist(pwy_sif::Vector)
 
-    proteins = Set{String}()
     new_edges = Vector{Any}[] 
 
     # Modify the edges to/from proteins
-    for edge in pathway 
+    for edge in pwy_sif 
         u = edge[1]
         
-        ent_types = [PWY_SIF_CODE[edge[2][[1]]], 
+        ent_types = (PWY_SIF_CODE[edge[2][[1]]], 
                      PWY_SIF_CODE[edge[2][[2]]]
-                    ]
-        target = edge[2][[3]]
-        sgn = edge[2][[4]] 
+                    )
+        target = PWY_SIF_CODE[edge[2][[3]]]
+        sgn = PWY_SIF_CODE[edge[2][[4]]]
         
         v = edge[3]
 
@@ -50,7 +51,6 @@ function extend_pathway(pathway::Vector)
         # it with an "activation" node
         if ent_types[1] == "protein"
             new_u = string(u, "_activation")
-            push!(proteins, u)
         else
             new_u = string(u, "_", ent_types[1])
         end  
@@ -59,7 +59,6 @@ function extend_pathway(pathway::Vector)
         # its transcription or activation is
         # targeted by this edge
         if ent_types[2] == "protein"
-            push!(proteins, v)
             if target == "transcription"
                 new_v = string(v, "_mrna")
             else
@@ -69,182 +68,28 @@ function extend_pathway(pathway::Vector)
             new_v = string(v, "_", ent_types[2])
         end
 
-        # Extract the promotes/suppresses information
-        if sgn == ">"
-            sgn = 1
-        elseif sgn == "|"
-            sgn = -1
-        end
-
-        push!(new_edges, [new_u, new_v, sgn])
+        push!(new_edges, [(new_u,""), (new_v,""), sgn])
     end
     
-    # Add edges to/from the new entities
-    # (dna, mrna, protein, activation)
-   
-    for u in proteins
-        push!(new_edges, [string(u, "_dna"), string(u, "_mrna"), 1])
-        push!(new_edges, [string(u, "_mrna"), string(u, "_protein"), 1])
-        push!(new_edges, [string(u, "_protein"), string(u, "_activation"), 1])
-    end
-
     return new_edges
 end
 
 
 """
-Tag the nodes of the extended pathway with empty strings,
-indicating that they will be virtual/unobserved features
-in the model.
+    Given a set of genes, construct an edgelist
+    containing nodes/edges that represent the 
+    central dogma for each gene.
+    dna -> mrna -> protein -> activation
 """
-function tag_pathway(pathway)
+function construct_dogma_edges(unq_dogma_genes)
 
-    result = Vector{Any}[]
-    for edge in pathway
-        new_edge = [(edge[1],""), (edge[2],""), edge[3]]
-        push!(result, new_edge)
-    end
-
-    return result
-end
-
-
-function get_all_proteins(pathways)
-
-    proteins = Set{String}()
-    for edge_list in pathways
-        for edge in edge_list
-            for node in edge[1:2]
-                name = node[1]
-                tok = split(name,"_")
-                if tok[2] == "protein"
-                    push!(proteins, tok[1])
-                end
-            end
-        end
-    end
-
-    return proteins
-end
-
-
-function get_all_nodes(edge_list)
-    nodes = Set()
-    for edge in edge_list
-        push!(nodes, edge[1])
-        push!(nodes, edge[2])
-    end
-    return nodes
-end
-
-
-function get_all_nodes_many(edge_lists)
-    nodes = Set()
-    for edge_list in edge_lists
-        union!(nodes, get_all_nodes(edge_list))
-    end
-    return nodes
-end
-
-
-
-################################################################
-# Mapping features to pathways
-################################################################
-
-"""
-    Prepare a data structure that will map
-    graph nodes to rows of data.
-"""
-function initialize_featuremap(all_pwy_proteins, unique_assays)
-
-    result = Dict( (pro, assay) =>  Int[] 
-                                    for assay in unique_assays  
-                                        for pro in all_pwy_proteins)
-    #result["unmapped"] = Vector{Int}()
-    return result
-end
-
-
-"""
-    Given an empty featuremap, populate it from the array 
-    of features. 
-"""
-function populate_featuremap(featuremap, feature_genes, feature_assays)
-
-    for (idx, (gene, assay)) in enumerate(zip(feature_genes, feature_assays))
-        
-        # extract gene names (there may be more than one)
-        gene_names = split(gene, " ")
-        
-        # for each gene name
-        for gene in gene_names
-            k = (gene, assay)
-            if k in keys(featuremap)
-                push!(featuremap[k], idx)
-            end
-        end
-    end
-
-    return featuremap
-end
-
-
-##############################################################
-# Add data nodes to the pathways
-##############################################################
-
-function add_data_nodes_sparse_latent(pathway,
-                                      feature_map::Dict, 
-                                      unique_assays, 
-                                      assay_map::Dict)
-
-    # Get all of the proteins from this pathway
-    proteins = get_all_proteins([pathway])
-
-    # for each protein, add edges from data nodes to
-    # to the correct parts of the graph
-    for protein in proteins
-        for assay in unique_assays
-            for idx in feature_map[(protein, assay)]
-                data_node = (protein, assay) 
-                v = assay_map[assay]
-                pwy_node = (string(protein, "_", v[1]), "")
-                push!(pathway, [pwy_node, data_node, v[2]])
-            end
-        end
-    end
-
-    return pathway
-end
-
-
-function add_data_nodes_to_pathway(pathway, featuremap, unique_assays, assay_map;
-                                   strategy="sparse_latent")
-    
-    if strategy == "sparse_latent"
-        pwy = add_data_nodes_sparse_latent(pathway, featuremap, 
-                                           unique_assays, assay_map)
-    else
-        throw(DomainError(strategy, "not a valid option for `strategy`"))
-    end
-
-    return pwy
-
-end
-
-#######################################################
-# ASSAY GRAPH
-#######################################################
-
-function construct_assay_edgelist(features, assays)
-    
-    unique_assay_set = Set(assays)
     edgelist = Vector{Any}[]
-
-    for feat in features
-        if feat[2] in unique_assay_set
-            push!(edgelist, [(feat[2],""), feat, 1])
+    for genes in unq_dogma_genes
+        gene_names = split(genes, " ")
+        for g in gene_names
+            push!(edgelist, [(string(g, "_dna"), ""), (string(g, "_mrna"), ""), 1])
+            push!(edgelist, [(string(g, "_mrna"), ""), (string(g, "_protein"), ""), 1])
+            push!(edgelist, [(string(g, "_protein"), ""), (string(g, "_activation"), ""), 1])
         end
     end
 
@@ -252,97 +97,69 @@ function construct_assay_edgelist(features, assays)
 end
 
 
-function add_assay_nodes(prepped_features, feature_assays)
-    
-    unique_assays = unique(feature_assays)
-    assay_nodes = [(assay,"") for assay in unique_assays]
-    prepped_features = vcat(prepped_features, assay_nodes) 
-    return prepped_features
+"""
+    Given an edgelist and a vector of features, add
+    edges that connect the features to appropriate parts
+    of the existing network.
+"""
+function construct_data_edges(dogma_features; assay_map=DEFAULT_ASSAY_MAP)
+
+    edges = Vector{Any}[]
+    for (genes, assay) in dogma_features        
+        suff, weight = assay_map[assay]
+        gene_names = split(genes, " ")
+        for g in gene_names
+            push!(edges, [(genes, assay), (string(g,"_",suff), ""), weight])
+        end
+    end
+    return edges
 end
 
 
-
-####################################################
-# Putting it all together...
-####################################################
-
-
-
-function load_pathways(pwy_vec::Vector{Vector{T}} where T, feature_genes, feature_assays)
-
-    extended_pwys = [extend_pathway(pwy) for pwy in pwy_vec]
-    tagged_pwys = [tag_pathway(pwy) for pwy in extended_pwys]
-    pwy_proteins = get_all_proteins(tagged_pwys)
-
-    unique_assays = unique(feature_assays)
-    empty_feature_map = initialize_featuremap(pwy_proteins, unique_assays)
-
-    populated_feature_map = populate_featuremap(empty_feature_map, 
-                                                feature_genes, 
-                                                feature_assays)
-
-    return tagged_pwys, populated_feature_map
-end
-
-
-function load_pathways(sif_filenames::Vector{String}, feature_genes, feature_assays)
-
-    pathways = read_all_sif_files(sif_filenames)
-    extended_pwys, feature_map = load_pathways(pathways, 
-                                               feature_genes,
-                                               feature_assays)
- 
-    return extended_pwys, feature_map
-end 
-
-
-function prep_pathways(pathway_data, feature_genes, feature_assays;
+"""
+    Given a vector of pathway SIFs and a vector of data features,
+    construct edgelists that represent (1) the pathways and 
+    (2) those features' relationships to the central dogma.
+"""
+function prep_pathways(pwy_sif_data::Vector{Vector{T}} where T, features;
+                       dogma_features=nothing,
                        assay_map=DEFAULT_ASSAY_MAP)
 
+    # Determine which features will be included
+    # in the "central dogma" network
+    if dogma_features == nothing
+        dogma_features = copy(features)
+    else
+        @assert issubset(dogma_features, features)
+    end
 
-    # Extend the pathways to include "central dogma" entities
-    extended_pwys, featuremap = load_pathways(pathway_data, 
-                                              feature_genes, 
-                                              feature_assays)
+    # Construct the "central dogma" edgelist for these features
+    unq_dogma_genes = unique(map(get_gene, features))
+    dogma_edgelist = construct_dogma_edges(unq_dogma_genes)
 
-    unique_assays = unique(feature_assays)
+    # Add data edges to the edgelist
+    data_edges = construct_data_edges(dogma_features; assay_map=assay_map)
+    dogma_edgelist = vcat(dogma_edgelist, data_edges) 
 
-    # Add data nodes to the pathways
-    augmented_pwys = Vector{Any}[add_data_nodes_to_pathway(pwy, featuremap, 
-                                                           unique_assays, 
-                                                           assay_map) 
-                      for pwy in extended_pwys] 
+    # Construct the pathway-specific graphs
+    pwy_edgelists = Vector{Any}[]
+    for pwy in pwy_sif_data
+        edgelist = deepcopy(dogma_edgelist)
+        edgelist = vcat(edgelist, sif_to_edgelist(pwy)) 
 
-    # Assemble the augmented feature set
-    augmented_features = collect(get_all_nodes_many(augmented_pwys))
-    
-    return augmented_pwys, augmented_features
+        prune_leaves!(edgelist; except=features)
+        push!(pwy_edgelists, edgelist)
+    end
+
+    return pwy_edgelists
 end
 
 
-#function assemble_feature_reg_mats(pathway_sif_data, feature_genes, feature_assays;
-#                                   assay_map=DEFAULT_ASSAY_MAP)
-#
-#    prepped_pathways, prepped_features = prep_pathways(pathway_sif_data,
-#                                                       feature_genes,
-#                                                       feature_assays)
-#    
-#    # Need to add additional virtual nodes for
-#    # assay-wise regularization
-#    prepped_features = add_assay_nodes(prepped_features, feature_assays)
-#
-#    # Sort features by loss, assay, and gene
-#    prepped_features = sort_features(prepped_features)
-#    feat_to_idx = value_to_idx(prepped_features)
-#    
-#    # Assemble the regularizer sparse matrices
-#    feature_reg_mats = edgelists_to_spmats(prepped_pathways, feat_to_idx)
-#    
-#    # Create a graph connecting features of the same assay 
-#    assay_edgelist = construct_assay_edgelist(prepped_features, feature_assays)
-#    assay_reg_mat = edgelist_to_spmat(assay_edgelist, feat_to_idx)
-#
-#    return feature_reg_mats, assay_reg_mat, prepped_features, feat_to_idx
-#end
+function prep_pathways(pathway_files::Vector{String}, features;
+                       kwargs...)
+
+    pwy_sif_data = read_all_sif_files(pathway_files) 
+    return prep_pathways(pwy_sif_data, features; kwargs...)
+end
 
 

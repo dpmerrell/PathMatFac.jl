@@ -1,6 +1,8 @@
 
 export MultiomicModel
 
+import Base: ==
+
 mutable struct MultiomicModel
 
     # Matrix factorization model
@@ -21,59 +23,42 @@ mutable struct MultiomicModel
 
 end
 
+@functor MultiomicModel
+
 
 function MultiomicModel(pathway_sif_data, 
                         pathway_names::Vector{String},
                         sample_ids::Vector{String}, 
                         sample_conditions::Vector{String},
-                        sample_batch_dict::Dict{T,Vector{U}},
                         feature_genes::Vector{String}, 
-                        feature_assays::Vector{T};
-                        lambda_X::Real=0.1,
-                        lambda_Y::Real=0.1) where T where U
-        
+                        feature_assays::Vector{T},
+                        sample_batch_dict::Dict{T,Vector{U}};
+                        lambda_X::Real=1.0,
+                        lambda_Y::Real=1.0;
+                        model_features=nothing) where T where U
+       
+    features = collect(zip(feature_genes, feature_assays))
     return assemble_model(pathway_sif_data, 
                           pathway_names,
                           sample_ids, sample_conditions,
                           sample_batch_dict,
-                          feature_genes, feature_assays,
-                          lambda_X, lambda_Y)
+                          features,
+                          lambda_X, lambda_Y;
+                          model_features=model_features)
 
 end
 
+PMTypes = Union{MultiomicModel,NetworkRegularizer}
 
-#function Base.:(==)(model_a::MultiomicModel, model_b::MultiomicModel)
-#    for fn in fieldnames(MultiomicModel)
-#        if !(getfield(model_a, fn) == getfield(model_b, fn)) 
-#            return false
-#        end
-#    end
-#    return true
-#end
-#
-#
-#function Base.getproperty(model::MultiomicModel, sym::Symbol)
-#
-#    if sym == :X
-#        return view(model.matfac.X, :, model.internal_sample_idx)
-#    elseif sym == :Y
-#        return view(model.matfac.Y, :, model.internal_feature_idx)
-#    elseif sym == :mu
-#         return view(model.matfac.mu, model.internal_feature_idx)
-#    elseif sym == :log_sigma
-#         return view(model.matfac.log_sigma, model.internal_feature_idx)
-#    elseif sym == :log_delta
-#        return BMF.batch_matrix(model.matfac.log_delta_values,
-#                                model.matfac.sample_batch_ids,
-#                                model.matfac.feature_batch_ids)
-#
-#    elseif sym == :theta
-#        return BMF.batch_matrix(model.matfac.theta_values,
-#                                model.matfac.sample_batch_ids,
-#                                model.matfac.feature_batch_ids)
-#    else
-#        return getfield(model, sym)
-#    end
-#end
+function Base.:(==)(a::T, b::T) where T <: PMTypes
+    for fn in fieldnames(T)
+        if !(getfield(a, fn) == getfield(b, fn))
+            println(string("NOT EQUAL: ", fn))
+            return false
+        end
+    end
+    return true
+end
+
 
 

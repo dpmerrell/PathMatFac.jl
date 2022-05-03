@@ -9,9 +9,9 @@ function save_model(filename, model::MultiomicModel)
     BSON.@save filename model
 end
 
-function load_model(filename::MultiomicModel)
-    BSON.@load filename model
-    return model
+function load_model(filename::String)
+    d = BSON.load(filename, @__MODULE__) 
+    return d[:model]
 end
 
 

@@ -1,5 +1,11 @@
 
-using HDF5
+using HDF5, PathwayMultiomics, StatsBase
+
+PM = PathwayMultiomics
+
+function assay_to_noise(assay_name)
+    return PM.DEFAULT_ASSAY_LOSSES[assay_name]
+end
 
 function get_omic_feature_genes(omic_hdf)
 
@@ -60,6 +66,23 @@ function get_barcodes(omic_hdf)
     return result
 end
 
+function barcode_to_batch(barcode::String)
+
+    if barcode == ""
+        return ""
+    end
+
+    terms = split(barcode,"-")
+    n_terms = length(terms)
+
+    return join(terms[(n_terms-1):n_terms], "-")
+end
+
+
+function barcodes_to_batches(barcode_dict::Dict{String,Vector{String}})
+    return Dict{String,Vector{String}}(k=>map(barcode_to_batch, v) for (k,v) in barcode_dict)
+end
+
 
 function save_omic_data(output_hdf, feature_names, instance_names, 
                         instance_groups, omic_matrix)
@@ -108,3 +131,9 @@ function parse_opts!(defaults, opt_list)
     return defaults
 
 end
+
+nanmean(x) = mean(filter(!isnan, x))
+nanvar(x) = var(filter(!isnan, x))
+nanmean_and_var(x) = mean_and_var(filter(!isnan, x))
+
+
