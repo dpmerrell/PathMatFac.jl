@@ -34,10 +34,11 @@ function MultiomicModel(pathway_sif_data,
                         feature_assays::Vector{T},
                         sample_batch_dict::Dict{T,Vector{U}};
                         lambda_X::Real=1.0,
-                        lambda_Y::Real=1.0;
+                        lambda_Y::Real=1.0,
                         model_features=nothing) where T where U
        
     features = collect(zip(feature_genes, feature_assays))
+
     return assemble_model(pathway_sif_data, 
                           pathway_names,
                           sample_ids, sample_conditions,
@@ -48,12 +49,11 @@ function MultiomicModel(pathway_sif_data,
 
 end
 
-PMTypes = Union{MultiomicModel,NetworkRegularizer}
+PMTypes = Union{MultiomicModel,NetworkRegularizer,NetworkL1Regularizer}
 
 function Base.:(==)(a::T, b::T) where T <: PMTypes
     for fn in fieldnames(T)
         if !(getfield(a, fn) == getfield(b, fn))
-            println(string("NOT EQUAL: ", fn))
             return false
         end
     end

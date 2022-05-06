@@ -55,11 +55,10 @@ function main(args)
 
     model = MultiomicModel(pwys, pwy_names, 
                            sample_names, sample_conditions,
-                           batch_dict,
-                           feature_genes, feature_assays;
+                           feature_genes, feature_assays,
+                           batch_dict;
                            lambda_X=lambda_X, 
                            lambda_Y=lambda_Y)
-
 
     start_time = time()
     ScikitLearnBase.fit!(model, omic_data; opts...)

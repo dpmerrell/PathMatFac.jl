@@ -6,7 +6,7 @@ import BatchMatFac: is_contiguous
 
 DEFAULT_ASSAY_LOSSES = Dict("cna" => "ordinal3",
                             "mutation" => "bernoulli",
-                            "methylation" => "normal",
+                            "methylation" => "bernoulli",
                             "mrnaseq" => "normal", 
                             "rppa" => "normal",
                             "" => "noloss"
@@ -19,10 +19,10 @@ LOSS_ORDER = Dict("normal" => 1,
                   "noloss" => 5
                   )
 
+DOGMA_ORDER = ["dna", "mrna", "protein", "activation"]
 
 DEFAULT_ASSAYS = collect(keys(DEFAULT_ASSAY_LOSSES))
 DEFAULT_ASSAY_SET = Set(DEFAULT_ASSAYS)
-
 
 DEFAULT_ASSAY_MAP = Dict("cna" => ("dna", 1),
                          "mutation" => ("dna", -1),
@@ -216,7 +216,7 @@ end
 
 
 """
-    Remove all leaf nodes (degree=1), except those
+    Remove all leaf nodes (degree <= 1), except those
     specified by `except`
 """
 function prune_leaves!(edgelist; except=nothing)
@@ -224,30 +224,47 @@ function prune_leaves!(edgelist; except=nothing)
     if except == nothing
         except_set=Set()
     else
-        except_set = Set(except)
+        except_set=Set(except)
     end
 
     graph = edgelist_to_dict(edgelist)
 
-    while true
-        finished = true
+    # Initialize the frontier set with the leaves
+    frontier = Set([node for (node, neighbors) in graph if 
+                  ((length(neighbors) < 2) & !in(node, except_set))])
 
-        for (u,d) in graph
-            degree = length(d)
-            if (degree == 1) & !in(u, except_set)
-                finished = false
-                for (v,w) in d
-                    delete!(graph[u],v)
-                    delete!(graph[v],u)
+    println(string("PRUNING ", length(frontier), " LEAVES"))
+
+    # Continue until the frontier is empty
+    while length(frontier) > 0
+        maybe_leaf = pop!(frontier)
+
+        # If this is, in fact, a leaf...
+        if length(graph[maybe_leaf]) < 2 
+            # Add the leaf's neighbor (if any) to the frontier
+            for neighbor in keys(graph[maybe_leaf])
+                if !in(neighbor, except_set)
+                    push!(frontier, neighbor)
                 end
+                # Remove the leaf from the neighbor's neighbors
+                delete!(graph[neighbor], maybe_leaf)
             end
-        end
-
-        if finished
-            break
+            # Remove the leaf from the graph
+            delete!(graph, maybe_leaf)
         end
     end
 
     edgelist = dict_to_edgelist(graph)
 end
+
+function get_all_nodes(edgelist)
+
+    result = Set()
+    for edge in edgelist
+        push!(result, edge[1])
+        push!(result, edge[2])
+    end
+    return result
+end
+
 

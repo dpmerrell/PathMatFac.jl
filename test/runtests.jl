@@ -34,7 +34,7 @@ function util_tests()
         @test PM.get_loss(("BRCA","mutation")) == "bernoulli"
 
         # sort_features
-        @test PM.sort_features(feature_list) == [("GENE2","methylation"), ("GENE1", "mrnaseq"),
+        @test PM.sort_features(feature_list) == [("GENE1", "mrnaseq"),("GENE2","methylation"), 
                                                  ("GENE4", "mutation"), ("GENE3","cna"), 
                                                  ("VIRTUAL1", "")
                                                  ]
@@ -149,6 +149,7 @@ function preprocess_tests()
                           "mrnaseq", "methylation"]
         features = collect(zip(feature_genes, feature_assays))
       
+        ###TODO: REORGANIZE CODE TO AVOID ~30MINUTE PREPROCESSING TIMES!!! :(
         dogma_edges = PM.construct_dogma_edges(unique(feature_genes))
         @test Set(dogma_edges) == Set(test_dogma_edges)
 
@@ -156,13 +157,15 @@ function preprocess_tests()
         @test Set([Set(edge) for edge in data_edges]) == Set([Set(edge) for edge in test_data_edges])
 
         # prep pathways
-        prepped_pwys = PM.prep_pathways([sif_data], features)
+        pwy_edgelists = PM.sifs_to_edgelists([sif_data])
+        prepped_pwys = PM.extend_pathways(pwy_edgelists, features)
         test_prepped_edges = vcat(test_pwy_edges, test_dogma_edges, test_data_edges)
         PM.prune_leaves!(test_prepped_edges)
         @test Set([Set(edge) for edge in prepped_pwys[1]]) == Set([Set(edge) for edge in test_prepped_edges]) 
 
         ## load_pathway_sifs
-        prepped_pwys = PM.prep_pathways([test_sif_path], features)
+        pwy_edgelists = PM.sifs_to_edgelists([test_sif_path])
+        prepped_pwys = PM.extend_pathways(pwy_edgelists, features)
         @test Set([Set(edge) for edge in prepped_pwys[1]]) == Set([Set(edge) for edge in test_prepped_edges]) 
 
     end
@@ -215,20 +218,20 @@ function network_reg_tests()
 
         ##############################################
         # Test on "real pathway"
-        features = collect(zip(feature_genes, feature_assays))
-        prepped_pwys = PM.prep_pathways([test_sif_path], features)
-        prepped_features = Set()
+        model_features = collect(zip(feature_genes, feature_assays))
+        pwy_edgelists = PM.sifs_to_edgelists([test_sif_path])
+        prepped_pwys = PM.extend_pathways(pwy_edgelists, model_features)
+        pwy_nodes = Set()
         for el in prepped_pwys
             for edge in el
-                push!(prepped_features, edge[1])
-                push!(prepped_features, edge[2])
+                push!(pwy_nodes, edge[1])
+                push!(pwy_nodes, edge[2])
             end
         end
-        observed = sort([feat for feat in prepped_features if feat[2] != ""])
-        netreg = PM.NetworkRegularizer(prepped_pwys; observed=features)
+        netreg = PM.NetworkRegularizer(prepped_pwys; observed=model_features)
       
-        n_obs = length(observed) 
-        n_unobs = length(prepped_features) - n_obs
+        n_obs = length(model_features) 
+        n_unobs = length(pwy_nodes) - n_obs
         @test length(netreg.AA) == 1
         @test size(netreg.AA[1]) == (n_obs,n_obs)
         @test size(netreg.AB[1]) == (n_obs,n_unobs)
@@ -236,6 +239,68 @@ function network_reg_tests()
 
         @test size(netreg.B_matrix) == (1, n_unobs)
 
+    end
+    
+    @testset "Network L1 regularizers" begin
+
+        #############################################
+        # Test on synthetic network
+        edgelists = [[[1, 2, 1.0],[2, 3, 1.0],[3, 4, 1.0]],
+                     [[1, 3, -1.0],[2, 4, -1.0]]
+                    ]
+        data_features = [1,2,3,5]
+        nr = PM.NetworkL1Regularizer(data_features, edgelists)
+        @test length(nr.AA) == 2
+        @test size(nr.AA[1]) == (4,4)
+        @test dropzeros(nr.AA[1]) == sparse([1. -1. 0.  0;
+                                            -1.  2. -1. 0;
+                                             0. -1. 2.  0;
+                                             0   0  0   0])
+        @test size(nr.AB[1]) == (4,1)
+        @test nr.AB[1] == sparse(reshape([0.;
+                                          0.;
+                                         -1.;
+                                          0 ], (4,1)))
+        @test size(nr.BB[1]) == (1,1)
+        @test nr.BB[1] == sparse(ones(1,1))
+        @test size(nr.net_virtual[1]) == (1,)
+
+        @test nr.l1_feat_idx[1] == [false,false,false,true] 
+
+        nr = PM.NetworkL1Regularizer(data_features, edgelists; 
+                                     l1_features=[[2,5],[2,5]])
+        @test length(nr.AA) == 2
+        @test size(nr.AA[1]) == (4,4)
+        @test size(nr.AB[1]) == (4,1)
+        @test size(nr.BB[1]) == (1,1)
+        @test size(nr.net_virtual[1]) == (1,)
+        @test nr.l1_feat_idx[1] == [false,true,false,true] 
+
+        ##############################################
+        # Test on "real pathway"
+        model_features = collect(zip(feature_genes, feature_assays))
+        pwy_edgelists = PM.sifs_to_edgelists([test_sif_path])
+        prepped_pwys = PM.extend_pathways(pwy_edgelists, model_features)
+        pwy_nodes = Set()
+        for el in prepped_pwys
+            for edge in el
+                push!(pwy_nodes, edge[1])
+                push!(pwy_nodes, edge[2])
+            end
+        end
+        netreg = PM.NetworkL1Regularizer(model_features, prepped_pwys)
+        
+        n_unobs = length([node for node in pwy_nodes if node[2] == ""])
+        n_obs = length(model_features)
+
+        @test length(netreg.AA) == 1
+        @test size(netreg.AA[1]) == (n_obs,n_obs)
+        @test size(netreg.AB[1]) == (n_obs,n_unobs)
+        @test size(netreg.BB[1]) == (n_unobs, n_unobs)
+
+        @test size(netreg.net_virtual[1]) == (n_unobs,)
+        @test length(netreg.l1_feat_idx[1]) == n_obs 
+        @test typeof(netreg.l1_feat_idx[1]) == Vector{Bool}
     end
 end
 
@@ -276,7 +341,9 @@ function assemble_model_tests()
 
         @test feature_genes[model.feature_idx] == model.feature_genes
         @test feature_assays[model.feature_idx] == model.feature_assays
-        
+        println("L1 Feature index...")
+        println(model.matfac.Y_reg.l1_feat_idx[1])
+        @test sum(model.matfac.Y_reg.l1_feat_idx[1]) == 2
     end
 end
 
@@ -319,10 +386,10 @@ function fit_tests()
         model = MultiomicModel([test_sif_path, test_sif_path, test_sif_path],  
                                [string(test_pwy_name,"_",i) for i=1:3],
                                sample_ids, sample_conditions,
-                               sample_batch_dict,
-                               feature_genes, feature_assays)
+                               feature_genes, feature_assays,
+                               sample_batch_dict)
 
-        fit!(model, omic_data; verbose=false)
+        fit!(model, omic_data; verbose=true, lr=0.07, max_epochs=10)
 
         @test true
     end
@@ -358,8 +425,8 @@ function model_io_tests()
         model = MultiomicModel([test_sif_path, test_sif_path, test_sif_path],  
                                [string(test_pwy_name,"_",i) for i=1:3],
                                sample_ids, sample_conditions,
-                               sample_batch_dict,
-                               feature_genes, feature_assays)
+                               feature_genes, feature_assays,
+                               sample_batch_dict)
 
         save_model(test_bson_path, model)
 
@@ -426,9 +493,9 @@ end
 function main()
 
     util_tests()
-    preprocess_tests()
-    network_reg_tests()
-    assemble_model_tests()
+    #preprocess_tests()
+    #network_reg_tests()
+    #assemble_model_tests()
     #fit_tests()
     #model_io_tests()
     #simulation_tests()

@@ -28,10 +28,7 @@ function NetworkRegularizer(edgelists; observed=nothing,
     # Collect all the nodes from the edgelists
     all_nodes = Set()
     for el in edgelists
-        for edge in el
-            push!(all_nodes, edge[1])
-            push!(all_nodes, edge[2])
-        end
+        union!(all_nodes, get_all_nodes(el))
     end
 
     # Figure out which nodes are observed,
@@ -214,15 +211,11 @@ function NetworkL1Regularizer(data_features, network_edgelists;
 
         ####################################
         # Construct network regularization
-
         edgelist = network_edgelists[k]
 
         # Extract the nodes from this edgelist
-        net_nodes = Set()
-        for edge in edgelist
-            push!(net_nodes, edge[1])
-            push!(net_nodes, edge[2])
-        end
+        net_nodes = get_all_nodes(edgelist)
+
         # Determine which are virtual and which are observed
         net_virtual_nodes = setdiff(net_nodes, data_features)
         net_features = setdiff(net_nodes, net_virtual_nodes)
@@ -233,7 +226,7 @@ function NetworkL1Regularizer(data_features, network_edgelists;
         node_to_idx = value_to_idx(all_nodes) 
 
         # Construct a sparse matrix encoding this network
-        spmat = edgelist_to_spmat(edgelists, node_to_idx)
+        spmat = edgelist_to_spmat(edgelist, node_to_idx)
 
         # Split this matrix into observed/unobserved blocks
         push!(AA, spmat[1:N, 1:N])
@@ -293,28 +286,27 @@ end
 function ChainRules.rrule(nr::NetworkL1Regularizer, X::AbstractMatrix)
 
     K, MA = size(X)
-    _, MB = size(nr.B_matrix)
 
     # Pre-allocate these matrix-vector products
     xAA = similar(X, K,MA)
-    xAB = similar(X, K,MB)
-    ABu = similar(nr.B_matrix, MA,K)
-    BBu = similar(nr.B_matrix, MB,K)
+    xAB = map(similar, nr.net_virtual)
+    ABu = similar(X, MA,K)
+    BBu = map(similar, nr.net_virtual)
 
     loss = 0.0
     for k=1:K
 
         # Network-regularization
         # Parts of the gradients
-        xAA[k,:] = transpose(X[k,:])*nr.AA[k]
-        xAB[k,:] = transpose(X[k,:])*nr.AB[k]
-        ABu[:,k] = nr.AB[k]*nr.B_matrix[k,:]
-        BBu[:,k] = nr.BB[k]*nr.B_matrix[k,:]
+        xAA[k,:] .= vec(transpose(X[k,:])*nr.AA[k])
+        xAB[k] .= vec(transpose(X[k,:])*nr.AB[k])
+        ABu[:,k] .= nr.AB[k]*nr.net_virtual[k]
+        BBu[k] .= nr.BB[k]*nr.net_virtual[k]
 
         # Full loss computation
         loss += 0.5*dot(xAA[k,:], X[k,:])
         loss += dot(X[k,:], ABu[:,k])
-        loss += 0.5*dot(nr.B_matrix[k,:], BBu[:,k])
+        loss += 0.5*dot(nr.net_virtual[k], BBu[k])
         loss *= nr.net_weight
 
         # L1-regularization
@@ -323,8 +315,11 @@ function ChainRules.rrule(nr::NetworkL1Regularizer, X::AbstractMatrix)
 
     function netreg_mat_pullback(loss_bar)
 
-        B_bar = nr.net_weight.*(xAB .+ transpose(BBu))
-        nr_bar = Tangent{NetworkRegularizer}(B_matrix=B_bar)
+        virt_bar = map(similar, nr.net_virtual)
+        for k=1:K
+            virt_bar[k] .= nr.net_weight.*(xAB[k] .+ BBu[k])
+        end
+        nr_bar = Tangent{NetworkL1Regularizer}(net_virtual=virt_bar)
 
         X_bar = nr.net_weight.*(xAA .+ transpose(ABu))
 
@@ -347,8 +342,8 @@ function (nr::NetworkL1Regularizer)(x::AbstractVector)
 
     loss = 0.0
     loss += quadratic(nr.AA[1], x)
-    loss += 2*quadratic(x, nr.AB[1], nr.B_matrix[1,:])
-    loss += quadratic(nr.BB[1], nr.B_matrix[1,:])
+    loss += 2*quadratic(x, nr.AB[1], nr.net_virtual[1])
+    loss += quadratic(nr.BB[1], nr.net_virtual[1])
     loss *= 0.5*nr.net_weight
 
     loss += nr.l1_weight*sum(abs.(x .* nr.l1_feat_idx[1]))
@@ -363,19 +358,19 @@ function ChainRules.rrule(nr::NetworkL1Regularizer, x::AbstractVector)
 
     xAA = transpose(x)*nr.AA[1]
     xAB = transpose(x)*nr.AB[1]
-    ABu = nr.AB[1]*nr.B_matrix[1,:]
-    BBu = nr.BB[1]*nr.B_matrix[1,:]
+    ABu = nr.AB[1]*nr.net_virtual[1]
+    BBu = nr.BB[1]*nr.net_virtual[1]
 
-    loss = nr.net_weight*0.5*(dot(xAA, x) + 2*dot(x, ABu) + dot(nr.B_matrix[1,:], BBu))
+    loss = nr.net_weight*0.5*(dot(xAA, x) + 2*dot(x, ABu) + dot(nr.net_virtual[1], BBu))
 
     loss += nr.l1_weight.*sum(abs.(x .* nr.l1_feat_idx[1]))
 
     function netreg_vec_pullback(loss_bar)
 
-        b_matrix_bar = zero(nr.B_matrix)
-        b_matrix_bar[1,:] .= nr.net_weight.*(vec(xAB) .+ BBu)
+        virt_bar = map(zero, nr.net_virtual)
+        virt_bar[1] .= nr.net_weight.*(vec(xAB) .+ BBu)
 
-        nr_bar = Tangent{NetworkRegularizer}(B_matrix=b_matrix_bar)
+        nr_bar = Tangent{NetworkL1Regularizer}(net_virtual=virt_bar)
         
         x_bar = similar(x)
         x_bar[:] .= nr.net_weight.*(vec(xAA) .+ ABu)
@@ -391,15 +386,18 @@ end
 # Equality operator
 #########################################
 
-RegType = Union{NetworkRegularizer,NetworkL1Regularizer}
-
-function Base.:(==)(a::T, b::T) where T <: RegType
-    for fn in fieldnames(T)
-        if !(getfield(a, fn) == getfield(b, fn)) 
-            return false
-        end
-    end
-    return true
-end
+#RegType = Union{NetworkRegularizer,NetworkL1Regularizer}
+#
+#function Base.:(==)(a::T, b::T) where T <: RegType 
+#    for fn in fieldnames(T)
+#        if !(getfield(a, fn) == getfield(b, fn))
+#            println(string("NOT EQUAL: ", fn))
+#            println(getfield(a,fn))
+#            println(getfield(b,fn))
+#            return false
+#        end
+#    end
+#    return true
+#end
 
 

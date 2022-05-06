@@ -2,16 +2,24 @@
 import ScikitLearnBase: fit!
 
 
-function normalize_factors!(model::MultiomicModel)
+function initialize_params!(model::MultiomicModel, D::AbstractMatrix; 
+                            loss_map=DEFAULT_ASSAY_LOSSES)
 
-    Y = model.matfac.mp.Y
+    println("Setting initial values for mu and sigma...")
+    model_losses = map(x->loss_map[x], model.feature_assays) 
+    normal_columns = model_losses .== "normal"
 
-    Y_norms = sqrt.(sum(Y .* Y; dims=2))
-    N = size(Y,2)
-    target_Y_norm = N/100
-    model.matfac.mp.Y .*= (target_Y_norm ./ Y_norms)
+    model.matfac.cshift.mu[normal_columns] .= vec(mapslices(nanmean, 
+                                                              D[:,normal_columns]; 
+                                                              dims=1)
+                                                   )
 
-    model.pathway_weights .= vec(Matrix(Y_norms)) ./ (target_Y_norm) 
+    model.matfac.cscale.logsigma[normal_columns] .= log.(sqrt.(vec(mapslices(nanvar,
+                                                                          D[:,normal_columns];
+                                                                          dims=1)
+                                                                     )
+                                                                 )
+                                                          )
 
 end
 
@@ -20,11 +28,13 @@ function fit!(model::MultiomicModel, D::AbstractMatrix; kwargs...)
 
     # Permute the data columns to match the model's
     # internal ordering
-    internal_D = D[:,model.feature_idx]
+    println("Rearranging data columns...")
+    D = D[:,model.feature_idx]
 
-    fit!(model.matfac, internal_D; kwargs...)
+    # First set some model parameters to the right ball-park
+    initialize_params!(model, D)
 
-    normalize_factors!(model)
+    fit!(model.matfac, D; kwargs...)
 
 end
 
