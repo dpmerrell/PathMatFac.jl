@@ -101,19 +101,19 @@ function preprocess_tests()
                      ]
     tuplify = edge -> [(edge[1],""),(edge[2],""),edge[3]]
     test_pwy_edges = map(tuplify, test_pwy_edges)
+        
+    feature_genes = ["PLK1","PLK1","PLK1", 
+                     "PAK1", "PAK1", "PAK1",
+                     "SGOL1", 
+                     "BRCA", "BRCA"]
+    feature_assays = ["cna", "mutation","mrnaseq", 
+                      "rppa", "methylation", "mutation",
+                      "mrnaseq",
+                      "mrnaseq", "methylation"]
 
     test_dogma_edges = [["PLK1_dna", "PLK1_mrna", 1],
-                        ["PLK1_mrna", "PLK1_protein", 1],
-                        ["PLK1_protein", "PLK1_activation", 1],
                         ["PAK1_dna", "PAK1_mrna", 1],
                         ["PAK1_mrna", "PAK1_protein", 1],
-                        ["PAK1_protein", "PAK1_activation", 1],
-                        ["SGOL1_dna", "SGOL1_mrna", 1],
-                        ["SGOL1_mrna", "SGOL1_protein", 1],
-                        ["SGOL1_protein", "SGOL1_activation", 1],
-                        ["BRCA_dna", "BRCA_mrna", 1],
-                        ["BRCA_mrna", "BRCA_protein", 1],
-                        ["BRCA_protein", "BRCA_activation", 1],
                        ]
     test_dogma_edges = map(tuplify, test_dogma_edges)
 
@@ -128,7 +128,17 @@ function preprocess_tests()
                        [("BRCA_mrna",""),("BRCA","mrnaseq"),  1],
                        [("BRCA_mrna",""),("BRCA","methylation"),  -1]
                       ]
-    
+   
+    test_all_edges = vcat(test_data_edges, test_dogma_edges)
+    test_all_edges = vcat(test_all_edges, map(tuplify, [["PLK1_mrna", "PLK1_protein", 1],
+                                                        ["PLK1_protein", "PLK1_activation", 1],
+                                                        ["PAK1_protein", "PAK1_activation", 1],
+                                                        ["SGOL1_mrna", "SGOL1_protein", 1],
+                                                        ["SGOL1_protein", "SGOL1_activation", 1]
+                                                       ]),
+                          test_pwy_edges
+                          )
+                        
 
     @testset "Prep Pathways" begin
 
@@ -139,34 +149,36 @@ function preprocess_tests()
         el = PM.sif_to_edgelist(sif_data)
         @test Set(el) == Set(test_pwy_edges) 
 
-        feature_genes = ["PLK1","PLK1","PLK1", 
-                         "PAK1", "PAK1", "PAK1",
-                         "SGOL1", 
-                         "BRCA", "BRCA"]
-        feature_assays = ["cna", "mutation","mrnaseq", 
-                          "rppa", "methylation", "mutation",
-                          "mrnaseq",
-                          "mrnaseq", "methylation"]
         features = collect(zip(feature_genes, feature_assays))
-      
-        ###TODO: REORGANIZE CODE TO AVOID ~30MINUTE PREPROCESSING TIMES!!! :(
-        dogma_edges = PM.construct_dogma_edges(unique(feature_genes))
+     
+        # construct_dogma_edges
+        dogma_edges, dogmax = PM.construct_dogma_edges(features)
         @test Set(dogma_edges) == Set(test_dogma_edges)
 
+        # construct_data_edges
         data_edges = PM.construct_data_edges(features)
         @test Set([Set(edge) for edge in data_edges]) == Set([Set(edge) for edge in test_data_edges])
+        
+        # connect_pwy_to_dogma
+        dogma_edges = vcat(dogma_edges, data_edges)
+        all_edges = PM.connect_pwy_to_dogma(dogma_edges, el, dogmax)
+        all_edge_set = Set(map(Set, all_edges))
+        test_all_edge_set = Set(map(Set, test_all_edges))
+        @test Set([Set(edge) for edge in all_edges]) == Set([Set(edge) for edge in test_all_edges])
 
         # prep pathways
         pwy_edgelists = PM.sifs_to_edgelists([sif_data])
-        prepped_pwys = PM.extend_pathways(pwy_edgelists, features)
-        test_prepped_edges = vcat(test_pwy_edges, test_dogma_edges, test_data_edges)
-        PM.prune_leaves!(test_prepped_edges)
-        @test Set([Set(edge) for edge in prepped_pwys[1]]) == Set([Set(edge) for edge in test_prepped_edges]) 
+        prepped_pwy = PM.extend_pathways(pwy_edgelists, features)[1]
+        all_edge_set = Set(map(Set, prepped_pwy))
+        test_all_edge_set = Set(map(Set, test_all_edges))
+        @test Set([Set(edge) for edge in prepped_pwy]) == Set([Set(edge) for edge in test_all_edges]) 
 
         ## load_pathway_sifs
         pwy_edgelists = PM.sifs_to_edgelists([test_sif_path])
-        prepped_pwys = PM.extend_pathways(pwy_edgelists, features)
-        @test Set([Set(edge) for edge in prepped_pwys[1]]) == Set([Set(edge) for edge in test_prepped_edges]) 
+        prepped_pwy = PM.extend_pathways(pwy_edgelists, features)[1]
+        all_edge_set = Set(map(Set, prepped_pwy))
+        test_all_edge_set = Set(map(Set, test_all_edges))
+        @test Set([Set(edge) for edge in prepped_pwy]) == Set([Set(edge) for edge in test_all_edges]) 
 
     end
 end
@@ -341,8 +353,6 @@ function assemble_model_tests()
 
         @test feature_genes[model.feature_idx] == model.feature_genes
         @test feature_assays[model.feature_idx] == model.feature_assays
-        println("L1 Feature index...")
-        println(model.matfac.Y_reg.l1_feat_idx[1])
         @test sum(model.matfac.Y_reg.l1_feat_idx[1]) == 2
     end
 end
@@ -493,11 +503,11 @@ end
 function main()
 
     util_tests()
-    #preprocess_tests()
-    #network_reg_tests()
-    #assemble_model_tests()
-    #fit_tests()
-    #model_io_tests()
+    preprocess_tests()
+    network_reg_tests()
+    assemble_model_tests()
+    fit_tests()
+    model_io_tests()
     #simulation_tests()
 
 end

@@ -233,8 +233,6 @@ function prune_leaves!(edgelist; except=nothing)
     frontier = Set([node for (node, neighbors) in graph if 
                   ((length(neighbors) < 2) & !in(node, except_set))])
 
-    println(string("PRUNING ", length(frontier), " LEAVES"))
-
     # Continue until the frontier is empty
     while length(frontier) > 0
         maybe_leaf = pop!(frontier)

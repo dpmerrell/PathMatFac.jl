@@ -3,9 +3,12 @@ import ScikitLearnBase: fit!
 
 
 function initialize_params!(model::MultiomicModel, D::AbstractMatrix; 
-                            loss_map=DEFAULT_ASSAY_LOSSES)
+                            loss_map=DEFAULT_ASSAY_LOSSES, verbose=true)
 
-    println("Setting initial values for mu and sigma...")
+    if verbose
+        println("Setting initial values for mu and sigma...")
+    end
+
     model_losses = map(x->loss_map[x], model.feature_assays) 
     normal_columns = model_losses .== "normal"
 

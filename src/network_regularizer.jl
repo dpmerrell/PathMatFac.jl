@@ -382,22 +382,4 @@ function ChainRules.rrule(nr::NetworkL1Regularizer, x::AbstractVector)
     return loss, netreg_vec_pullback
 end
 
-#########################################
-# Equality operator
-#########################################
-
-#RegType = Union{NetworkRegularizer,NetworkL1Regularizer}
-#
-#function Base.:(==)(a::T, b::T) where T <: RegType 
-#    for fn in fieldnames(T)
-#        if !(getfield(a, fn) == getfield(b, fn))
-#            println(string("NOT EQUAL: ", fn))
-#            println(getfield(a,fn))
-#            println(getfield(b,fn))
-#            return false
-#        end
-#    end
-#    return true
-#end
-
 
