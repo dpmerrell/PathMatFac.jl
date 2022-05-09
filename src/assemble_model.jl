@@ -64,7 +64,7 @@ function assemble_model(pathway_sif_data,
     end
     
     # Bookkeeping to track the subsetting/sorting
-    _, perm_idx = keymatch(model_features, data_features)
+    _, used_feature_idx = keymatch(model_features, data_features)
 
     # Extract genes and assays from the features
     model_genes = [get_gene(feat) for feat in model_features]
@@ -119,8 +119,8 @@ function assemble_model(pathway_sif_data,
 
     model = MultiomicModel(matfac, 
                            sample_ids, sample_conditions, 
-                           perm_idx,
-                           model_genes, model_assays,
+                           data_genes, data_assays,
+                           used_feature_idx,
                            pathway_names, pathway_weights)
 
     return model

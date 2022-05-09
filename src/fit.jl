@@ -32,7 +32,7 @@ function fit!(model::MultiomicModel, D::AbstractMatrix; kwargs...)
     # Permute the data columns to match the model's
     # internal ordering
     println("Rearranging data columns...")
-    D = D[:,model.feature_idx]
+    D = D[:,model.internal_feature_idx]
 
     # First set some model parameters to the right ball-park
     initialize_params!(model, D)

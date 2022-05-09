@@ -13,9 +13,9 @@ mutable struct MultiomicModel
     sample_conditions::Vector{String}
 
     # Information about data features
-    feature_idx::Vector{Int}
-    feature_genes::Vector{String}
-    feature_assays::Vector{String}
+    data_genes::Vector{String}
+    data_assays::Vector{String}
+    used_feature_idx::Vector{Int}
 
     # Pathway information
     pathway_names::Vector{String}
@@ -30,20 +30,20 @@ function MultiomicModel(pathway_sif_data,
                         pathway_names::Vector{String},
                         sample_ids::Vector{String}, 
                         sample_conditions::Vector{String},
-                        feature_genes::Vector{String}, 
-                        feature_assays::Vector{T},
+                        data_genes::Vector{String}, 
+                        data_assays::Vector{T},
                         sample_batch_dict::Dict{T,Vector{U}};
                         lambda_X::Real=1.0,
                         lambda_Y::Real=1.0,
                         model_features=nothing) where T where U
        
-    features = collect(zip(feature_genes, feature_assays))
+    data_features = collect(zip(data_genes, data_assays))
 
     return assemble_model(pathway_sif_data, 
                           pathway_names,
                           sample_ids, sample_conditions,
                           sample_batch_dict,
-                          features,
+                          data_features,
                           lambda_X, lambda_Y;
                           model_features=model_features)
 

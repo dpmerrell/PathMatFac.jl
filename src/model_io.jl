@@ -3,7 +3,9 @@ import BSON
 
 export save_model, load_model
 
-
+################################
+# Save/load BSON
+################################
 function save_model(filename, model::MultiomicModel)
     BSON.@save filename model
 end

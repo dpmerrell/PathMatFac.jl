@@ -4,7 +4,6 @@ include("script_util.jl")
 
 using PathwayMultiomics
 using JSON
-using Statistics
 using ScikitLearnBase
 using Profile
 using ProfileSVG
@@ -15,7 +14,7 @@ function main(args)
    
     omic_hdf_filename = args[1]
     pwy_json = args[2]
-    out_hdf = args[3]
+    out_name = args[3]
 
     opts = Dict(:max_epochs => Inf, 
                 :rel_tol =>1e-8, 
@@ -67,7 +66,8 @@ function main(args)
     println("ELAPSED TIME (s):")
     println(end_time - start_time)
 
-    save_model(out_hdf, model)
+    save_model(string(out_name, ".bson"), model)
+    save_params_hdf(string(out_name, ".hdf"), model)
 
 end
 
