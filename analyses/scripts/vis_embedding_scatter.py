@@ -55,12 +55,13 @@ def get_pc_names(n_pc):
 
 
 def embedding_scatter(U, instance_ids, instance_groups, 
-                      clinical_data, clinical_cols, pc_idx):
+                      clinical_data, clinical_cols, pc_idx,
+                      color_col="CancerType"):
 
     labels = get_pc_names(U.shape[1])
 
     source_df = pd.DataFrame(data=U, columns=labels)
-    source_df["Cancer Type"] = instance_groups
+    source_df["CancerType"] = instance_groups
     source_df["Patient ID"] = instance_ids
 
     hover_cols = []
@@ -73,11 +74,14 @@ def embedding_scatter(U, instance_ids, instance_groups,
     fig = px.scatter_3d(source_df, x=labels[pc_idx[0]], 
                                    y=labels[pc_idx[1]], 
                                    z=labels[pc_idx[2]],
-                                   color="Cancer Type",
-                                   hover_data=["Cancer Type"]+hover_cols,
+                                   color=color_col,
+                                   hover_data=["CancerType"]+hover_cols,
                                    title="Pathway Embedding",
                        )
-    print(fig.layout)
+    fig.update_traces(marker=dict(line=dict(width=2,
+                                            color='DarkSlateGrey')),
+                      selector=dict(mode='markers')) 
+    print(fig.data)
 
     return fig
 
@@ -171,13 +175,15 @@ if __name__=="__main__":
     output_scatter = args[4]
 
     opts = {"exclude": [],
-            "keep": []
+            "keep": [],
+            "color": ["CancerType"]
            }
     if len(args) > 5:
         opts = parse_opts(opts, args[5:])
 
     exclude_groups = opts["exclude"]
     keep_groups = opts["keep"]
+    color_col = opts["color"][0]
 
     # Load information stored in the model
     orig_X = su.load_embedding(model_hdf)
@@ -203,7 +209,8 @@ if __name__=="__main__":
     clinical_data = match_clinical_to_omic(clinical_data, clinical_samples, samples)
     pc_idx = list(range(first_pc, first_pc+3))
 
-    scatter_fig = embedding_scatter(U, samples, groups, clinical_data, clinical_cols, pc_idx)
+    scatter_fig = embedding_scatter(U, samples, groups, clinical_data, clinical_cols, pc_idx,
+                                    color_col=color_col)
     explained_var_fig = explained_var_plot(s)
     line_fig = pc_line_plot(Vh, pathways, pc_idx)
 
