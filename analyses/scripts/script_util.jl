@@ -1,5 +1,8 @@
 
-using HDF5
+using HDF5, StatsBase, BatchMatFac
+
+
+BMF = BatchMatFac
 
 function get_omic_feature_genes(omic_hdf)
 
@@ -60,9 +63,26 @@ function get_barcodes(omic_hdf)
     return result
 end
 
+function barcode_to_batch(barcode::String)
+
+    if barcode == ""
+        return ""
+    end
+
+    terms = split(barcode,"-")
+    n_terms = length(terms)
+
+    return join(terms[(n_terms-1):n_terms], "-")
+end
+
+
+function barcodes_to_batches(barcode_dict::Dict{String,Vector{String}})
+    return Dict{String,Vector{String}}(k=>map(barcode_to_batch, v) for (k,v) in barcode_dict)
+end
+
 
 function save_omic_data(output_hdf, feature_names, instance_names, 
-                    instance_groups, omic_matrix)
+                        instance_groups, omic_matrix)
 
     @assert size(omic_matrix,2) == length(feature_names)
     @assert size(omic_matrix,1) == length(instance_names)
@@ -73,6 +93,76 @@ function save_omic_data(output_hdf, feature_names, instance_names,
         write(file, "instances", instance_names)
         write(file, "groups", instance_groups)
         write(file, "data", omic_matrix)
+    end
+
+end
+
+
+function parse_opts!(defaults, opt_list)
+
+    opts_k = [Symbol(split(opt,"=")[1]) for opt in opt_list]
+    opts_v = [split(opt,"=")[end] for opt in opt_list]
+
+    parsed_v = []
+    for v in opts_v
+        new_v = v
+        try
+            new_v = parse(Int64, v)
+        catch ArgumentError
+            try
+                new_v = parse(Float64, v)
+            catch ArgumentError
+                new_v = v
+            end
+        finally
+            push!(parsed_v, new_v)
+        end
+    end
+
+    opt_d = Dict([ opts_k[i] => parsed_v[i] for i=1:length(opts_k)])
+
+    for (opt_k, opt_v) in opt_d
+        defaults[opt_k] = opt_v
+    end
+
+    return defaults
+
+end
+
+nanmean(x) = mean(filter(!isnan, x))
+nanvar(x) = var(filter(!isnan, x))
+nanmean_and_var(x) = mean_and_var(filter(!isnan, x))
+
+####################################
+# Save HDF
+####################################
+
+function Base.write(f::HDF5.File, path::AbstractString, obj::Union{BMF.BatchArray, Tuple, UnitRange})
+    for pname in propertynames(obj)
+        x = getproperty(obj,pname)
+        write(f, string(path, "/", pname), x)
+    end
+end
+
+
+function save_params_hdf(hdf_filename, model::MultiomicModel)
+
+    h5open(hdf_filename, "w") do f
+        write(f, "X", model.matfac.mp.X)
+        write(f, "sample_ids", model.sample_ids)
+        write(f, "sample_conditions", model.sample_conditions)
+
+        write(f, "Y", model.matfac.mp.Y)
+        write(f, "data_genes", model.data_genes)
+        write(f, "data_assays", model.data_assays)
+        write(f, "used_feature_idx", model.used_feature_idx)
+
+        write(f, "pathway_names", model.pathway_names)
+
+        write(f, "mu", model.matfac.cshift.mu)
+        write(f, "logsigma", model.matfac.cscale.logsigma)
+        write(f, "theta", model.matfac.bshift.theta)
+        write(f, "logdelta", model.matfac.bscale.logdelta)
     end
 
 end

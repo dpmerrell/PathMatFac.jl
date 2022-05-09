@@ -1,6 +1,8 @@
 
 export MultiomicModel
 
+import Base: ==
+
 mutable struct MultiomicModel
 
     # Matrix factorization model
@@ -10,19 +12,10 @@ mutable struct MultiomicModel
     sample_ids::Vector{String}
     sample_conditions::Vector{String}
 
-    # Information about internal samples
-    internal_sample_idx::Vector{Int}
-    internal_sample_ids::Vector{String}
-
     # Information about data features
-    feature_idx::Vector{Int}
-    feature_genes::Vector{String}
-    feature_assays::Vector{String}
-
-    # Information about internal features
-    internal_feature_idx::Vector{Int}
-    internal_feature_genes::Vector{String}
-    internal_feature_assays::Vector{String}
+    data_genes::Vector{String}
+    data_assays::Vector{String}
+    used_feature_idx::Vector{Int}
 
     # Pathway information
     pathway_names::Vector{String}
@@ -30,59 +23,42 @@ mutable struct MultiomicModel
 
 end
 
+@functor MultiomicModel
+
 
 function MultiomicModel(pathway_sif_data, 
                         pathway_names::Vector{String},
                         sample_ids::Vector{String}, 
                         sample_conditions::Vector{String},
-                        sample_batch_dict::Dict{T,Vector{U}},
-                        feature_genes::Vector{String}, 
-                        feature_assays::Vector{T};
-                        lambda_X::Real=0.1,
-                        lambda_Y::Real=0.1) where T where U
-        
+                        data_genes::Vector{String}, 
+                        data_assays::Vector{T},
+                        sample_batch_dict::Dict{T,Vector{U}};
+                        lambda_X::Real=1.0,
+                        lambda_Y::Real=1.0,
+                        model_features=nothing) where T where U
+       
+    data_features = collect(zip(data_genes, data_assays))
+
     return assemble_model(pathway_sif_data, 
                           pathway_names,
                           sample_ids, sample_conditions,
                           sample_batch_dict,
-                          feature_genes, feature_assays,
-                          lambda_X, lambda_Y)
+                          data_features,
+                          lambda_X, lambda_Y;
+                          model_features=model_features)
 
 end
 
+PMTypes = Union{MultiomicModel,NetworkRegularizer,NetworkL1Regularizer}
 
-function Base.:(==)(model_a::MultiomicModel, model_b::MultiomicModel)
-    for fn in fieldnames(MultiomicModel)
-        if !(getfield(model_a, fn) == getfield(model_b, fn)) 
+function Base.:(==)(a::T, b::T) where T <: PMTypes
+    for fn in fieldnames(T)
+        if !(getfield(a, fn) == getfield(b, fn))
             return false
         end
     end
     return true
 end
 
-
-function Base.getproperty(model::MultiomicModel, sym::Symbol)
-
-    if sym == :X
-        return view(model.matfac.X, :, model.internal_sample_idx)
-    elseif sym == :Y
-        return view(model.matfac.Y, :, model.internal_feature_idx)
-    elseif sym == :mu
-         return view(model.matfac.mu, model.internal_feature_idx)
-    elseif sym == :log_sigma
-         return view(model.matfac.log_sigma, model.internal_feature_idx)
-    elseif sym == :log_delta
-        return BMF.batch_matrix(model.matfac.log_delta_values,
-                                model.matfac.sample_batch_ids,
-                                model.matfac.feature_batch_ids)
-
-    elseif sym == :theta
-        return BMF.batch_matrix(model.matfac.theta_values,
-                                model.matfac.sample_batch_ids,
-                                model.matfac.feature_batch_ids)
-    else
-        return getfield(model, sym)
-    end
-end
 
 

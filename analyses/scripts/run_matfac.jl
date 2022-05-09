@@ -4,73 +4,24 @@ include("script_util.jl")
 
 using PathwayMultiomics
 using JSON
-using Statistics
 using ScikitLearnBase
 using Profile
 using ProfileSVG
 
-function parse_opts!(defaults, opt_list)
-
-    opts_k = [Symbol(split(opt,"=")[1]) for opt in opt_list]
-    opts_v = [split(opt,"=")[end] for opt in opt_list]
-
-    parsed_v = []
-    for v in opts_v
-        new_v = v
-        try
-            new_v = parse(Int64, v)
-        catch ArgumentError
-            try
-                new_v = parse(Float64, v)
-            catch ArgumentError
-                new_v = v
-            end
-        finally
-            push!(parsed_v, new_v)
-        end
-    end
-
-    opt_d = Dict([ opts_k[i] => parsed_v[i] for i=1:length(opts_k)])
-
-    for (opt_k, opt_v) in opt_d
-        defaults[opt_k] = opt_v
-    end
-
-    return defaults
-
-end
-
-
-function barcode_to_batch(barcode::String)
-
-    if barcode == ""
-        return ""
-    end
-
-    terms = split(barcode,"-")
-    n_terms = length(terms)
-
-    return join(terms[(n_terms-1):n_terms], "-")
-end
-
-
-function barcodes_to_batches(barcode_dict::Dict{String,Vector{String}})
-    return Dict{String,Vector{String}}(k=>map(barcode_to_batch, v) for (k,v) in barcode_dict)
-end
 
 
 function main(args)
    
     omic_hdf_filename = args[1]
     pwy_json = args[2]
-    out_hdf = args[3]
+    out_name = args[3]
 
     opts = Dict(:max_epochs => Inf, 
                 :rel_tol =>1e-8, 
-                :lambda_X =>0.1, 
-                :lambda_Y =>0.1,
-                :lr => 0.05,
-                :capacity => Int(5e7),
+                :lambda_X =>0.0, 
+                :lambda_Y =>0.0,
+                :lr => 0.07,
+                :capacity => Int(1e8),
                 :verbose => true
                )
     if length(args) > 3
@@ -103,22 +54,24 @@ function main(args)
 
     model = MultiomicModel(pwys, pwy_names, 
                            sample_names, sample_conditions,
-                           batch_dict,
-                           feature_genes, feature_assays;
+                           feature_genes, feature_assays,
+                           batch_dict;
                            lambda_X=lambda_X, 
                            lambda_Y=lambda_Y)
 
-
     start_time = time()
-    fit!(model, omic_data; opts...)
+    ScikitLearnBase.fit!(model, omic_data; opts...)
     end_time = time()
 
     println("ELAPSED TIME (s):")
     println(end_time - start_time)
 
-    save_hdf(model, out_hdf)
+    save_model(string(out_name, ".bson"), model)
+    save_params_hdf(string(out_name, ".hdf"), model)
 
 end
 
 
 main(ARGS)
+
+

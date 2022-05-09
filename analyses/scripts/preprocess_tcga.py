@@ -74,9 +74,9 @@ def cna_threshold(a, l=-0.5, u=0.5):
     u_idx = (a > u)
     mid_idx = np.logical_not( l_idx | u_idx | nan_idx )
 
-    a[l_idx] = 0.0
-    a[u_idx] = 1.0
-    a[mid_idx] = 0.5
+    a[l_idx] = 1.0
+    a[u_idx] = 3.0
+    a[mid_idx] = 2.0
 
     return a
 
@@ -106,7 +106,7 @@ def preprocess_features(omic_matrix, feature_assays, sample_groups, standardized
 
     print("ASSAY ROWS:", assay_rows)
 
-    omic_matrix[assay_rows["methylation"],:] = inv_logistic(omic_matrix[assay_rows["methylation"],:])
+    #omic_matrix[assay_rows["methylation"],:] = inv_logistic(omic_matrix[assay_rows["methylation"],:])
     omic_matrix[assay_rows["cna"],:] = cna_threshold(omic_matrix[assay_rows["cna"],:])
     omic_matrix[assay_rows["mutation"],:] = mut_threshold(omic_matrix[assay_rows["mutation"],:])
 

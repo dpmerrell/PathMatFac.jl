@@ -4,28 +4,31 @@ export DEFAULT_ASSAYS, sort_features
 
 import BatchMatFac: is_contiguous
 
-DEFAULT_ASSAY_LOSSES = Dict("" => "noloss",
-                            "cna" => "logistic",
-                            "mutation" => "logistic",
-                            "methylation" => "normal",
+DEFAULT_ASSAY_LOSSES = Dict("cna" => "ordinal3",
+                            "mutation" => "bernoulli",
+                            "methylation" => "bernoulli",
                             "mrnaseq" => "normal", 
-                            "rppa" => "normal"
+                            "rppa" => "normal",
+                            "" => "noloss"
                             )
 
-LOSS_ORDER = Dict("noloss" => 1,
-                  "logistic" => 2,
-                  "normal" => 3)
+LOSS_ORDER = Dict("normal" => 1,
+                  "poisson" => 2,
+                  "bernoulli" => 3,
+                  "ordinal3" => 4,
+                  "noloss" => 5
+                  )
 
+DOGMA_ORDER = ["dna", "mrna", "protein", "activation"]
 
 DEFAULT_ASSAYS = collect(keys(DEFAULT_ASSAY_LOSSES))
 DEFAULT_ASSAY_SET = Set(DEFAULT_ASSAYS)
 
-
-DEFAULT_ASSAY_MAP = Dict("cna" => ["dna", 1],
-                         "mutation" => ["dna", -1],
-                         "methylation" => ["mrna", -1],
-                         "mrnaseq" => ["mrna", 1],
-                         "rppa" => ["protein", 1]
+DEFAULT_ASSAY_MAP = Dict("cna" => ("dna", 1),
+                         "mutation" => ("dna", -1),
+                         "methylation" => ("mrna", -1),
+                         "mrnaseq" => ("mrna", 1),
+                         "rppa" => ("protein", 1)
                         )
 
 
@@ -34,7 +37,10 @@ PWY_SIF_CODE = Dict("a" => "activation",
                     "c" => "compound",
                     "h" => "chemical",
                     "p" => "protein",
-                    "f" => "family"
+                    "f" => "family",
+                    "t" => "transcription",
+                    ">" => 1,
+                    "|" => -1
                    )
 
 
@@ -105,25 +111,22 @@ function nanvar(x)
 end
 
 
-function edgelist_to_spmat(edgelist, node_to_idx; epsilon=1e-5, verbose=false)
+function edgelist_to_spmat(edgelist, node_to_idx; epsilon=0.0)
 
     N = length(node_to_idx)
 
     # make safe against redundancies.
     # in case of redundancy, keep the latest
     edge_dict = Dict()
-    pwy_nodes = Set()
+    pwy_idx = Set()
     for edge in edgelist
-        if verbose
-            println(edge)
-        end
         e1 = node_to_idx[edge[1]]
         e2 = node_to_idx[edge[2]]
         u = max(e1, e2)
         v = min(e1, e2)
         edge_dict[(u,v)] = edge[3]
-        push!(pwy_nodes, u)
-        push!(pwy_nodes, v)
+        push!(pwy_idx, e1)
+        push!(pwy_idx, e2)
     end
 
     # Store indices and nonzero values
@@ -132,13 +135,7 @@ function edgelist_to_spmat(edgelist, node_to_idx; epsilon=1e-5, verbose=false)
     V = Float64[] 
 
     # Store values for the diagonal
-    diagonal = fill(epsilon, N)
-    # Need to add 1 to the nodes that aren't in this pathway
-    for i=1:N
-        if !in(i, pwy_nodes)
-            diagonal[i] += 1
-        end
-    end
+    diagonal = zeros(N)
 
     # Off-diagonal entries
     for (idx, value) in edge_dict
@@ -154,35 +151,118 @@ function edgelist_to_spmat(edgelist, node_to_idx; epsilon=1e-5, verbose=false)
 
         # increment diagonal entries
         # (maintain positive definite-ness)
-        av = abs(value)
-        diagonal[idx[1]] += av
-        diagonal[idx[2]] += av
+        ab = abs(value)
+        diagonal[idx[1]] += ab
+        diagonal[idx[2]] += ab
     end
     
-
-    # diagonal entries
+    for idx in pwy_idx
+        diagonal[idx] += epsilon 
+    end
+    
+    # Diagonal entries
     for i=1:N
         push!(I, i)
         push!(J, i)
         push!(V, diagonal[i])
     end
 
-    result = sparse(I, J, V)
-
-    return PMRegMat(result)
-end
-
-function edgelists_to_spmats(edgelists, node_to_idx; verbose=false)
-    return [edgelist_to_spmat(el, node_to_idx; verbose=verbose) for el in edgelists]
+    return sparse(I, J, V)
 end
 
 
-function rescale!(spmat::CuSparseMatrixCSC, scalar::Number)
-    spmat.nzVal .*= scalar 
+function edgelists_to_spmats(edgelists, node_to_idx; epsilon=0.0)
+    return [edgelist_to_spmat(el, node_to_idx; epsilon=epsilon) for el in edgelists]
 end
+
 
 function rescale!(spmat::SparseMatrixCSC, scalar::Number)
     spmat.nzval .*= scalar 
+end
+
+
+function edgelist_to_dict(edgelist)
+    result = Dict()
+
+    for edge in edgelist
+        u, v, w = edge
+
+        if haskey(result, u)
+            result[u][v] = w
+        else
+            result[u] = Dict(v=>w)
+        end
+        if haskey(result, v)
+            result[v][u] = w
+        else
+            result[v] = Dict(u=>w)
+        end
+    end
+    return result
+end
+
+
+function dict_to_edgelist(graph_dict)
+    result = Vector{Any}[]
+    for (u,d) in graph_dict
+        for (v,w) in d
+            push!(result, [u,v,w])
+            # Skip redundant edges
+            delete!(graph_dict[v], u)
+        end
+    end
+    return result
+end
+
+
+"""
+    Remove all leaf nodes (degree <= 1), except those
+    specified by `except`
+"""
+function prune_leaves!(edgelist; except=nothing)
+
+    if except == nothing
+        except_set=Set()
+    else
+        except_set=Set(except)
+    end
+
+    graph = edgelist_to_dict(edgelist)
+
+    # Initialize the frontier set with the leaves
+    frontier = Set([node for (node, neighbors) in graph if 
+                  ((length(neighbors) < 2) & !in(node, except_set))])
+
+    # Continue until the frontier is empty
+    while length(frontier) > 0
+        maybe_leaf = pop!(frontier)
+
+        # If this is, in fact, a leaf...
+        if length(graph[maybe_leaf]) < 2 
+            # Add the leaf's neighbor (if any) to the frontier
+            for neighbor in keys(graph[maybe_leaf])
+                if !in(neighbor, except_set)
+                    push!(frontier, neighbor)
+                end
+                # Remove the leaf from the neighbor's neighbors
+                delete!(graph[neighbor], maybe_leaf)
+            end
+            # Remove the leaf from the graph
+            delete!(graph, maybe_leaf)
+        end
+    end
+
+    edgelist = dict_to_edgelist(graph)
+end
+
+function get_all_nodes(edgelist)
+
+    result = Set()
+    for edge in edgelist
+        push!(result, edge[1])
+        push!(result, edge[2])
+    end
+    return result
 end
 
 
