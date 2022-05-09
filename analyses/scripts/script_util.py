@@ -82,54 +82,47 @@ def load_batch_matrix(model_hdf, bmf_key, values_key, keytype=str, dtype=float):
 
 
 
-def load_embedding(model_hdf):
-
-    with h5py.File(model_hdf, "r") as f:
-        internal_X = f["matfac"]["X"][:,:]
-        sample_idx = f["internal_sample_idx"][:]
-        X = internal_X[sample_idx,:]
-
-    return X
+def load_embedding(param_hdf):
+    return load_hdf(param_hdf, "X") 
 
 
-def load_sample_ids(model_hdf):
-    return load_hdf(model_hdf, "sample_ids", dtype=str)
+def load_sample_ids(param_hdf):
+    return load_hdf(param_hdf, "sample_ids", dtype=str)
 
+def load_sample_groups(param_hdf):
+    return load_hdf(param_hdf, "sample_conditions", dtype=str)
 
-def load_sample_groups(model_hdf):
-    return load_hdf(model_hdf, "sample_conditions", dtype=str)
+def load_pathway_names(param_hdf):
+    return load_hdf(param_hdf, "pathway_names", dtype=str)
 
-def load_pathway_names(model_hdf):
-    return load_hdf(model_hdf, "pathway_names", dtype=str)
-
-def load_features(model_hdf):
-    feature_genes = load_hdf(model_hdf, "feature_genes", dtype=str)
-    feature_assays = load_hdf(model_hdf, "feature_assays", dtype=str)
+def load_features(param_hdf):
+    feature_genes = load_hdf(param_hdf, "data_genes", dtype=str)
+    feature_assays = load_hdf(param_hdf, "data_assays", dtype=str)
     f_l = np.array(list("{}_{}".format(g,a) for (g,a) in zip(feature_genes, feature_assays)))
 
-    feature_idx = load_hdf(model_hdf, "feature_idx", dtype=int)
+    feature_idx = load_hdf(param_hdf, "used_feature_idx", dtype=int)
     feature_idx -= 1
     return f_l[feature_idx]
 
 
-def load_feature_factors(model_hdf):
-    factors = load_hdf(model_hdf, "matfac/Y")
-    feature_idx = load_hdf(model_hdf, "internal_feature_idx", dtype=int)
+def load_feature_factors(param_hdf):
+    factors = load_hdf(param_hdf, "Y")
+    feature_idx = load_hdf(param_hdf, "used_feature_idx", dtype=int)
     feature_idx -= 1 # convert from Julia to Python indexing!
     return factors[feature_idx, :]
 
 
-def load_col_param(model_hdf, key):
-    raw_param = load_hdf(model_hdf, key)
-    internal_idx = load_hdf(model_hdf, "internal_feature_idx", dtype=int)
+def load_col_param(param_hdf, key):
+    raw_param = load_hdf(param_hdf, key)
+    internal_idx = load_hdf(param_hdf, "used_feature_idx", dtype=int)
     internal_idx -= 1
     return raw_param[internal_idx]
 
-def load_mu(model_hdf):
-    return load_col_param(model_hdf, "matfac/mu")
+def load_mu(param_hdf):
+    return load_col_param(param_hdf, "matfac/mu")
 
-def load_log_sigma(model_hdf):
-    return load_col_param(model_hdf, "matfac/log_sigma")
+def load_log_sigma(param_hdf):
+    return load_col_param(param_hdf, "matfac/log_sigma")
 
 def value_to_idx(ls):
     return {k: idx for idx, k in enumerate(ls)}

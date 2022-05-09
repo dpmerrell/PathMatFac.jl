@@ -10,6 +10,7 @@ import pandas as pd
 
 import script_util as su
 
+
 def load_clinical_data(clinical_hdf, cols):
     
     with h5py.File(clinical_hdf, "r") as f:

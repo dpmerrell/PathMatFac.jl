@@ -83,6 +83,7 @@ function assemble_model(pathway_sif_data,
     K = length(pathway_sif_data)
     
     # Preprocess the pathways
+    println("\tPreprocessing pathways...")
     pwy_edgelists = sifs_to_edgelists(pathway_sif_data)
     ext_edgelists = extend_pathways(pwy_edgelists,
                                     model_features;
@@ -90,6 +91,9 @@ function assemble_model(pathway_sif_data,
 
     # Construct a regularizer for Y
     nonpwy_features = compute_nonpwy_features(model_features, pwy_edgelists)
+
+    println("\tConstructing regularizers...")
+
     Y_reg = NetworkL1Regularizer(model_features, ext_edgelists; 
                                  net_weight=lambda_Y, l1_weight=lambda_Y,
                                  l1_features=nonpwy_features)
@@ -116,6 +120,9 @@ function assemble_model(pathway_sif_data,
                               mu_reg=mu_reg)
 
     pathway_weights = zeros(K)
+
+    data_genes = [get_gene(feat) for feat in data_features]
+    data_assays = [get_assay(feat) for feat in data_features]
 
     model = MultiomicModel(matfac, 
                            sample_ids, sample_conditions, 
