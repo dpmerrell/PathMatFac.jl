@@ -109,7 +109,7 @@ def load_feature_factors(param_hdf):
     factors = load_hdf(param_hdf, "Y")
     feature_idx = load_hdf(param_hdf, "used_feature_idx", dtype=int)
     feature_idx -= 1 # convert from Julia to Python indexing!
-    return factors[feature_idx, :]
+    return factors
 
 
 def load_col_param(param_hdf, key):
