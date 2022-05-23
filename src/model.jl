@@ -49,7 +49,8 @@ function MultiomicModel(pathway_sif_data,
 
 end
 
-PMTypes = Union{MultiomicModel,NetworkRegularizer,NetworkL1Regularizer}
+PMTypes = Union{MultiomicModel,NetworkRegularizer,NetworkL1Regularizer,
+                BMFLayerReg}
 
 function Base.:(==)(a::T, b::T) where T <: PMTypes
     for fn in fieldnames(T)

@@ -1,13 +1,12 @@
 
-include("script_util.jl")
-
-
 using PathwayMultiomics
 using JSON
 using ScikitLearnBase
 using Profile
 using ProfileSVG
+using Flux
 
+include("script_util.jl")
 
 
 function main(args)
@@ -59,6 +58,7 @@ function main(args)
                            lambda_X=lambda_X, 
                            lambda_Y=lambda_Y)
 
+
     start_time = time()
     ScikitLearnBase.fit!(model, omic_data; opts...)
     end_time = time()
@@ -66,7 +66,7 @@ function main(args)
     println("ELAPSED TIME (s):")
     println(end_time - start_time)
 
-    save_model(string(out_name, ".bson"), model)
+    PathwayMultiomics.save_model(string(out_name, ".bson"), model)
     save_params_hdf(string(out_name, ".hdf"), model)
 
 end

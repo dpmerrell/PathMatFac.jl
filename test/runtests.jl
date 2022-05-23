@@ -351,8 +351,11 @@ function assemble_model_tests()
                                feature_genes, feature_assays,
                                sample_batch_dict)
 
-        @test feature_genes[model.feature_idx] == model.feature_genes
-        @test feature_assays[model.feature_idx] == model.feature_assays
+        #@test feature_genes[model.used_feature_idx] == model.data_genes
+        #@test feature_assays[model.used_feature_idx] == model.data_assays
+        @test feature_genes == model.data_genes
+        @test feature_assays == model.data_assays
+        @test length(model.used_feature_idx) == length(feature_genes)
         @test sum(model.matfac.Y_reg.l1_feat_idx[1]) == 2
     end
 end

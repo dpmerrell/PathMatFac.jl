@@ -1,4 +1,8 @@
 
+import Flux: trainable
+import Base: ==
+
+export BMFLayerReg
 
 ##########################################################
 # Network regularizer
@@ -21,6 +25,8 @@ mutable struct NetworkRegularizer{K}
 end
 
 @functor NetworkRegularizer
+
+trainable(nr::NetworkRegularizer) = (B_matrix=nr.B_matrix, )
 
 function NetworkRegularizer(edgelists; observed=nothing,
                                        weight=1.0)
@@ -118,10 +124,10 @@ function ChainRules.rrule(nr::NetworkRegularizer, X::AbstractMatrix)
 
     function netreg_mat_pullback(loss_bar)
 
-        B_bar = xAB .+ transpose(BBu)
+        B_bar = loss_bar.*(xAB .+ transpose(BBu))
         nr_bar = Tangent{NetworkRegularizer}(B_matrix=B_bar)
 
-        return nr_bar, xAA .+ transpose(ABu)
+        return nr_bar, loss_bar .* (xAA .+ transpose(ABu))
     end
 
     return loss, netreg_mat_pullback
@@ -155,10 +161,10 @@ function ChainRules.rrule(nr::NetworkRegularizer, x::AbstractVector)
     function netreg_vec_pullback(loss_bar)
 
         b_matrix_bar = zero(nr.B_matrix)
-        b_matrix_bar[1,:] .= vec(xAB) .+ BBu
+        b_matrix_bar[1,:] .= loss_bar.*(vec(xAB) .+ BBu)
 
         x_bar = similar(x)
-        x_bar[:] .= vec(xAA) .+ ABu
+        x_bar[:] .= loss_bar.*(vec(xAA) .+ ABu)
 
         nr_bar = Tangent{NetworkRegularizer}(B_matrix=b_matrix_bar)
 
@@ -189,6 +195,8 @@ mutable struct NetworkL1Regularizer{K}
 end
 
 @functor NetworkL1Regularizer
+
+trainable(nr::NetworkL1Regularizer) = (net_virtual=nr.net_virtual,)
 
 
 function NetworkL1Regularizer(data_features, network_edgelists;
@@ -272,8 +280,8 @@ function (nr::NetworkL1Regularizer)(X::AbstractMatrix)
     for k=1:K
         # Network-regularization
         loss += quadratic(nr.AA[k], X[k,:])
-        loss += 2*quadratic(X[k,:], nr.AB[k], nr.B_matrix[k,:])
-        loss += quadratic(nr.BB[k], nr.B_matrix[k,:])
+        loss += 2*quadratic(X[k,:], nr.AB[k], nr.net_virtual[k])
+        loss += quadratic(nr.BB[k], nr.net_virtual[k])
         loss *= 0.5*nr.net_weight
 
         # L1-regularization
@@ -317,15 +325,17 @@ function ChainRules.rrule(nr::NetworkL1Regularizer, X::AbstractMatrix)
 
         virt_bar = map(similar, nr.net_virtual)
         for k=1:K
-            virt_bar[k] .= nr.net_weight.*(xAB[k] .+ BBu[k])
+            virt_bar[k] .= (loss_bar*nr.net_weight).*(xAB[k] .+ BBu[k])
         end
         nr_bar = Tangent{NetworkL1Regularizer}(net_virtual=virt_bar)
 
+        # Network regularization
         X_bar = nr.net_weight.*(xAA .+ transpose(ABu))
-
+        # L1 regularization
         for k=1:K
             X_bar[k,:] .+= nr.l1_weight.*(sign.(X[k,:]).*nr.l1_feat_idx[k])
         end
+        X_bar .*= loss_bar
 
         return nr_bar, X_bar 
     end
@@ -368,18 +378,35 @@ function ChainRules.rrule(nr::NetworkL1Regularizer, x::AbstractVector)
     function netreg_vec_pullback(loss_bar)
 
         virt_bar = map(zero, nr.net_virtual)
-        virt_bar[1] .= nr.net_weight.*(vec(xAB) .+ BBu)
+        virt_bar[1] .= (loss_bar*nr.net_weight).*(vec(xAB) .+ BBu)
 
         nr_bar = Tangent{NetworkL1Regularizer}(net_virtual=virt_bar)
         
         x_bar = similar(x)
         x_bar[:] .= nr.net_weight.*(vec(xAA) .+ ABu)
-        X_bar .+= nr.l1_weight.*(sign.(x) .* nr.l1_feat_idx[1])
+        x_bar .+= nr.l1_weight.*(sign.(x) .* nr.l1_feat_idx[1])
+        x_bar .*= loss_bar
 
         return nr_bar, x_bar
     end
     
     return loss, netreg_vec_pullback
+end
+
+###########################################
+# Now define a combined regularizer functor 
+###########################################
+
+mutable struct BMFLayerReg
+    cscale_reg::NetworkRegularizer
+    cshift_reg::NetworkRegularizer
+end
+
+@functor BMFLayerReg
+
+function (reg::BMFLayerReg)(layers::BMF.BatchMatFacLayers)
+    return (reg.cscale_reg(layers.cscale.logsigma) 
+            + reg.cshift_reg(layers.cshift.mu))
 end
 
 

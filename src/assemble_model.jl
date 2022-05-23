@@ -104,7 +104,8 @@ function assemble_model(pathway_sif_data,
                                                                 weight=lambda_Y)
     mu_reg = NetworkRegularizer([feature_group_edgelist]; observed=model_features,
                                                           weight=lambda_Y)
-    
+    layer_reg = BMFLayerReg(logsigma_reg, mu_reg) 
+
     # Construct a regularizer for X
     sample_edgelist = create_group_edgelist(sample_ids, sample_conditions)
     X_reg = NetworkRegularizer(fill(sample_edgelist, K); observed=sample_ids,
@@ -116,8 +117,7 @@ function assemble_model(pathway_sif_data,
                               sample_batch_ids, 
                               feature_losses;
                               X_reg=X_reg, Y_reg=Y_reg, 
-                              logsigma_reg=logsigma_reg, 
-                              mu_reg=mu_reg)
+                              col_transform_reg=layer_reg)
 
     pathway_weights = zeros(K)
 
