@@ -21,7 +21,7 @@ function main(args)
                 :lambda_Y =>0.0,
                 :lr => 0.07,
                 :capacity => Int(1e8),
-                :verbose => true
+                :verbosity => 1
                )
     if length(args) > 3
         parse_opts!(opts, args[4:end])
@@ -59,8 +59,6 @@ function main(args)
                            lambda_Y=lambda_Y)
 
     # Move to GPU
-    model = gpu(model)
-    omic_data = gpu(omic_data)
 
     start_time = time()
     ScikitLearnBase.fit!(model, omic_data; opts...)
@@ -70,7 +68,6 @@ function main(args)
     println(end_time - start_time)
 
     # Move model back to CPU; save to disk
-    model = cpu(model)
     PathwayMultiomics.save_model(string(out_name, ".bson"), model)
     save_params_hdf(string(out_name, ".hdf"), model)
 
