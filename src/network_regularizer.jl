@@ -1,8 +1,6 @@
 
-import Flux: trainable
 import Base: ==
 
-export BMFLayerReg
 
 ##########################################################
 # Network regularizer
@@ -25,8 +23,7 @@ mutable struct NetworkRegularizer{K}
 end
 
 @functor NetworkRegularizer
-
-trainable(nr::NetworkRegularizer) = (B_matrix=nr.B_matrix, )
+Flux.trainable(nr::NetworkRegularizer) = (B_matrix=nr.B_matrix, )
 
 function NetworkRegularizer(edgelists; observed=nothing,
                                        weight=1.0)
@@ -195,8 +192,7 @@ mutable struct NetworkL1Regularizer{K}
 end
 
 @functor NetworkL1Regularizer
-
-trainable(nr::NetworkL1Regularizer) = (net_virtual=nr.net_virtual,)
+Flux.trainable(nr::NetworkL1Regularizer) = (net_virtual=nr.net_virtual,)
 
 
 function NetworkL1Regularizer(data_features, network_edgelists;
@@ -397,14 +393,14 @@ end
 # Now define a combined regularizer functor 
 ###########################################
 
-mutable struct BMFLayerReg
+mutable struct PMLayerReg
     cscale_reg::NetworkRegularizer
     cshift_reg::NetworkRegularizer
 end
 
-@functor BMFLayerReg
+@functor PMLayerReg
 
-function (reg::BMFLayerReg)(layers::BMF.BatchMatFacLayers)
+function (reg::PMLayerReg)(layers::PMLayers)
     return (reg.cscale_reg(layers.cscale.logsigma) 
             + reg.cshift_reg(layers.cshift.mu))
 end

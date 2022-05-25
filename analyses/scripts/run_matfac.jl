@@ -58,6 +58,9 @@ function main(args)
                            lambda_X=lambda_X, 
                            lambda_Y=lambda_Y)
 
+    # Move to GPU
+    model = gpu(model)
+    omic_data = gpu(omic_data)
 
     start_time = time()
     ScikitLearnBase.fit!(model, omic_data; opts...)
@@ -66,6 +69,8 @@ function main(args)
     println("ELAPSED TIME (s):")
     println(end_time - start_time)
 
+    # Move model back to CPU; save to disk
+    model = cpu(model)
     PathwayMultiomics.save_model(string(out_name, ".bson"), model)
     save_params_hdf(string(out_name, ".hdf"), model)
 

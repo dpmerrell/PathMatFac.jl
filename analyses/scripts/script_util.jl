@@ -1,8 +1,7 @@
 
-using HDF5, StatsBase, BatchMatFac
+using HDF5, StatsBase, PathwayMultiomics
 
-
-BMF = BatchMatFac
+PM = PathwayMultiomics
 
 function get_omic_feature_genes(omic_hdf)
 
@@ -137,7 +136,7 @@ nanmean_and_var(x) = mean_and_var(filter(!isnan, x))
 # Save HDF
 ####################################
 
-function Base.write(f::HDF5.File, path::AbstractString, obj::Union{BMF.BatchArray, Tuple, UnitRange})
+function Base.write(f::HDF5.File, path::AbstractString, obj::Union{PM.BatchArray, Tuple, UnitRange})
     for pname in propertynames(obj)
         x = getproperty(obj,pname)
         write(f, string(path, "/", pname), x)
@@ -148,21 +147,21 @@ end
 function save_params_hdf(hdf_filename, model::MultiomicModel)
 
     h5open(hdf_filename, "w") do f
-        write(f, "X", model.matfac.mp.X)
+        write(f, "X", model.matfac.X)
         write(f, "sample_ids", model.sample_ids)
         write(f, "sample_conditions", model.sample_conditions)
 
-        write(f, "Y", model.matfac.mp.Y)
+        write(f, "Y", model.matfac.Y)
         write(f, "data_genes", model.data_genes)
         write(f, "data_assays", model.data_assays)
         write(f, "used_feature_idx", model.used_feature_idx)
 
         write(f, "pathway_names", model.pathway_names)
 
-        write(f, "mu", model.matfac.cshift.mu)
-        write(f, "logsigma", model.matfac.cscale.logsigma)
-        write(f, "theta", model.matfac.bshift.theta)
-        write(f, "logdelta", model.matfac.bscale.logdelta)
+        write(f, "mu", model.matfac.col_transform.cshift.mu)
+        write(f, "logsigma", model.matfac.col_transform.cscale.logsigma)
+        write(f, "theta", model.matfac.col_transform.bshift.theta)
+        write(f, "logdelta", model.matfac.col_transform.bscale.logdelta)
     end
 
 end

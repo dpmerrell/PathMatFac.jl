@@ -1,10 +1,8 @@
 
 
-using Test, PathwayMultiomics, SparseArrays, LinearAlgebra, ScikitLearnBase
-
+using Test, PathwayMultiomics, SparseArrays, LinearAlgebra, ScikitLearnBase, Zygote, Flux
 
 PM = PathwayMultiomics
-
 
 function util_tests()
 
@@ -17,6 +15,30 @@ function util_tests()
 
     @testset "Utility functions" begin
 
+        @test PM.is_contiguous([2,2,2,1,1,4,4,4])
+        @test PM.is_contiguous(["cat","cat","dog","dog","fish"])
+        @test !PM.is_contiguous([1,1,5,5,1,3,3,3])
+
+        @test PM.ids_to_ranges([2,2,2,1,1,4,4,4]) == [1:3, 4:5, 6:8]
+        my_ranges = PM.ids_to_ranges(["cat","cat","dog","dog","fish"])
+        @test my_ranges == [1:2,3:4,5:5]
+
+        @test PM.subset_ranges(my_ranges, 2:5) == ([2:2,3:4,5:5], 1, 3)
+
+        my_ind_mat = PM.ids_to_ind_mat([1,1,1,2,2,1,2,3,3,1,2,3,3])
+        @test my_ind_mat == Bool[1 0 0;
+                                 1 0 0;
+                                 1 0 0;
+                                 0 1 0;
+                                 0 1 0;
+                                 1 0 0;
+                                 0 1 0;
+                                 0 0 1;
+                                 0 0 1;
+                                 1 0 0;
+                                 0 1 0;
+                                 0 0 1;
+                                 0 0 1] 
         # value_to_index
         vti = PM.value_to_idx(values)
         @test (vti["cat"] == 1) & (vti["dog"] == 2) & (vti["fish"] == 3) & (vti["bird"] == 4)
@@ -73,6 +95,183 @@ function util_tests()
         pruned = PM.prune_leaves!(leafy_el, except=["f"])
         correct_pruned = vcat(edgelist, [["c","f",1]])
         @test Set([Set(edge) for edge in pruned]) == Set([Set(edge) for edge in correct_pruned])
+
+    end
+end
+
+
+function batch_array_tests()
+    
+    @testset "Batch Arrays" begin
+
+        col_batches = ["cat", "cat", "cat", "dog", "dog", "fish"]
+        row_batches = [[1,1,1,2,2], [1,1,2,2,2], [1,1,1,1,2]]
+        values = [Dict(1=>3.14, 2=>2.7), Dict(1=>0.0, 2=>0.5), Dict(1=>-1.0, 2=>1.0)]
+        A = zeros(5,6)
+
+        ##############################
+        # Constructor
+        ba = PM.BatchArray(col_batches, row_batches, values)
+        @test ba.col_ranges == (1:3, 4:5, 6:6)
+        test_row_batches = (Bool[1 0; 1 0; 1 0; 0 1; 0 1],
+                            Bool[1 0; 1 0; 0 1; 0 1; 0 1],
+                            Bool[1 0; 1 0; 1 0; 1 0; 0 1])
+        @test ba.row_batches == test_row_batches 
+        @test ba.values == ([3.14, 2.7], [0.0, 0.5], [-1.0, 1.0])
+
+        ##############################
+        # View
+        ba_view = view(ba, 2:4, 2:5)
+        @test ba_view.col_ranges == (1:2, 3:4)
+        @test ba_view.row_batches == test_row_batches[1:2]
+        @test ba_view.row_idx == ba.row_idx[2:4]
+        @test ba_view.values == ([3.14, 2.7],[0.0,0.5])
+
+        ###############################
+        # zero
+        ba_zero = zero(ba)
+        @test ba_zero.col_ranges == ba.col_ranges
+        @test ba_zero.row_batches == ba.row_batches
+        @test ba_zero.values == ([0.0, 0.0], [0.0, 0.0], [0.0, 0.0])
+
+        ###############################
+        # Addition
+        Z = A + ba
+        test_mat = [3.14 3.14 3.14 0.0 0.0 -1.0;
+                    3.14 3.14 3.14 0.0 0.0 -1.0;
+                    3.14 3.14 3.14 0.5 0.5 -1.0;
+                    2.7  2.7  2.7  0.5 0.5 -1.0;
+                    2.7  2.7  2.7  0.5 0.5  1.0]
+        @test Z == test_mat
+        (A_grad, ba_grad) = Zygote.gradient((x,y)->sum(x+y), A, ba)
+        @test A_grad == ones(size(A)...)
+        @test ba_grad.values == ([9., 6.], [4., 6.], [4., 1.])
+
+        ################################
+        # Multiplication
+        Z = ones(5,6) * ba
+        @test Z == test_mat
+        (A_grad, ba_grad) = Zygote.gradient((x,y)->sum(x*y), ones(5,6), ba)
+        @test A_grad == Z
+        @test ba_grad.values == ([9.0, 6.0],[4.0, 6.0],[4.0, 1.0])
+
+        ################################
+        # Exponentiation
+        ba_exp = exp(ba)
+        @test (ones(5,6) * ba_exp) == exp.(test_mat)
+        (ba_grad,) = Zygote.gradient(x->sum(ones(5,6) * exp(x)), ba)
+        @test ba_grad.values == ([9. * exp(3.14), 6. * exp(2.7)],
+                                 [4. * exp(0.0), 6. * exp(0.5)],
+                                 [4. * exp(-1.0), 1. * exp(1.0)])
+
+        #################################
+        # GPU
+        ba_d = gpu(ba)
+        @test ba.values == ([3.14, 2.7], [0.0, 0.5], [-1.0, 1.0])
+       
+        # view
+        ba_d_view = view(ba_d, 2:4, 2:5)
+        @test ba_d_view.col_ranges == (1:2, 3:4)
+        @test ba_d_view.row_batches == ba_d.row_batches[1:2]
+        @test ba_d_view.row_idx == ba_d.row_idx[2:4]
+        @test ba_d_view.values == (gpu([3.14, 2.7]),gpu([0.0,0.5]))
+
+        # zero 
+        ba_d_zero = zero(ba_d)
+        @test ba_d_zero.col_ranges == ba_d.col_ranges
+        @test ba_d_zero.row_batches == ba_d.row_batches
+        @test ba_d_zero.values == map(gpu, ([0.0, 0.0], [0.0, 0.0], [0.0, 0.0]))
+
+        # addition
+        A_d = gpu(A)
+        Z_d = A_d + ba_d
+        test_mat_d = gpu(test_mat)
+        @test Z_d == test_mat_d
+        (A_grad, ba_grad) = Zygote.gradient((x,y)->sum(x+y), A_d, ba_d)
+        @test A_grad == gpu(ones(size(A)...))
+        @test ba_grad.values == map(gpu, ([9., 6.], [4., 6.], [4., 1.]))
+
+        # multiplication
+        Z_d = gpu(ones(5,6)) * ba_d
+        @test Z_d == test_mat_d
+        (A_grad, ba_grad) = Zygote.gradient((x,y)->sum(x*y), gpu(ones(5,6)), ba_d)
+        @test A_grad == Z_d
+        @test ba_grad.values == map(gpu, ([9.0, 6.0],[4.0, 6.0],[4.0, 1.0]))
+
+        # exponentiation
+        ba_d_exp = exp(ba_d)
+        @test isapprox((gpu(ones(5,6)) * ba_d_exp), exp.(test_mat_d))
+        (ba_grad,) = Zygote.gradient(x->sum(gpu(ones(5,6)) * exp(x)), ba_d)
+        @test all(map(isapprox, ba_grad.values, map(gpu, ([9. * exp(3.14), 6. * exp(2.7)],
+                                                          [4. * exp(0.0), 6. * exp(0.5)],
+                                                          [4. * exp(-1.0), 1. * exp(1.0)]))))
+
+
+    end
+end
+
+function layers_tests()
+
+    @testset "Layers" begin
+
+        M = 20
+        N = 30
+        K = 4
+
+        view_N = 10
+
+        n_col_batches = 2
+        n_row_batches = 4
+
+        X = randn(K,M)
+        Y = randn(K,N)
+        xy = transpose(X)*Y
+
+        X_view = view(X,:,1:M)
+        Y_view = view(Y,:,1:view_N)
+        view_xy = transpose(X_view)*Y_view
+        
+        ###################################
+        # Column Scale
+        cscale = PM.ColScale(N)
+        @test size(cscale.logsigma) == (N,)
+        @test cscale(xy) == xy .* transpose(exp.(cscale.logsigma))
+        
+        cscale_view = view(cscale, 1:M, 1:view_N)
+        @test cscale_view(view_xy) == view_xy .* transpose(exp.(cscale.logsigma[1:view_N]))
+
+        ###################################
+        # Column Shift
+        cshift = PM.ColShift(N)
+        @test size(cshift.mu) == (N,)
+        @test cshift(xy) == xy .+ transpose(cshift.mu)
+        
+        cshift_view = view(cshift, 1:M, 1:view_N)
+        @test cshift_view(view_xy) == view_xy .+ transpose(cshift.mu[1:view_N])
+
+        ##################################
+        # Batch Scale
+        col_batches = repeat([string("colbatch",i) for i=1:n_col_batches], inner=div(N,n_col_batches))
+        row_batches = [repeat([string("rowbatch",i) for i=1:n_row_batches], inner=div(M,n_row_batches)) for j=1:n_col_batches]
+        bscale = PM.BatchScale(col_batches, row_batches)
+        @test length(bscale.logdelta.values) == n_col_batches
+        @test size(bscale.logdelta.values[1]) == (n_row_batches,)
+        @test bscale(xy)[1:div(M,n_row_batches),1:div(N,n_col_batches)] == xy[1:div(M,n_row_batches),1:div(N,n_col_batches)] .* exp(bscale.logdelta.values[1][1])
+
+        bscale_grads = Zygote.gradient((f,x)->sum(f(x)), bscale, xy)
+        @test isapprox(bscale_grads[1].logdelta.values[end][end], sum(xy[16:20,16:30].*exp(bscale.logdelta.values[end][end])))
+        @test bscale_grads[2] == zeros(M,N) + exp(bscale.logdelta)
+
+        ##################################
+        # Batch Shift
+        bshift = PM.BatchShift(col_batches, row_batches)
+        @test length(bshift.theta.values) == n_col_batches
+        @test size(bshift.theta.values[1]) == (n_row_batches,)
+        @test bshift(xy)[1:div(M,n_row_batches),1:div(N,n_col_batches)] == xy[1:div(M,n_row_batches),1:div(N,n_col_batches)] .+ bshift.theta.values[1][1]
+
+        bshift_grads = Zygote.gradient((f,x)->sum(f(x)), bshift, xy)
+        @test bshift_grads[1].theta.values == Tuple(ones(n_row_batches).*(div(M,n_row_batches)*div(N,n_col_batches)) for j=1:n_col_batches)
+        @test bshift_grads[2] == ones(M,N)
 
     end
 end
@@ -402,7 +601,7 @@ function fit_tests()
                                feature_genes, feature_assays,
                                sample_batch_dict)
 
-        fit!(model, omic_data; verbose=true, lr=0.07, max_epochs=10)
+        fit!(model, omic_data; verbosity=1, lr=0.07, max_epochs=10)
 
         @test true
     end
@@ -433,7 +632,6 @@ function model_io_tests()
     test_bson_path = "test_model.bson"
 
     @testset "Model IO" begin
-
 
         model = MultiomicModel([test_sif_path, test_sif_path, test_sif_path],  
                                [string(test_pwy_name,"_",i) for i=1:3],
@@ -506,6 +704,8 @@ end
 function main()
 
     util_tests()
+    batch_array_tests()
+    layers_tests()
     preprocess_tests()
     network_reg_tests()
     assemble_model_tests()

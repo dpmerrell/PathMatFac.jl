@@ -6,7 +6,7 @@ import Base: ==
 mutable struct MultiomicModel
 
     # Matrix factorization model
-    matfac::BatchMatFacModel
+    matfac::MatFacModel
 
     # Information about data samples
     sample_ids::Vector{String}
@@ -50,12 +50,22 @@ function MultiomicModel(pathway_sif_data,
 end
 
 PMTypes = Union{MultiomicModel,NetworkRegularizer,NetworkL1Regularizer,
-                BMFLayerReg}
+                PMLayers,PMLayerReg,ColScale,ColShift,BatchScale,BatchShift,
+                BatchArray}
+
+NoEqTypes = Function
 
 function Base.:(==)(a::T, b::T) where T <: PMTypes
     for fn in fieldnames(T)
-        if !(getfield(a, fn) == getfield(b, fn))
-            return false
+        af = getfield(a, fn)
+        bf = getfield(b, fn)
+        if !(af == bf)
+            if !((typeof(af) <: NoEqTypes) & (typeof(bf) <: NoEqTypes))
+                println(string("(PM) NOT EQUAL: ", fn))
+                println(af)
+                println(bf)
+                return false
+            end
         end
     end
     return true

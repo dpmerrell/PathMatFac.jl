@@ -98,26 +98,27 @@ function assemble_model(pathway_sif_data,
                                  net_weight=lambda_Y, l1_weight=lambda_Y,
                                  l1_features=nonpwy_features)
 
-    # Construct regularizers for sigma and mu
+    # Construct the column layers
+    col_layers = PMLayers(model_assays, sample_batch_ids) 
+
+    # Construct a regularizer for the column layers
     feature_group_edgelist = create_group_edgelist(model_features, model_assays)
     logsigma_reg = NetworkRegularizer([feature_group_edgelist]; observed=model_features,
                                                                 weight=lambda_Y)
     mu_reg = NetworkRegularizer([feature_group_edgelist]; observed=model_features,
                                                           weight=lambda_Y)
-    layer_reg = BMFLayerReg(logsigma_reg, mu_reg) 
+    layer_reg = PMLayerReg(logsigma_reg, mu_reg) 
 
     # Construct a regularizer for X
     sample_edgelist = create_group_edgelist(sample_ids, sample_conditions)
     X_reg = NetworkRegularizer(fill(sample_edgelist, K); observed=sample_ids,
                                                          weight=lambda_X)
     
-
     # Construct MatFacModel
-    matfac = BatchMatFacModel(M, N, K, model_assays, 
-                              sample_batch_ids, 
-                              feature_losses;
-                              X_reg=X_reg, Y_reg=Y_reg, 
-                              col_transform_reg=layer_reg)
+    matfac = MatFacModel(M, N, K, feature_losses;
+                         col_transform=col_layers,
+                         X_reg=X_reg, Y_reg=Y_reg, 
+                         col_transform_reg=layer_reg)
 
     pathway_weights = zeros(K)
 

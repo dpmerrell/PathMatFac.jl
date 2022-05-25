@@ -55,12 +55,6 @@ version = "0.3.5"
 [[Base64]]
 uuid = "2a0f44e3-6c83-55bd-87e4-b1978d98bd5f"
 
-[[BatchMatFac]]
-deps = ["Arpack", "ArrayInterface", "BSON", "CUDA", "ChainRules", "ChainRulesCore", "Distributions", "FillArrays", "Flux", "Functors", "ScikitLearnBase", "SparseArrays", "Zygote"]
-path = "../BatchMatFac"
-uuid = "23734cf9-4c0e-45d4-b5ff-f416ac13e898"
-version = "0.1.0"
-
 [[BenchmarkTools]]
 deps = ["JSON", "Logging", "Printf", "Profile", "Statistics", "UUIDs"]
 git-tree-sha1 = "4c10eee4af024676200bc7752e536f858c6b8f93"
@@ -494,6 +488,12 @@ version = "0.5.9"
 deps = ["Base64"]
 uuid = "d6f4376e-aef5-505a-96c1-9c027394607a"
 
+[[MatFac]]
+deps = ["BSON", "CUDA", "ChainRules", "ChainRulesCore", "Flux", "Functors", "ScikitLearnBase", "SparseArrays", "Zygote"]
+path = "../MatFac"
+uuid = "23734cf9-4c0e-45d4-b5ff-f416ac13e898"
+version = "0.1.0"
+
 [[MathOptInterface]]
 deps = ["BenchmarkTools", "CodecBzip2", "CodecZlib", "JSON", "JSONSchema", "LinearAlgebra", "MutableArithmetics", "OrderedCollections", "SparseArrays", "Test", "Unicode"]
 git-tree-sha1 = "575644e3c05b258250bb599e57cf73bbf1062901"
@@ -897,10 +897,10 @@ uuid = "3161d3a3-bdf6-5164-811a-617609db77b4"
 version = "1.5.2+0"
 
 [[Zygote]]
-deps = ["AbstractFFTs", "ChainRules", "ChainRulesCore", "DiffRules", "Distributed", "FillArrays", "ForwardDiff", "IRTools", "InteractiveUtils", "LinearAlgebra", "MacroTools", "NaNMath", "Random", "Requires", "SpecialFunctions", "Statistics", "ZygoteRules"]
-git-tree-sha1 = "88a4d79f4e389456d5a90d79d53d1738860ef0a5"
+deps = ["AbstractFFTs", "ChainRules", "ChainRulesCore", "DiffRules", "Distributed", "FillArrays", "ForwardDiff", "IRTools", "InteractiveUtils", "LinearAlgebra", "MacroTools", "NaNMath", "Random", "Requires", "SparseArrays", "SpecialFunctions", "Statistics", "ZygoteRules"]
+git-tree-sha1 = "a49267a2e5f113c7afe93843deea7461c0f6b206"
 uuid = "e88e6eb3-aa80-5325-afca-941959d7151f"
-version = "0.6.34"
+version = "0.6.40"
 
 [[ZygoteRules]]
 deps = ["MacroTools"]
