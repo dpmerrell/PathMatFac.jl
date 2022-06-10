@@ -460,7 +460,7 @@ function network_reg_tests()
                      [[1, 3, -1.0],[2, 4, -1.0]]
                     ]
         data_features = [1,2,3,5]
-        nr = PM.NetworkL1Regularizer(data_features, edgelists)
+        nr = PM.NetworkL1Regularizer(data_features, edgelists; epsilon=0.0)
         @test length(nr.AA) == 2
         @test size(nr.AA[1]) == (4,4)
         @test dropzeros(nr.AA[1]) == sparse([1. -1. 0.  0;
@@ -479,7 +479,7 @@ function network_reg_tests()
         @test nr.l1_feat_idx[1] == [false,false,false,true] 
 
         nr = PM.NetworkL1Regularizer(data_features, edgelists; 
-                                     l1_features=[[2,5],[2,5]])
+                                     l1_features=[[2,5],[2,5]], epsilon=0.0)
         @test length(nr.AA) == 2
         @test size(nr.AA[1]) == (4,4)
         @test size(nr.AB[1]) == (4,1)
@@ -499,7 +499,7 @@ function network_reg_tests()
                 push!(pwy_nodes, edge[2])
             end
         end
-        netreg = PM.NetworkL1Regularizer(model_features, prepped_pwys)
+        netreg = PM.NetworkL1Regularizer(model_features, prepped_pwys; epsilon=0.0)
         
         n_unobs = length([node for node in pwy_nodes if node[2] == ""])
         n_obs = length(model_features)
@@ -650,6 +650,7 @@ function model_io_tests()
 
 end
 
+
 function simulation_tests()
     
     test_sif_path = "test_pathway.sif"
@@ -664,7 +665,7 @@ function simulation_tests()
                       "mrnaseq", "methylation"]
     M = 10
     m_groups = 2
-    N = 7 # (the number of features that actually occur in our pathways) 
+    N = 9 # (the number of features that actually occur in our pathways) 
 
     sample_ids = [string("patient_",i) for i=1:M]
     sample_conditions = repeat([string("group_",i) for i=1:m_groups], inner=5)
@@ -677,29 +678,19 @@ function simulation_tests()
         pathway_sif_data = repeat([test_sif_path], n_pwys)
         pathway_names = [string("test_pwy_",i) for i=1:n_pwys]
 
-        assay_moments_dict = Dict("mrnaseq"=>(5.0, 14.0),
-                                  "rppa"=>(0.0, 1.0),
-                                  "cna"=>(0.01,),
-                                  "methylation"=>(3.0,10.0),
-                                  "mutation"=>(0.001,)
-                                 )
+        D = PM.simulate_data(pathway_sif_data, 
+                             pathway_names,
+                             sample_ids, 
+                             sample_conditions,
+                             feature_genes, 
+                             feature_assays,
+                             sample_batch_dict)
 
-        model, params, D = PM.simulate_data(pathway_sif_data, 
-                                            pathway_names,
-                                            sample_ids, 
-                                            sample_conditions,
-                                            sample_batch_dict,
-                                            feature_genes, 
-                                            feature_assays,
-                                            assay_moments_dict;
-                                            mu_snr=10.0,
-                                            delta_snr=10.0,
-                                            logistic_snr=100.0,
-                                            sample_snr=10.0
-                                           )
         @test size(D) == (M,N)
+        @test all(isinteger.(D[:,[1,2,6]]))
     end
 end
+
 
 function main()
 
@@ -711,7 +702,7 @@ function main()
     assemble_model_tests()
     fit_tests()
     model_io_tests()
-    #simulation_tests()
+    simulation_tests()
 
 end
 

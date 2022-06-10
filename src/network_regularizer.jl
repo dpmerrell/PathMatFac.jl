@@ -197,7 +197,8 @@ Flux.trainable(nr::NetworkL1Regularizer) = (net_virtual=nr.net_virtual,)
 
 function NetworkL1Regularizer(data_features, network_edgelists;
                               net_weight=1.0, l1_weight=1.0,
-                              l1_features=nothing)
+                              l1_features=nothing,
+                              epsilon=1.0)
 
     N = length(data_features)
     K = length(network_edgelists)
@@ -230,7 +231,7 @@ function NetworkL1Regularizer(data_features, network_edgelists;
         node_to_idx = value_to_idx(all_nodes) 
 
         # Construct a sparse matrix encoding this network
-        spmat = edgelist_to_spmat(edgelist, node_to_idx)
+        spmat = edgelist_to_spmat(edgelist, node_to_idx; epsilon=epsilon)
 
         # Split this matrix into observed/unobserved blocks
         push!(AA, spmat[1:N, 1:N])
