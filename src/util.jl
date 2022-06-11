@@ -348,3 +348,21 @@ function get_all_nodes(edgelist)
 end
 
 
+function csc_to_coo(A)
+    I = zero(A.rowval)
+    J = zero(A.rowval)
+    V = zero(A.nzval)
+
+    for j=1:A.n
+        cpt = (A.colptr[j]):(A.colptr[j+1]-1)
+        J[cpt] .= j
+        I[cpt] .= A.rowval[cpt]
+        V[cpt] .= A.nzval[cpt]
+    end
+
+    return I, J, V
+end
+
+
+
+

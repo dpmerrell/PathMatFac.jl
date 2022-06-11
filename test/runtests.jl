@@ -601,9 +601,14 @@ function fit_tests()
                                feature_genes, feature_assays,
                                sample_batch_dict)
 
+        X_start = deepcopy(model.matfac.X)
+        Y_start = deepcopy(model.matfac.Y)
+
         fit!(model, omic_data; verbosity=1, lr=0.07, max_epochs=10)
 
         @test true
+        @test !isapprox(model.matfac.X, X_start)
+        @test !isapprox(model.matfac.Y, Y_start)
     end
 
 end
@@ -678,13 +683,13 @@ function simulation_tests()
         pathway_sif_data = repeat([test_sif_path], n_pwys)
         pathway_names = [string("test_pwy_",i) for i=1:n_pwys]
 
-        D = PM.simulate_data(pathway_sif_data, 
-                             pathway_names,
-                             sample_ids, 
-                             sample_conditions,
-                             feature_genes, 
-                             feature_assays,
-                             sample_batch_dict)
+        model, D = PM.simulate_data(pathway_sif_data, 
+                                    pathway_names,
+                                    sample_ids, 
+                                    sample_conditions,
+                                    feature_genes, 
+                                    feature_assays,
+                                    sample_batch_dict)
 
         @test size(D) == (M,N)
         @test all(isinteger.(D[:,[1,2,6]]))
@@ -694,14 +699,14 @@ end
 
 function main()
 
-    util_tests()
-    batch_array_tests()
-    layers_tests()
-    preprocess_tests()
-    network_reg_tests()
-    assemble_model_tests()
+    #util_tests()
+    #batch_array_tests()
+    #layers_tests()
+    #preprocess_tests()
+    #network_reg_tests()
+    #assemble_model_tests()
     fit_tests()
-    model_io_tests()
+    #model_io_tests()
     simulation_tests()
 
 end

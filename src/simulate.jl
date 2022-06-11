@@ -1,5 +1,4 @@
 
-using SparseArrays
 
 #######################################################
 # Sampling data for different noise models
@@ -75,18 +74,36 @@ function sample_normal(precision_matrix::AbstractMatrix)
     N = size(precision_matrix,1)
     z = randn(N)
 
-    x = precision_matrix \ z
+    fac = cholesky(precision_matrix)
+    x = fac.UP \ z
     return x
 end
 
 
-function simulate_Y!(model::MultiomicModel; average_non_pwy=5.0)
+function construct_precision(AA, AB, BB)
+    AA_I, AA_J, AA_V = csc_to_coo(AA)
+    AB_I, AB_J, AB_V = csc_to_coo(AB)
+    BB_I, BB_J, BB_V = csc_to_coo(BB)
+
+    N = AA.m
+
+    I = vcat(AA_I, AB_I, AB_J.+N, BB_I.+N)
+    J = vcat(AA_J, AB_J.+N, AB_I, BB_J.+N)
+    V = vcat(AA_V, AB_V, AB_V, BB_V)
+
+    N += BB.m
+
+    return sparse(I, J, V, N, N)
+end
+
+
+
+function simulate_Y!(model::MultiomicModel; average_non_pwy=10.0)
 
     K, N = size(model.matfac.Y)
 
     Y = zeros(K,N)
     for k=1:K
-
         # Unpack the regularizer for this row of Y
         netreg = model.matfac.Y_reg
         AA = netreg.AA[k]
@@ -98,20 +115,23 @@ function simulate_Y!(model::MultiomicModel; average_non_pwy=5.0)
         N_total = N + N_virtual
 
         # Construct the precision matrix
-        precision = spzeros(N_total, N_total)
-        precision[1:N,1:N] .= AA
-        precision[1:N, N+1:N_total] .= AB
-        precision[N+1:N_total, 1:N] .= transpose(AB)
-        precision[N+1:N_total, N+1:N_total] .= BB
+        precision = construct_precision(AA, AB, BB)
 
         # Sample from the MVN defined by the precision matrix
         y = sample_normal(precision)
         y = y[1:N]
 
         # Set most of the non-pathway members to zeros
-        n_non_pwy = sum(non_pwy_idx)
-        p_non_pwy = average_non_pwy/n_non_pwy
-        to_flip = (rand(N) .<= p_non_pwy)
+        non_pwy_genes = unique(model.data_genes[non_pwy_idx])
+        n_non_pwy = length(non_pwy_genes)
+        p_flip = average_non_pwy/n_non_pwy
+        flip_gene_idx = (rand(n_non_pwy) .<= p_flip)
+        flip_genes = non_pwy_genes[flip_gene_idx]
+        to_flip = zeros(Bool, N)
+        for fg in flip_genes
+            to_flip[model.data_genes .== fg] .= true 
+        end
+
         mask = (!).(non_pwy_idx) .| to_flip
         y .*= mask
 
@@ -142,7 +162,6 @@ function simulate_batch_params!(model::MultiomicModel; std=0.01)
     theta_v = model.matfac.col_transform.bshift.theta.values
 
     for i=1:length(logdelta_v)
-
         M_batch = length(logdelta_v[i])
         logdelta_v[i] .= randn(M_batch).*std
         theta_v[i] .= randn(M_batch).*std
@@ -161,26 +180,34 @@ function simulate_data(pathway_sif_data, pathway_names,
                        sample_batch_dict) 
 
     # Construct the model object
+    println("Constructing model...")
     model = MultiomicModel(pathway_sif_data, pathway_names,
                            sample_ids, sample_conditions,
                            data_genes, data_assays,
                            sample_batch_dict) 
 
     # Generate the model parameters
+    println("Simulating X...")
     simulate_X!(model)
+    println("Simulating Y...")
     simulate_Y!(model)
+    println("Simulating sigma, mu...")
     simulate_col_params!(model)
+    println("Simulating delta, theta...")
     simulate_batch_params!(model)
 
     # Run the model in forward mode
+    println("Running the model in forward mode...")
     Z = model.matfac()
 
     # Sample random values
+    println("Sampling random values...")
     Z = sample(model.matfac.noise_model, Z)
 
     # Rearrange the columns so they match the original data's ordering
+    println("Rearranging columns...")
     Z[:, model.used_feature_idx] .= Z
-    return Z
+    return model, Z
 end
 
 

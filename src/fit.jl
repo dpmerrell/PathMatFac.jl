@@ -37,13 +37,13 @@ function fit!(model::MultiomicModel, D::AbstractMatrix; kwargs...)
     # First set some model parameters to the right ball-park
     initialize_params!(model, D)
 
-    model = gpu(model)
+    matfac_d = gpu(model.matfac)
     D = gpu(D)
     println("Fitting model to data...")
-    fit!(model.matfac, D; kwargs...)
+    fit!(matfac_d, D; kwargs...)
     
     D = nothing
-    model = cpu(model)
+    model.matfac = cpu(matfac_d)
 
     return model
 end
