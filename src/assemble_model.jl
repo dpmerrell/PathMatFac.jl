@@ -52,6 +52,7 @@ function assemble_model(pathway_sif_data,
                         sample_batch_dict,
                         data_features,
                         lambda_X, lambda_Y;
+                        lambda_layer=0.1,
                         model_features=nothing,
                         dogma_features=nothing)
 
@@ -104,9 +105,9 @@ function assemble_model(pathway_sif_data,
     # Construct a regularizer for the column layers
     feature_group_edgelist = create_group_edgelist(model_features, model_assays)
     logsigma_reg = NetworkRegularizer([feature_group_edgelist]; observed=model_features,
-                                                                weight=lambda_Y)
+                                                                weight=lambda_layer)
     mu_reg = NetworkRegularizer([feature_group_edgelist]; observed=model_features,
-                                                          weight=lambda_Y)
+                                                          weight=lambda_layer)
     layer_reg = PMLayerReg(logsigma_reg, mu_reg) 
 
     # Construct a regularizer for X

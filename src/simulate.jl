@@ -135,6 +135,13 @@ function simulate_Y!(model::MultiomicModel; average_non_pwy=10.0)
         mask = (!).(non_pwy_idx) .| to_flip
         y .*= mask
 
+        # Choose the sign that maximizes the number
+        # of pathway members with positive components.
+        # Reverse the sign if necessary.
+        if dot((!).(non_pwy_idx), sign.(y)) < 0
+            y .*= -1
+        end
+
         Y[k,:] = y
 
     end
@@ -143,15 +150,38 @@ function simulate_Y!(model::MultiomicModel; average_non_pwy=10.0)
 
 end
 
+ASSAY_MU = Dict("mrnaseq" => 7.468,
+                "cna" => 0.0,
+                "mutation" => 0.0,
+                "methylation" => 0.0,
+                "rppa" => 0.0)
 
-function simulate_col_params!(model::MultiomicModel; std=0.01)
+ASSAY_SIGMA = Dict("mrnaseq" => 2.0,
+                   "cna" => 1.0,
+                   "mutation" => 1.0,
+                   "methylation" => 1.0,
+                   "rppa" => 1.0)
+
+
+function simulate_col_params!(model::MultiomicModel, data_assays; std=0.01)
 
     # TODO: Allow assays to determine these parameters
 
-    N = length(model.matfac.col_transform.cscale.logsigma)
 
-    model.matfac.col_transform.cscale.logsigma = randn(N).*std
-    model.matfac.col_transform.cshift.mu = randn(N).*std
+    N = length(model.matfac.col_transform.cscale.logsigma)
+    lsig = zeros(N)
+    mu = zeros(N)
+
+    unq_assays = unique(data_assays)
+    for a in unq_assays
+        rel_idx = (data_assays .== a)
+        N_a = sum(rel_idx)
+        lsig[rel_idx] .= log(ASSAY_SIGMA[a]) .+ randn(N_a).*std
+        mu[rel_idx] .= ASSAY_MU[a] .+ randn(N_a).*std
+    end
+
+    model.matfac.col_transform.cscale.logsigma = lsig
+    model.matfac.col_transform.cshift.mu = mu
 
 end
 
@@ -192,7 +222,7 @@ function simulate_data(pathway_sif_data, pathway_names,
     println("Simulating Y...")
     simulate_Y!(model)
     println("Simulating sigma, mu...")
-    simulate_col_params!(model)
+    simulate_col_params!(model, data_assays)
     println("Simulating delta, theta...")
     simulate_batch_params!(model)
 

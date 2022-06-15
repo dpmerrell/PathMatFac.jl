@@ -27,6 +27,26 @@ function initialize_params!(model::MultiomicModel, D::AbstractMatrix;
 end
 
 
+function postprocess!(fitted_model)
+
+    # Remove sign ambiguity from factorization:
+    # choose the sign that maximizes the number
+    # of pathway members with positive Y-components.
+    non_pwy_idx = fitted_model.matfac.Y_reg.l1_feat_idx
+    K = size(fitted_model.matfac.X,1)
+
+    for k=1:K
+        pwy_idx = (!).(non_pwy_idx[k])
+
+        if dot(pwy_idx, sign.(Y[k,:])) < 0
+            fitted_model.matfac.Y[k,:] .*= -1
+            fitted_model.matfac.X[k,:] .*= -1
+        end
+    end
+
+end
+
+
 function fit!(model::MultiomicModel, D::AbstractMatrix; kwargs...)
 
     # Permute the data columns to match the model's
@@ -37,13 +57,17 @@ function fit!(model::MultiomicModel, D::AbstractMatrix; kwargs...)
     # First set some model parameters to the right ball-park
     initialize_params!(model, D)
 
+    # Move model and data to GPU (if one exists); 
+    # train the model; and then move back to CPU
     matfac_d = gpu(model.matfac)
     D = gpu(D)
     println("Fitting model to data...")
     fit!(matfac_d, D; kwargs...)
-    
     D = nothing
     model.matfac = cpu(matfac_d)
+
+    # Postprocess the model 
+    postprocess!(model)
 
     return model
 end

@@ -51,7 +51,7 @@ function NetworkRegularizer(edgelists; observed=nothing,
     allnodes_sorted = vcat(observed, unobserved)
 
     node_to_idx = value_to_idx(allnodes_sorted) 
-    spmats = edgelists_to_spmats(edgelists, node_to_idx; epsilon=1.0)
+    spmats = edgelists_to_spmats(edgelists, node_to_idx; epsilon=0.0)
 
     # Rescale the sparse matrices with the 
     # regularization weight

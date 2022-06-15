@@ -107,8 +107,6 @@ def load_features(param_hdf):
 
 def load_feature_factors(param_hdf):
     factors = load_hdf(param_hdf, "Y")
-    feature_idx = load_hdf(param_hdf, "used_feature_idx", dtype=int)
-    feature_idx -= 1 # convert from Julia to Python indexing!
     return factors
 
 
@@ -156,14 +154,5 @@ def omic_feature_losses(feature_ids):
     return [feature_to_loss(feat) for feat in feature_ids]
 
 
-def parse_arg_str(arg_str):
-
-    kv_strs = arg_str.split("_")
-    kvs = [kv.split(":") for kv in kv_strs]
-    keys = [kv[0] for kv in kvs]
-    val_lists = [kv[1].split(",") for kv in kvs]
-
-    return dict(zip(keys, val_lists))
-    
 
 
