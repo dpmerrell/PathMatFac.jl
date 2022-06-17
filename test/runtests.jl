@@ -11,7 +11,7 @@ function util_tests()
     b_values = ["dog","bird","cat"]
 
     feature_list = [ ("GENE1","mrnaseq"), ("GENE2","methylation"), 
-                     ("GENE3","cna"), ("GENE4", "mutation"), ("VIRTUAL1", "")]
+                     ("GENE3","cna"), ("GENE4", "mutation"), ("VIRTUAL1", "activation")]
 
     @testset "Utility functions" begin
 
@@ -58,7 +58,7 @@ function util_tests()
         # sort_features
         @test PM.sort_features(feature_list) == [("GENE1", "mrnaseq"),("GENE2","methylation"), 
                                                  ("GENE4", "mutation"), ("GENE3","cna"), 
-                                                 ("VIRTUAL1", "")
+                                                 ("VIRTUAL1", "activation")
                                                  ]
 
         # nansum
@@ -281,24 +281,24 @@ function preprocess_tests()
 
     test_sif_path = "test_pathway.sif"
 
-    test_sif_contents = [["MOL:GTP",   "hca>", "GRASP65/GM130/RAB1/GTP/PLK1"],
-                         ["METAPHASE", "bpa>", "PLK1"],
-                         ["PAK1",      "ppa>", "PLK1"],
-                         ["RAB1A",     "pca>", "GRASP65/GM130/RAB1/GTP/PLK1"],
-                         ["PLK1",      "ppa>", "SGOL1"],
-                         ["PLK1",      "pca>", "GRASP65/GM130/RAB1/GTP/PLK1"],
-                         ["PP2A-ALPHA B56", "cpa|", "SGOL1"]
+    test_sif_contents = [["MOL:GTP",   "a>", "GRASP65/GM130/RAB1/GTP/PLK1"],
+                         ["METAPHASE", "a>", "PLK1"],
+                         ["PAK1",      "a>", "PLK1"],
+                         ["RAB1A",     "a>", "GRASP65/GM130/RAB1/GTP/PLK1"],
+                         ["PLK1",      "a>", "SGOL1"],
+                         ["PLK1",      "a>", "GRASP65/GM130/RAB1/GTP/PLK1"],
+                         ["PP2A-ALPHA B56", "a|", "SGOL1"]
                         ]
 
-    test_pwy_edges = [["MOL:GTP_chemical", "GRASP65/GM130/RAB1/GTP/PLK1_compound", 1],
-                      ["METAPHASE_abstract", "PLK1_activation", 1],
-                      ["PAK1_activation", "PLK1_activation", 1],
-                      ["RAB1A_activation", "GRASP65/GM130/RAB1/GTP/PLK1_compound", 1],
-                      ["PLK1_activation", "SGOL1_activation", 1],
-                      ["PLK1_activation", "GRASP65/GM130/RAB1/GTP/PLK1_compound", 1],
-                      ["PP2A-ALPHA B56_compound", "SGOL1_activation", -1]
+    test_pwy_edges = [["MOL:GTP", "GRASP65/GM130/RAB1/GTP/PLK1", 1],
+                      ["METAPHASE", "PLK1", 1],
+                      ["PAK1", "PLK1", 1],
+                      ["RAB1A", "GRASP65/GM130/RAB1/GTP/PLK1", 1],
+                      ["PLK1", "SGOL1", 1],
+                      ["PLK1", "GRASP65/GM130/RAB1/GTP/PLK1", 1],
+                      ["PP2A-ALPHA B56", "SGOL1", -1]
                      ]
-    tuplify = edge -> [(edge[1],""),(edge[2],""),edge[3]]
+    tuplify = edge -> [(edge[1],"activation"),(edge[2],"activation"),edge[3]]
     test_pwy_edges = map(tuplify, test_pwy_edges)
         
     feature_genes = ["PLK1","PLK1","PLK1", 
@@ -309,34 +309,38 @@ function preprocess_tests()
                       "rppa", "methylation", "mutation",
                       "mrnaseq",
                       "mrnaseq", "methylation"]
+    full_geneset = Set(feature_genes)
 
-    test_dogma_edges = [["PLK1_dna", "PLK1_mrna", 1],
-                        ["PAK1_dna", "PAK1_mrna", 1],
-                        ["PAK1_mrna", "PAK1_protein", 1],
+
+    test_dogma_edges = [[("PLK1","dna"), ("PLK1","mrna"), 1],
+                        [("PAK1","dna"), ("PAK1","mrna"), 1],
+                        [("PAK1","mrna"), ("PAK1","protein"), 1],
                        ]
-    test_dogma_edges = map(tuplify, test_dogma_edges)
+    #test_dogma_edges = map(tuplify, test_dogma_edges)
 
 
-    test_data_edges = [[("PLK1_dna",""), ("PLK1","cna"), 1],
-                       [("PLK1_dna",""), ("PLK1","mutation"), -1],
-                       [("PLK1_mrna",""), ("PLK1","mrnaseq"),  1],
-                       [("PAK1_dna",""), ("PAK1","mutation"),  -1],
-                       [("PAK1_mrna",""),("PAK1","methylation"),  -1],
-                       [("PAK1_protein",""), ("PAK1","rppa"),  1],
-                       [("SGOL1_mrna",""), ("SGOL1","mrnaseq"),  1],
-                       [("BRCA_mrna",""),("BRCA","mrnaseq"),  1],
-                       [("BRCA_mrna",""),("BRCA","methylation"),  -1]
+    test_data_edges = [[("PLK1","dna"), ("PLK1","cna"), 1],
+                       [("PLK1","dna"), ("PLK1","mutation"), -1],
+                       [("PLK1","mrna"), ("PLK1","mrnaseq"),  1],
+                       [("PAK1","dna"), ("PAK1","mutation"),  -1],
+                       [("PAK1","mrna"),("PAK1","methylation"),  -1],
+                       [("PAK1","protein"), ("PAK1","rppa"),  1],
+                       [("SGOL1","mrna"), ("SGOL1","mrnaseq"),  1],
+                       [("BRCA","mrna"),("BRCA","mrnaseq"),  1],
+                       [("BRCA","mrna"),("BRCA","methylation"),  -1]
                       ]
    
     test_all_edges = vcat(test_data_edges, test_dogma_edges)
-    test_all_edges = vcat(test_all_edges, map(tuplify, [["PLK1_mrna", "PLK1_protein", 1],
-                                                        ["PLK1_protein", "PLK1_activation", 1],
-                                                        ["PAK1_protein", "PAK1_activation", 1],
-                                                        ["SGOL1_mrna", "SGOL1_protein", 1],
-                                                        ["SGOL1_protein", "SGOL1_activation", 1]
+    tuplify2 = edge -> [Tuple(split(edge[1], "_")), Tuple(split(edge[2],"_")), edge[3]]
+    test_all_edges = vcat(test_all_edges, map(tuplify2, [["PLK1_mrna", "PLK1_protein", 1],
+                                                         ["PLK1_protein", "PLK1_activation", 1],
+                                                         ["PAK1_protein", "PAK1_activation", 1],
+                                                         ["SGOL1_mrna", "SGOL1_protein", 1],
+                                                         ["SGOL1_protein", "SGOL1_activation", 1]
                                                        ]),
                           test_pwy_edges
                           )
+    test_all_edge_set = Set(map(Set, test_all_edges))
                         
 
     @testset "Prep Pathways" begin
@@ -356,28 +360,25 @@ function preprocess_tests()
 
         # construct_data_edges
         data_edges = PM.construct_data_edges(features)
-        @test Set([Set(edge) for edge in data_edges]) == Set([Set(edge) for edge in test_data_edges])
+        @test Set(map(Set, data_edges)) == Set(map(Set, test_data_edges))
         
         # connect_pwy_to_dogma
         dogma_edges = vcat(dogma_edges, data_edges)
-        all_edges = PM.connect_pwy_to_dogma(dogma_edges, el, dogmax)
+        all_edges = PM.connect_pwy_to_dogma(dogma_edges, el, dogmax, full_geneset)
         all_edge_set = Set(map(Set, all_edges))
-        test_all_edge_set = Set(map(Set, test_all_edges))
-        @test Set([Set(edge) for edge in all_edges]) == Set([Set(edge) for edge in test_all_edges])
+        @test all_edge_set == test_all_edge_set
 
         # prep pathways
         pwy_edgelists = PM.sifs_to_edgelists([sif_data])
         prepped_pwy = PM.extend_pathways(pwy_edgelists, features)[1]
         all_edge_set = Set(map(Set, prepped_pwy))
-        test_all_edge_set = Set(map(Set, test_all_edges))
-        @test Set([Set(edge) for edge in prepped_pwy]) == Set([Set(edge) for edge in test_all_edges]) 
+        @test all_edge_set == test_all_edge_set 
 
-        ## load_pathway_sifs
+        # load_pathway_sifs
         pwy_edgelists = PM.sifs_to_edgelists([test_sif_path])
         prepped_pwy = PM.extend_pathways(pwy_edgelists, features)[1]
         all_edge_set = Set(map(Set, prepped_pwy))
-        test_all_edge_set = Set(map(Set, test_all_edges))
-        @test Set([Set(edge) for edge in prepped_pwy]) == Set([Set(edge) for edge in test_all_edges]) 
+        @test all_edge_set == test_all_edge_set 
 
     end
 end
@@ -407,16 +408,16 @@ function network_reg_tests()
         nr = PM.NetworkRegularizer(edgelists; observed=observed)
         @test length(nr.AA) == 2
         @test size(nr.AA[1]) == (3,3)
-        @test nr.AA[1] == sparse([2. -1. 0.;# 0;
-                                  -1. 3. -1.;# 0;
-                                  0. -1. 3.])# 1;
+        @test nr.AA[1] == sparse([1. -1. 0.;# 0;
+                                  -1. 2. -1.;# 0;
+                                  0. -1. 2.])# 1;
                                   #0 0 1 2])
         @test size(nr.AB[1]) == (3,1)
         @test nr.AB[1] == sparse(reshape([0.;
                                           0.;
                                           -1.], (3,1)))
         @test size(nr.BB[1]) == (1,1)
-        @test nr.BB[1] == sparse(ones(1,1)*2)
+        @test nr.BB[1] == sparse(ones(1,1)*1)
         @test size(nr.B_matrix) == (2, 1)
 
 
@@ -501,7 +502,7 @@ function network_reg_tests()
         end
         netreg = PM.NetworkL1Regularizer(model_features, prepped_pwys; epsilon=0.0)
         
-        n_unobs = length([node for node in pwy_nodes if node[2] == ""])
+        n_unobs = length(setdiff(pwy_nodes, model_features))
         n_obs = length(model_features)
 
         @test length(netreg.AA) == 1
@@ -550,8 +551,6 @@ function assemble_model_tests()
                                feature_genes, feature_assays,
                                sample_batch_dict)
 
-        #@test feature_genes[model.used_feature_idx] == model.data_genes
-        #@test feature_assays[model.used_feature_idx] == model.data_assays
         @test feature_genes == model.data_genes
         @test feature_assays == model.data_assays
         @test length(model.used_feature_idx) == length(feature_genes)
@@ -703,10 +702,10 @@ function main()
     #batch_array_tests()
     #layers_tests()
     #preprocess_tests()
-    #network_reg_tests()
-    #assemble_model_tests()
+    network_reg_tests()
+    assemble_model_tests()
     fit_tests()
-    #model_io_tests()
+    model_io_tests()
     simulation_tests()
 
 end

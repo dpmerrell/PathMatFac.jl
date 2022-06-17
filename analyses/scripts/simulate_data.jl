@@ -44,7 +44,10 @@ function main(args)
     #            "logistic_snr" => 10.0,
     #            "sample_snr" => 10.0
     #           )
-    
+    opts = Dict(:Xvar => 4.0,
+                :noisevar => 0.01
+               )
+
     pwy_json = args[1]
     sample_json = args[2]
     feature_json = args[3]
@@ -52,7 +55,9 @@ function main(args)
     model_hdf = args[5]
 
     # Parse options
-    #opts = parse_opts!(opts, args[5:end])
+    opts = parse_opts!(opts, args[6:end])
+    X_var = opts[:Xvar]
+    noise_var = opts[:noisevar]
 
     # Load pathway data
     println("Loading pathway data")
@@ -80,7 +85,8 @@ function main(args)
     model, D = PM.simulate_data(pwys, pwy_names,
                                 sample_ids, sample_conditions, 
                                 feature_genes, feature_assays,
-                                sample_batch_dict) 
+                                sample_batch_dict;
+                                X_var=X_var, noise_var=noise_var) 
 
     # Write to HDF
     println("Saving data to HDF")

@@ -10,11 +10,23 @@ function sample(nm::MF.NormalNoise, Z::AbstractMatrix; std=0.1, kwargs...)
 end
 
 
-function sample(nm::MF.BernoulliNoise, Z::AbstractMatrix; xor_p=0.01, kwargs...)
-    X = rand(size(Z)...)
-    X = (X .> Z)
-    to_flip = (rand(size(Z)...) .<= xor_p)
-    X = xor.(X, to_flip)
+function sample(nm::MF.BernoulliNoise, Z::AbstractMatrix; xor_p=0.001, assay="mutation", kwargs...)
+   
+    # We don't binarize methylation data;
+    # just perturb the value, but stay in 
+    # the interval [0,1]
+    if assay == "methylation"
+        std = sqrt(xor_p)
+        X = Z .+ (randn(size(Z)...) .* std)
+        X[X .> 1.0] .= 1.0
+        X[X .< 0.0] .= 0.0
+    else
+        X = rand(size(Z)...)
+        X = (X .> Z)
+        to_flip = (rand(size(Z)...) .<= xor_p)
+        X = xor.(X, to_flip)
+    end
+
     return X
 end
 
@@ -34,11 +46,13 @@ function sample(nm::MF.OrdinalNoise, Z::AbstractMatrix; ordinal_std=0.1, kwargs.
 end
 
 
-function sample(nm::MF.CompositeNoise, Z::AbstractMatrix; std=0.1, xor_p=0.01, ordinal_std=0.1)
+function sample(nm::MF.CompositeNoise, Z::AbstractMatrix, assays; std=0.1, xor_p=0.01, ordinal_std=0.1)
 
     X = similar(Z)
     for (idx, nm) in zip(nm.col_ranges, nm.noises)
-        X[:,idx] .= sample(nm, Z[:,idx]; std=std)
+        assay = assays[idx][1]
+        X[:,idx] .= sample(nm, Z[:,idx]; std=std, ordinal_std=ordinal_std, 
+                                         xor_p=xor_p, assay=assay)
     end
 
     return X
@@ -49,7 +63,10 @@ end
 # Generate the model parameters
 #######################################################
 
-function simulate_X!(model::MultiomicModel; within_sigma=1.0, between_sigma=1.0)
+function simulate_X!(model::MultiomicModel; within_var=0.25, between_var=0.75)
+
+    within_sigma = sqrt(within_var)
+    between_sigma = sqrt(between_var)
 
     K, M = size(model.matfac.X)
 
@@ -64,7 +81,7 @@ function simulate_X!(model::MultiomicModel; within_sigma=1.0, between_sigma=1.0)
         X[:, model.sample_conditions .== cond] .+= condition_centers[:,j]
     end
 
-    model.matfac.X = X
+    model.matfac.X .= X
 
 end
 
@@ -146,13 +163,13 @@ function simulate_Y!(model::MultiomicModel; average_non_pwy=10.0)
 
     end
 
-    model.matfac.Y = Y
+    model.matfac.Y .= Y
 
 end
 
 ASSAY_MU = Dict("mrnaseq" => 7.468,
                 "cna" => 0.0,
-                "mutation" => 0.0,
+                "mutation" => -1.0,
                 "methylation" => 0.0,
                 "rppa" => 0.0)
 
@@ -163,25 +180,23 @@ ASSAY_SIGMA = Dict("mrnaseq" => 2.0,
                    "rppa" => 1.0)
 
 
-function simulate_col_params!(model::MultiomicModel, data_assays; std=0.01)
+function simulate_col_params!(model::MultiomicModel, model_assays; std=0.01)
 
     # TODO: Allow assays to determine these parameters
-
-
     N = length(model.matfac.col_transform.cscale.logsigma)
     lsig = zeros(N)
     mu = zeros(N)
 
-    unq_assays = unique(data_assays)
+    unq_assays = unique(model_assays)
     for a in unq_assays
-        rel_idx = (data_assays .== a)
+        rel_idx = (model_assays .== a)
         N_a = sum(rel_idx)
         lsig[rel_idx] .= log(ASSAY_SIGMA[a]) .+ randn(N_a).*std
         mu[rel_idx] .= ASSAY_MU[a] .+ randn(N_a).*std
     end
 
-    model.matfac.col_transform.cscale.logsigma = lsig
-    model.matfac.col_transform.cshift.mu = mu
+    model.matfac.col_transform.cscale.logsigma .= lsig
+    model.matfac.col_transform.cshift.mu .= mu
 
 end
 
@@ -207,7 +222,8 @@ end
 function simulate_data(pathway_sif_data, pathway_names,
                        sample_ids, sample_conditions,
                        data_genes, data_assays,  
-                       sample_batch_dict) 
+                       sample_batch_dict;
+                       X_var=1.0, noise_var=0.01) 
 
     # Construct the model object
     println("Constructing model...")
@@ -218,11 +234,12 @@ function simulate_data(pathway_sif_data, pathway_names,
 
     # Generate the model parameters
     println("Simulating X...")
-    simulate_X!(model)
+    simulate_X!(model; within_var=0.25*X_var, between_var=0.75*X_var)
     println("Simulating Y...")
     simulate_Y!(model)
     println("Simulating sigma, mu...")
-    simulate_col_params!(model, data_assays)
+    used_assays = data_assays[model.used_feature_idx]
+    simulate_col_params!(model, used_assays)
     println("Simulating delta, theta...")
     simulate_batch_params!(model)
 
@@ -232,7 +249,9 @@ function simulate_data(pathway_sif_data, pathway_names,
 
     # Sample random values
     println("Sampling random values...")
-    Z = sample(model.matfac.noise_model, Z)
+    noise_std = sqrt(noise_var)
+    Z = sample(model.matfac.noise_model, Z, used_assays; 
+               std=noise_std, ordinal_std=noise_std, xor_p=noise_var*0.001)
 
     # Rearrange the columns so they match the original data's ordering
     println("Rearranging columns...")

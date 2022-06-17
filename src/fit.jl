@@ -38,7 +38,7 @@ function postprocess!(fitted_model)
     for k=1:K
         pwy_idx = (!).(non_pwy_idx[k])
 
-        if dot(pwy_idx, sign.(Y[k,:])) < 0
+        if dot(pwy_idx, sign.(fitted_model.matfac.Y[k,:])) < 0
             fitted_model.matfac.Y[k,:] .*= -1
             fitted_model.matfac.X[k,:] .*= -1
         end

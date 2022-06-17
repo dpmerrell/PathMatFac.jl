@@ -35,40 +35,20 @@ function sif_to_edgelist(pwy_sif::Vector)
 
     new_edges = Vector{Any}[] 
 
-    # Modify the edges to/from proteins
+    # Extract sign and target attributes
+    # from the interaction
     for edge in pwy_sif 
+        
         u = edge[1]
         
-        ent_types = (PWY_SIF_CODE[edge[2][[1]]], 
-                     PWY_SIF_CODE[edge[2][[2]]]
-                    )
-        target = PWY_SIF_CODE[edge[2][[3]]]
-        sgn = PWY_SIF_CODE[edge[2][[4]]]
-        
+        target = PWY_SIF_CODE[edge[2][[1]]]
+        sgn = PWY_SIF_CODE[edge[2][[2]]]
+
         v = edge[3]
 
-        # If u is a protein, replace
-        # it with an "activation" node
-        if ent_types[1] == "protein"
-            new_u = string(u, "_activation")
-        else
-            new_u = string(u, "_", ent_types[1])
-        end  
+        push!(new_edges, [(u, PWY_SIF_CODE["a"]), 
+                          (v, target), sgn])
 
-        # If v is a protein, check whether
-        # its transcription or activation is
-        # targeted by this edge
-        if ent_types[2] == "protein"
-            if target == "transcription"
-                new_v = string(v, "_mrna")
-            else
-                new_v = string(v, "_activation")
-            end
-        else
-            new_v = string(v, "_", ent_types[2])
-        end
-
-        push!(new_edges, [(new_u,""), (new_v,""), sgn])
     end
     
     return new_edges
@@ -92,9 +72,8 @@ end
     central dogma for each gene.
     dna -> mrna -> protein -> activation
 """
-function construct_dogma_edges(dogma_features; assay_map=DEFAULT_ASSAY_MAP)
-
-    dogma_to_idx = value_to_idx(DOGMA_ORDER)
+function construct_dogma_edges(dogma_features; assay_map=DEFAULT_ASSAY_MAP,
+                                               dogma_to_idx=DOGMA_TO_IDX)
 
     # Find the lowest and highest 
     dogmax = Dict()
@@ -116,8 +95,8 @@ function construct_dogma_edges(dogma_features; assay_map=DEFAULT_ASSAY_MAP)
     for (gene, mn) in dogmin
         mx = dogmax[gene]
         for i=mn:(mx-1)
-            push!(edgelist, [(string(gene, "_", DOGMA_ORDER[i]),""),
-                             (string(gene, "_", DOGMA_ORDER[i+1]),""), 1])
+            push!(edgelist, [(gene, DOGMA_ORDER[i]),
+                             (gene, DOGMA_ORDER[i+1]), 1])
         end
     end
 
@@ -135,19 +114,17 @@ function construct_data_edges(dogma_features; assay_map=DEFAULT_ASSAY_MAP)
     edges = Vector{Any}[]
     for (gene, assay) in dogma_features        
         suff, weight = assay_map[assay]
-        push!(edges, [(gene, assay), (string(gene,"_",suff), ""), weight])
+        push!(edges, [(gene, assay), (gene, suff), weight])
     end
     return edges
 end
 
 
-function connect_pwy_to_dogma(dogma_edges, pwy, dogmax)
-
-    dogma_to_idx = value_to_idx(DOGMA_ORDER)
+function connect_pwy_to_dogma(dogma_edges, pwy, dogmax, full_geneset;
+                              dogma_to_idx=DOGMA_TO_IDX)
 
     pwy_nodes = get_all_nodes(pwy)
-    pwy_node_splits = [split(x[1],"_") for x in pwy_nodes]
-    pwy_proteins = [node[1] for node in pwy_node_splits if node[2]=="activation"]
+    pwy_proteins = [node[1] for node in pwy_nodes if node[1] in full_geneset]
 
     activation_idx = dogma_to_idx["activation"]
     termination = activation_idx - 1
@@ -157,8 +134,8 @@ function connect_pwy_to_dogma(dogma_edges, pwy, dogmax)
     for prot in pwy_proteins
         if haskey(dogmax, prot)
             for i=(dogmax[prot]):termination
-                push!(dogma_edges, [(string(prot,"_",DOGMA_ORDER[i]), ""), 
-                                    (string(prot,"_",DOGMA_ORDER[i+1]), ""), 1])
+                push!(dogma_edges, [(prot, DOGMA_ORDER[i]), 
+                                    (prot, DOGMA_ORDER[i+1]), 1])
             end
         end
     end
@@ -172,7 +149,8 @@ end
     construct edgelists that (1) include "central dogma edges"
     and (2) edges that connect to the features.
 """
-function extend_pathways(pwy_edgelists::Vector{Vector{T}} where T, features;
+function extend_pathways(pwy_edgelists::Vector{Vector{T}} where T, 
+                         features;
                          dogma_features=nothing,
                          assay_map=DEFAULT_ASSAY_MAP)
 
@@ -194,11 +172,13 @@ function extend_pathways(pwy_edgelists::Vector{Vector{T}} where T, features;
     data_edges = construct_data_edges(dogma_features; assay_map=assay_map)
     dogma_edgelist = vcat(dogma_edgelist, data_edges) 
 
+    full_geneset = Set([gene for (gene,_) in dogma_features])
+
     # Construct the pathway-specific graphs
     ext_edgelists = Vector{Vector{Any}}[]
     for pwy in pwy_edgelists
         full_edgelist = copy(dogma_edgelist)
-        full_edgelist = connect_pwy_to_dogma(full_edgelist, pwy, dogma_max_levels)
+        full_edgelist = connect_pwy_to_dogma(full_edgelist, pwy, dogma_max_levels, full_geneset)
         
         push!(ext_edgelists, full_edgelist)
     end

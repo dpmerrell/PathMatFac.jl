@@ -8,6 +8,7 @@ DEFAULT_ASSAY_LOSSES = Dict("cna" => "ordinal3",
                             "methylation" => "bernoulli",
                             "mrnaseq" => "normal", 
                             "rppa" => "normal",
+                            "activation" => "noloss",
                             "" => "noloss"
                             )
 
@@ -19,6 +20,7 @@ LOSS_ORDER = Dict("normal" => 1,
                   )
 
 DOGMA_ORDER = ["dna", "mrna", "protein", "activation"]
+DOGMA_TO_IDX = Dict([v => i for (i,v) in enumerate(DOGMA_ORDER)])
 
 DEFAULT_ASSAYS = collect(keys(DEFAULT_ASSAY_LOSSES))
 DEFAULT_ASSAY_SET = Set(DEFAULT_ASSAYS)
@@ -32,12 +34,9 @@ DEFAULT_ASSAY_MAP = Dict("cna" => ("dna", 1),
 
 
 PWY_SIF_CODE = Dict("a" => "activation",
-                    "b" => "abstract",
-                    "c" => "compound",
-                    "h" => "chemical",
+                    "d" => "dna",
+                    "t" => "mrna",
                     "p" => "protein",
-                    "f" => "family",
-                    "t" => "transcription",
                     ">" => 1,
                     "|" => -1
                    )
