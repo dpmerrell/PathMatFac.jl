@@ -52,7 +52,7 @@ function assemble_model(pathway_sif_data,
                         sample_batch_dict,
                         data_features,
                         lambda_X, lambda_Y;
-                        lambda_layer=0.1,
+                        lambda_layer=0.001,
                         model_features=nothing,
                         dogma_features=nothing)
 
@@ -97,7 +97,8 @@ function assemble_model(pathway_sif_data,
 
     Y_reg = NetworkL1Regularizer(model_features, ext_edgelists; 
                                  net_weight=lambda_Y, l1_weight=lambda_Y,
-                                 l1_features=nonpwy_features)
+                                 l1_features=nonpwy_features,
+                                 epsilon=1.0)
 
     # Construct the column layers
     col_layers = PMLayers(model_assays, sample_batch_ids) 
@@ -105,15 +106,21 @@ function assemble_model(pathway_sif_data,
     # Construct a regularizer for the column layers
     feature_group_edgelist = create_group_edgelist(model_features, model_assays)
     logsigma_reg = NetworkRegularizer([feature_group_edgelist]; observed=model_features,
-                                                                weight=lambda_layer)
+                                                                weight=lambda_layer,
+                                                                epsilon=0.0)
     mu_reg = NetworkRegularizer([feature_group_edgelist]; observed=model_features,
-                                                          weight=lambda_layer)
-    layer_reg = PMLayerReg(logsigma_reg, mu_reg) 
+                                                          weight=lambda_layer,
+                                                          epsilon=0.0)
+    logdelta_reg = BatchArrayReg(weight=lambda_layer)
+    theta_reg = BatchArrayReg(weight=lambda_layer)
+
+    layer_reg = PMLayerReg(logsigma_reg, mu_reg, logdelta_reg, theta_reg) 
 
     # Construct a regularizer for X
     sample_edgelist = create_group_edgelist(sample_ids, sample_conditions)
     X_reg = NetworkRegularizer(fill(sample_edgelist, K); observed=sample_ids,
-                                                         weight=lambda_X)
+                                                         weight=lambda_X,
+                                                         epsilon=0.0)
     
     # Construct MatFacModel
     matfac = MatFacModel(M, N, K, feature_losses;

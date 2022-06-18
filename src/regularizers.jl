@@ -26,7 +26,8 @@ end
 Flux.trainable(nr::NetworkRegularizer) = (B_matrix=nr.B_matrix, )
 
 function NetworkRegularizer(edgelists; observed=nothing,
-                                       weight=1.0)
+                                       weight=1.0,
+                                       epsilon=0.0)
 
     # Collect all the nodes from the edgelists
     all_nodes = Set()
@@ -45,23 +46,23 @@ function NetworkRegularizer(edgelists; observed=nothing,
     end
     n_obs = length(observed)
     n_unobs = length(unobserved)
+    n_total = n_obs + n_unobs
 
     # For constructing the sparse matrices, we simply
     # concatenate the observed and unobserved nodes
     allnodes_sorted = vcat(observed, unobserved)
 
     node_to_idx = value_to_idx(allnodes_sorted) 
-    spmats = edgelists_to_spmats(edgelists, node_to_idx; epsilon=0.0)
+    spmats = edgelists_to_spmats(edgelists, node_to_idx; epsilon=epsilon)
 
     # Rescale the sparse matrices with the 
     # regularization weight
     for spmat in spmats
         rescale!(spmat, weight)
     end
-   
-    AA = Tuple(map(mat->mat[1:n_obs,1:n_obs], spmats))
-    AB = Tuple(map(mat->mat[1:n_obs,n_obs+1:end], spmats))
-    BB = Tuple(map(mat->mat[n_obs+1:end, n_obs+1:end], spmats))
+    AA = Tuple(map(mat->csc_select(mat, 1:n_obs, 1:n_obs), spmats))
+    AB = Tuple(map(mat->csc_select(mat, 1:n_obs, n_obs+1:n_total), spmats))
+    BB = Tuple(map(mat->csc_select(mat, n_obs+1:n_total, n_obs+1:n_total), spmats))
 
     K = length(edgelists)
     B_matrix = randn(K, n_unobs)
@@ -234,9 +235,10 @@ function NetworkL1Regularizer(data_features, network_edgelists;
         spmat = edgelist_to_spmat(edgelist, node_to_idx; epsilon=epsilon)
 
         # Split this matrix into observed/unobserved blocks
-        push!(AA, spmat[1:N, 1:N])
-        push!(AB, spmat[1:N, N+1:end])
-        push!(BB, spmat[N+1:end, N+1:end])
+        N_total = size(spmat, 2)
+        push!(AA, csc_select(spmat, 1:N, 1:N))
+        push!(AB, csc_select(spmat, 1:N, N+1:N_total))
+        push!(BB, csc_select(spmat, N+1:N_total, N+1:N_total))
 
         # Initialize a vector of virtual values
         N_virtual = length(net_virtual_nodes)
@@ -391,19 +393,93 @@ function ChainRules.rrule(nr::NetworkL1Regularizer, x::AbstractVector)
 end
 
 ###########################################
+# Regularizer for Batch Arrays
+###########################################
+
+mutable struct BatchArrayReg 
+    weight::Number
+end
+
+@functor BatchArrayReg ()
+
+function BatchArrayReg(;weight=1.0)
+    return BatchArrayReg(weight)
+end
+
+function (reg::BatchArrayReg)(ba::BatchArray)
+    return reg.weight*0.5*sum(map(v->sum(v.*v), ba.values))
+end
+
+function ChainRulesCore.rrule(reg::BatchArrayReg, ba::BatchArray)
+
+    result = reg(ba)
+
+    function batcharray_reg_pullback(result_bar)
+        factor = result_bar*reg.weight
+        val_bar = map(x -> factor .* x, ba.values)
+        return ChainRulesCore.NoTangent(),
+               ChainRulesCore.Tangent{BatchArray}(values=val_bar)
+
+    end
+
+    return result, batcharray_reg_pullback
+end
+
+
+###########################################
 # Now define a combined regularizer functor 
 ###########################################
 
 mutable struct PMLayerReg
     cscale_reg::NetworkRegularizer
     cshift_reg::NetworkRegularizer
+    bscale_reg::BatchArrayReg
+    bshift_reg::BatchArrayReg
 end
 
 @functor PMLayerReg
 
 function (reg::PMLayerReg)(layers::PMLayers)
     return (reg.cscale_reg(layers.cscale.logsigma) 
-            + reg.cshift_reg(layers.cshift.mu))
+            + reg.cshift_reg(layers.cshift.mu)
+            + reg.bscale_reg(layers.bscale.logdelta)
+            + reg.bshift_reg(layers.bshift.theta))
 end
+
+
+function ChainRulesCore.rrule(reg::PMLayerReg, layers::PMLayers)
+
+    cscale_loss, 
+    cscale_pullback = ChainRulesCore.rrule(reg.cscale_reg, layers.cscale.logsigma)
+    
+    cshift_loss, 
+    cshift_pullback = ChainRulesCore.rrule(reg.cshift_reg, layers.cshift.mu)
+    
+    bscale_loss, 
+    bscale_pullback = ChainRulesCore.rrule(reg.bscale_reg, layers.bscale.logdelta)
+    
+    bshift_loss, 
+    bshift_pullback = ChainRulesCore.rrule(reg.bshift_reg, layers.bshift.theta)
+   
+    function pmlayer_reg_pullback(loss_bar)
+        cscale_reg_bar, logsigma_bar = cscale_pullback(loss_bar)
+        cshift_reg_bar, mu_bar = cshift_pullback(loss_bar)
+
+        bscale_reg_bar, logdelta_bar = bscale_pullback(loss_bar)
+        bshift_reg_bar, theta_bar = bshift_pullback(loss_bar)
+     
+        return ChainRulesCore.Tangent{PMLayerReg}(cscale_reg=cscale_reg_bar,
+                                                  cshift_reg=cshift_reg_bar),
+               ChainRulesCore.Tangent{PMLayers}(cshift=ChainRules.Tangent{ColShift}(mu=mu_bar),
+                                                cscale=ChainRules.Tangent{ColScale}(logsigma=logsigma_bar),
+                                                bshift=ChainRules.Tangent{BatchShift}(theta=theta_bar),
+                                                bscale=ChainRules.Tangent{BatchScale}(logdelta=logdelta_bar))
+    end
+
+    result = cscale_loss + cshift_loss + bscale_loss + bshift_loss
+
+    return result, pmlayer_reg_pullback
+end
+
 
 

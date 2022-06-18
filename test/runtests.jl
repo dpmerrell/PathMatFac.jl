@@ -669,7 +669,7 @@ function simulation_tests()
                       "mrnaseq", "methylation"]
     M = 10
     m_groups = 2
-    N = 9 # (the number of features that actually occur in our pathways) 
+    N = 9   
 
     sample_ids = [string("patient_",i) for i=1:M]
     sample_conditions = repeat([string("group_",i) for i=1:m_groups], inner=5)
@@ -689,7 +689,7 @@ function simulation_tests()
                                     feature_genes, 
                                     feature_assays,
                                     sample_batch_dict)
-
+        println(D[:,[1,2,6]])
         @test size(D) == (M,N)
         @test all(isinteger.(D[:,[1,2,6]]))
     end
@@ -702,11 +702,11 @@ function main()
     #batch_array_tests()
     #layers_tests()
     #preprocess_tests()
-    network_reg_tests()
-    assemble_model_tests()
+    #network_reg_tests()
+    #assemble_model_tests()
     fit_tests()
-    model_io_tests()
-    simulation_tests()
+    #model_io_tests()
+    #simulation_tests()
 
 end
 

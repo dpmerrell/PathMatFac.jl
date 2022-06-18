@@ -362,6 +362,22 @@ function csc_to_coo(A)
     return I, J, V
 end
 
+function coo_select(I,J,V, rng1::UnitRange, rng2::UnitRange)
 
+    keep_idx = (((I .>= rng1.start) .& (I .<= rng1.stop)) .& (J .>= rng2.start)) .& (J .<= rng2.stop) 
+
+    I_new = I[keep_idx] .- (rng1.start - 1)
+    J_new = J[keep_idx] .- (rng2.start - 1)
+    V_new = V[keep_idx]
+
+    return I_new, J_new, V_new
+end
+
+function csc_select(A, rng1::UnitRange, rng2::UnitRange)
+
+    new_m = length(rng1)
+    new_n = length(rng2)
+    return sparse(coo_select(csc_to_coo(A)..., rng1, rng2)..., new_m, new_n) 
+end
 
 

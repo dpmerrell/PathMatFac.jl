@@ -10,21 +10,33 @@ function sample(nm::MF.NormalNoise, Z::AbstractMatrix; std=0.1, kwargs...)
 end
 
 
-function sample(nm::MF.BernoulliNoise, Z::AbstractMatrix; xor_p=0.001, assay="mutation", kwargs...)
+function sample(nm::MF.BernoulliNoise, Z::AbstractMatrix; xor_p=0.001, assays=nothing, kwargs...)
    
-    # We don't binarize methylation data;
-    # just perturb the value, but stay in 
-    # the interval [0,1]
-    if assay == "methylation"
-        std = sqrt(xor_p)
-        X = Z .+ (randn(size(Z)...) .* std)
-        X[X .> 1.0] .= 1.0
-        X[X .< 0.0] .= 0.0
-    else
-        X = rand(size(Z)...)
-        X = (X .> Z)
-        to_flip = (rand(size(Z)...) .<= xor_p)
-        X = xor.(X, to_flip)
+    if assays == nothing
+        assays = fill("mutation", size(Z,2))
+    end
+
+    # Sampling differs between assays.
+    unq_assays = unique(assays)
+    assay_idx = ids_to_ranges(assays)
+
+    X = similar(Z)
+    for (idx, assay) in zip(assay_idx, unq_assays)
+        # We don't binarize methylation data;
+        # just perturb the value, but stay in 
+        # the interval [0,1]
+        if assay == "methylation"
+            std = sqrt(xor_p)
+            Xp = Z[:,idx] .+ (randn(size(Z,1), length(idx)) .* std)
+            Xp[Xp .> 1.0] .= 1.0
+            Xp[Xp .< 0.0] .= 0.0
+        else
+            Xp = rand(size(Z,1), length(idx))
+            Xp = (Xp .<= Z[:,idx])
+            to_flip = (rand(size(Z,1), length(idx)) .<= xor_p)
+            Xp = xor.(Xp, to_flip)
+        end
+        X[:,idx] .= Xp
     end
 
     return X
@@ -49,10 +61,11 @@ end
 function sample(nm::MF.CompositeNoise, Z::AbstractMatrix, assays; std=0.1, xor_p=0.01, ordinal_std=0.1)
 
     X = similar(Z)
+
     for (idx, nm) in zip(nm.col_ranges, nm.noises)
-        assay = assays[idx][1]
+        idx_assays = assays[idx]
         X[:,idx] .= sample(nm, Z[:,idx]; std=std, ordinal_std=ordinal_std, 
-                                         xor_p=xor_p, assay=assay)
+                                         xor_p=xor_p, assays=idx_assays)
     end
 
     return X
@@ -201,7 +214,7 @@ function simulate_col_params!(model::MultiomicModel, model_assays; std=0.01)
 end
 
 
-function simulate_batch_params!(model::MultiomicModel; std=0.01)
+function simulate_batch_params!(model::MultiomicModel; std=0.05)
 
     logdelta_v = model.matfac.col_transform.bscale.logdelta.values
     theta_v = model.matfac.col_transform.bshift.theta.values
@@ -223,7 +236,8 @@ function simulate_data(pathway_sif_data, pathway_names,
                        sample_ids, sample_conditions,
                        data_genes, data_assays,  
                        sample_batch_dict;
-                       X_var=1.0, noise_var=0.01) 
+                       X_var=1.0, noise_var=0.01,
+                       batch_std=0.0025) 
 
     # Construct the model object
     println("Constructing model...")
@@ -241,7 +255,7 @@ function simulate_data(pathway_sif_data, pathway_names,
     used_assays = data_assays[model.used_feature_idx]
     simulate_col_params!(model, used_assays)
     println("Simulating delta, theta...")
-    simulate_batch_params!(model)
+    simulate_batch_params!(model; std=batch_std)
 
     # Run the model in forward mode
     println("Running the model in forward mode...")

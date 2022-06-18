@@ -203,9 +203,9 @@ end
 
 function view(l::PMLayers, idx1, idx2)
     return PMLayers(view(l.cscale, idx1, idx2),
-                             view(l.cshift, idx1, idx2),
-                             view(l.bscale, idx1, idx2),
-                             view(l.bshift, idx1, idx2))
+                    view(l.cshift, idx1, idx2),
+                    view(l.bscale, idx1, idx2),
+                    view(l.bshift, idx1, idx2))
 end
 
 
