@@ -13,24 +13,27 @@ function main(args)
    
     omic_hdf_filename = args[1]
     pwy_json = args[2]
-    out_name = args[3]
+    out_bson = args[3]
+    out_hdf = args[4]
 
-    opts = Dict(:max_epochs => Inf, 
+    opts = Dict(:max_epochs => 1000, 
                 :rel_tol =>1e-8, 
-                :lambda_X =>0.0, 
-                :lambda_Y =>0.0,
+                :lambda_X =>0.001, 
+                :lambda_Y =>0.2,
+                :lambda_layer =>5.0,
                 :lr => 0.07,
-                :capacity => Int(1e8),
+                :capacity => 25000000,
                 :verbosity => 1
                )
     if length(args) > 3
-        parse_opts!(opts, args[4:end])
+        parse_opts!(opts, args[5:end])
     end
 
     println("OPTS:")
     println(opts)
     lambda_X = pop!(opts, :lambda_X)
     lambda_Y = pop!(opts, :lambda_Y)
+    lambda_layer = pop!(opts, :lambda_layer)
 
     println("Loading data...")
     feature_genes = get_omic_feature_genes(omic_hdf_filename)
@@ -56,7 +59,8 @@ function main(args)
                            feature_genes, feature_assays,
                            batch_dict;
                            lambda_X=lambda_X, 
-                           lambda_Y=lambda_Y)
+                           lambda_Y=lambda_Y,
+                           lambda_layer=lambda_layer)
 
     # Move to GPU
 
@@ -68,8 +72,8 @@ function main(args)
     println(end_time - start_time)
 
     # Move model back to CPU; save to disk
-    PathwayMultiomics.save_model(string(out_name, ".bson"), model)
-    save_params_hdf(string(out_name, ".hdf"), model)
+    PathwayMultiomics.save_model(out_bson, model)
+    save_params_hdf(out_hdf, model)
 
 end
 

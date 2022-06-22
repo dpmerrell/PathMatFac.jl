@@ -237,7 +237,7 @@ function simulate_data(pathway_sif_data, pathway_names,
                        data_genes, data_assays,  
                        sample_batch_dict;
                        X_var=1.0, noise_var=0.01,
-                       batch_std=0.0025) 
+                       batch_std=0.001) 
 
     # Construct the model object
     println("Constructing model...")

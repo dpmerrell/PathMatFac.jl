@@ -123,12 +123,14 @@ function shift_range(rng, delta)
     return (rng.start + delta):(rng.stop + delta) 
 end
 
-
-
-function value_to_idx(values)
-    return Dict(v => idx for (idx, v) in enumerate(values))
+function value_to_idx(values::Vector{T}) where T
+    d = Dict{T,Int64}()
+    sizehint!(d, length(values))
+    for (i,v) in enumerate(values)
+        d[v] = i
+    end
+    return d
 end
-
 
 function keymatch(l_keys, r_keys)
 
@@ -199,53 +201,41 @@ function edgelist_to_spmat(edgelist, node_to_idx; epsilon=0.0)
     # make safe against redundancies.
     # in case of redundancy, keep the latest
     edge_dict = Dict()
-    pwy_idx = Set()
+    sizehint!(edge_dict, length(edgelist))
     for edge in edgelist
         e1 = node_to_idx[edge[1]]
         e2 = node_to_idx[edge[2]]
-        u = max(e1, e2)
-        v = min(e1, e2)
-        edge_dict[(u,v)] = edge[3]
-        push!(pwy_idx, e1)
-        push!(pwy_idx, e2)
+        i = max(e1, e2)
+        j = min(e1, e2)
+        edge_dict[(i,j)] = edge[3]
     end
+    enc_edgelist = [(i,j,v) for ((i,j),v) in edge_dict]
 
     # Store indices and nonzero values
-    I = Int64[] 
-    J = Int64[] 
-    V = Float64[] 
-
-    # Store values for the diagonal
-    diagonal = zeros(N)
-
-    # Off-diagonal entries
-    for (idx, value) in edge_dict
-        # below the diagonal
-        push!(I, idx[1])
-        push!(J, idx[2])
-        push!(V, -value)
-        
-        # above the diagonal
-        push!(I, idx[2])
-        push!(J, idx[1])
-        push!(V, -value)
-
-        # increment diagonal entries
-        # (maintain positive definite-ness)
-        ab = abs(value)
-        diagonal[idx[1]] += ab
-        diagonal[idx[2]] += ab
-    end
+    n_edges = length(enc_edgelist)
+    mid = N + n_edges
+    nnz = N + 2*n_edges
+    I = zeros(Int64, nnz) 
+    J = zeros(Int64, nnz)
+    V = zeros(Float64, nnz)
     
-    for idx in pwy_idx
-        diagonal[idx] += epsilon 
-    end
-    
-    # Diagonal entries
-    for i=1:N
-        push!(I, i)
-        push!(J, i)
-        push!(V, diagonal[i])
+    # Initialize diagonal entries:
+    I[1:N] .= 1:N
+    J[1:N] .= 1:N
+    V[1:N] .= epsilon
+
+    for (count, (i,j,v)) in enumerate(enc_edgelist)
+        I[N+count] = i
+        J[N+count] = j
+        V[N+count] = -v
+
+        I[mid+count] = j
+        J[mid+count] = i
+        V[mid+count] = -v
+
+        av = abs(v)
+        V[i] += av
+        V[j] += av
     end
 
     return sparse(I, J, V)

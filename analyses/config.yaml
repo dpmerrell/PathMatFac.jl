@@ -1,17 +1,18 @@
 
-temp_dir: "temp"
-
-tcga_dir: "data/tcga"
-
-omic_types: ["cna", "mutation", "methylation", "mrnaseq", "rppa"]
-
-cancer_types: ["ACC", "CESC", "HNSC", 
-               "KIRC", "LGG", "LUSC", "PAAD", "READ", "STAD", 
-               "THCA", "UCS", "BLCA", "CHOL", "DLBC", "GBM", 
-               "KICH", "KIRP", "LIHC", "MESO", "PCPG", "SARC", 
-               "THYM", "UVM", "BRCA", "COAD", "ESCA", 
-               "LAML", "LUAD", "OV", "PRAD", 
-               "SKCM", "TGCT", "UCEC"]
+result_dir: "temp/"
+tcga_dir: "data/tcga/"
+reactome_dir: "data/reactome/"
 
 sim_params:
-    sim_replicates: 1
+    data_params:
+        snr: [99.0]
+        true_K: [300]
+        reps: 1
+    matfac_params:
+        max_epochs: 500
+        lr: 0.07
+        lambda_layer: 5.0
+        lambda_X: 0.001
+        lambda_Y: 0.2
+        used_K: [300]
+ 

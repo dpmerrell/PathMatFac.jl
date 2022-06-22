@@ -196,7 +196,7 @@ end
 Flux.trainable(nr::NetworkL1Regularizer) = (net_virtual=nr.net_virtual,)
 
 
-function NetworkL1Regularizer(data_features, network_edgelists;
+function NetworkL1Regularizer(data_features::Vector, network_edgelists::Vector;
                               net_weight=1.0, l1_weight=1.0,
                               l1_features=nothing,
                               epsilon=1.0)
@@ -204,10 +204,10 @@ function NetworkL1Regularizer(data_features, network_edgelists;
     N = length(data_features)
     K = length(network_edgelists)
 
-    AA = SparseMatrixCSC[]
-    AB = SparseMatrixCSC[]
-    BB = SparseMatrixCSC[]
-    l1_feat_idxs = []
+    AA = Vector{SparseMatrixCSC}(undef, K) 
+    AB = Vector{SparseMatrixCSC}(undef, K)
+    BB = Vector{SparseMatrixCSC}(undef, K)
+    l1_feat_idxs = Vector{Vector{Bool}}(undef, K)
     virtual = Vector{Float64}[]
 
     datafeature_set = Set(data_features)
@@ -215,6 +215,7 @@ function NetworkL1Regularizer(data_features, network_edgelists;
     # For each of the networks
     for k=1:K
 
+        #println("\tBEGIN ITER")
         ####################################
         # Construct network regularization
         edgelist = network_edgelists[k]
@@ -230,32 +231,35 @@ function NetworkL1Regularizer(data_features, network_edgelists;
         net_virtual_nodes = sort(collect(net_virtual_nodes))
         all_nodes = vcat(data_features, net_virtual_nodes)
         node_to_idx = value_to_idx(all_nodes) 
+        #println("\t\tJUST GOT ALL NODES")
 
         # Construct a sparse matrix encoding this network
         spmat = edgelist_to_spmat(edgelist, node_to_idx; epsilon=epsilon)
+        #println("\t\tJUST CONVERTED TO SPMAT")
 
         # Split this matrix into observed/unobserved blocks
         N_total = size(spmat, 2)
-        push!(AA, csc_select(spmat, 1:N, 1:N))
-        push!(AB, csc_select(spmat, 1:N, N+1:N_total))
-        push!(BB, csc_select(spmat, N+1:N_total, N+1:N_total))
+        AA[k] = csc_select(spmat, 1:N, 1:N)
+        AB[k] = csc_select(spmat, 1:N, N+1:N_total)
+        BB[k] = csc_select(spmat, N+1:N_total, N+1:N_total)
+        #println("\t\tJUST SPLIT MATRIX")
 
         # Initialize a vector of virtual values
         N_virtual = length(net_virtual_nodes)
         push!(virtual, zeros(N_virtual))
-
 
         ####################################
         # Construct L1 regularization
         if l1_features == nothing
             # By default, include all non-network features
             idx_vec = map(x->!in(x, net_nodes), data_features) 
-            push!(l1_feat_idxs, idx_vec) 
+            l1_feat_idxs[k] = idx_vec
         else # Otherwise, include the specified features
             l1_feature_set = Set(l1_features[k])
             idx_vec = map(x->in(x, l1_feature_set), data_features)
-            push!(l1_feat_idxs, idx_vec) 
+            l1_feat_idxs[k] = idx_vec
         end
+        #println("\t\tJUST CONSTRUCTED L1 REG")
     end
 
     return NetworkL1Regularizer(Tuple(AA), 

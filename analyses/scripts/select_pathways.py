@@ -4,20 +4,6 @@ import sys
 import numpy as np
 
 
-##def get_all_pwy_genes(all_pwys, all_genes):
-##    
-##    genes = set()
-##
-##    for edgelist in all_pwys.values():
-##        for edge in edgelist:
-##            for protein in (edge[0], edge[-1]):
-##                genes.add(protein)
-##
-##    genes = sorted(list(genes))
-##
-##    return genes
-
-
 def pwy_to_geneset(pwy, all_genes):
     
     geneset = set() 

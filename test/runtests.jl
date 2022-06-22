@@ -598,7 +598,8 @@ function fit_tests()
                                [string(test_pwy_name,"_",i) for i=1:3],
                                sample_ids, sample_conditions,
                                feature_genes, feature_assays,
-                               sample_batch_dict)
+                               sample_batch_dict;
+                               lambda_layer=0.1)
 
         X_start = deepcopy(model.matfac.X)
         Y_start = deepcopy(model.matfac.Y)
@@ -704,9 +705,9 @@ function main()
     #preprocess_tests()
     #network_reg_tests()
     #assemble_model_tests()
-    fit_tests()
-    #model_io_tests()
-    #simulation_tests()
+    #fit_tests()
+    model_io_tests()
+    simulation_tests()
 
 end
 

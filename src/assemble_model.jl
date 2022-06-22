@@ -52,7 +52,7 @@ function assemble_model(pathway_sif_data,
                         sample_batch_dict,
                         data_features,
                         lambda_X, lambda_Y;
-                        lambda_layer=0.001,
+                        lambda_layer=0.1,
                         model_features=nothing,
                         dogma_features=nothing)
 

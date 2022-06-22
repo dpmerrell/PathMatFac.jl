@@ -38,14 +38,11 @@ end
 function main(args)
 
     ## Default Values for various parameters
-    #opts = Dict("mu_snr" => 10.0,
-    #            "delta_snr" => 10.0,
-    #            "theta_snr" => 10.0,
-    #            "logistic_snr" => 10.0,
-    #            "sample_snr" => 10.0
+    #opts = Dict(:Xvar => 4.0,
+    #            :noisevar => 0.01
     #           )
-    opts = Dict(:Xvar => 4.0,
-                :noisevar => 0.01
+    opts = Dict(:total_var => 5.0,
+                :snr => 999.0
                )
 
     pwy_json = args[1]
@@ -56,8 +53,11 @@ function main(args)
 
     # Parse options
     opts = parse_opts!(opts, args[6:end])
-    X_var = opts[:Xvar]
-    noise_var = opts[:noisevar]
+    total_var = opts[:total_var]
+    snr = opts[:snr]
+
+    noise_var = total_var/(1 + snr)
+    X_var = snr*noise_var
 
     # Load pathway data
     println("Loading pathway data")

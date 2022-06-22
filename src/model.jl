@@ -35,6 +35,7 @@ function MultiomicModel(pathway_sif_data,
                         sample_batch_dict::Dict{T,Vector{U}};
                         lambda_X::Real=1.0,
                         lambda_Y::Real=1.0,
+                        lambda_layer::Real=0.1,
                         model_features=nothing) where T where U
        
     data_features = collect(zip(data_genes, data_assays))
@@ -45,13 +46,14 @@ function MultiomicModel(pathway_sif_data,
                           sample_batch_dict,
                           data_features,
                           lambda_X, lambda_Y;
+                          lambda_layer=lambda_layer,
                           model_features=model_features)
 
 end
 
 PMTypes = Union{MultiomicModel,NetworkRegularizer,NetworkL1Regularizer,
                 PMLayers,PMLayerReg,ColScale,ColShift,BatchScale,BatchShift,
-                BatchArray}
+                BatchArray,BatchArrayReg}
 
 NoEqTypes = Function
 

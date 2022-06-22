@@ -4,6 +4,19 @@ from collections import Counter, defaultdict
 import pandas as pd
 import json
 
+# Get the number of rows in the 
+# "edge" block of the Reactome txt
+def get_n_rows(input_txt):
+
+    f_in = open(input_txt, "r")
+
+    nrows=0
+    for line in f_in.readlines():
+        if line.isspace():
+            break
+        nrows += 1
+    return nrows
+
 
 def explore_txt(reactome_txt):
 
@@ -69,18 +82,19 @@ def isolate_pathways(txt_df):
     return result
             
 
-def read_txt(reactome_txt):
-    txt_df = pd.read_csv(reactome_txt, sep="\t")
-    return txt_df
+def read_tsv(reactome_tsv, nrows):
+    tsv_df = pd.read_csv(reactome_tsv, sep="\t", nrows=nrows)
+    return tsv_df
 
 
 
 def main():
 
-    edge_tsv = sys.argv[1]
+    reactome_txt = sys.argv[1]
     output_json = sys.argv[2]
 
-    edge_df = read_txt(edge_tsv)
+    n_rows = get_n_rows(reactome_txt)
+    edge_df = read_tsv(reactome_txt, n_rows)
     pwy_dict = isolate_pathways(edge_df)
 
     print("Saving to JSON: ", output_json)
