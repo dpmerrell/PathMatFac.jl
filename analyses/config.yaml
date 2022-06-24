@@ -1,6 +1,8 @@
 
 result_dir: "temp/"
 tcga_dir: "data/tcga/"
+
+reactome_url: "https://www.pathwaycommons.org/archives/PC2/v12/PathwayCommons12.reactome.hgnc.txt.gz" 
 reactome_dir: "data/reactome/"
 
 sim_params:
@@ -9,9 +11,9 @@ sim_params:
         true_K: [300]
         reps: 1
     matfac_params:
-        max_epochs: 500
+        max_epochs: 10
         lr: 0.07
-        lambda_layer: 5.0
+        lambda_layer: 100000.0 
         lambda_X: 0.001
         lambda_Y: 0.2
         used_K: [300]

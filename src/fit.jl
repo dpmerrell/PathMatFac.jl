@@ -2,27 +2,23 @@
 import ScikitLearnBase: fit!
 
 
-function initialize_params!(model::MultiomicModel, D::AbstractMatrix; 
-                            loss_map=DEFAULT_ASSAY_LOSSES, verbose=true)
+function initialize_params!(model::MultiomicModel, D::AbstractMatrix;
+                            capacity=Int(25e6), verbose=true,
+                            loss_map=DEFAULT_ASSAY_LOSSES)
 
     if verbose
         println("Setting initial values for mu and sigma...")
     end
+    
+    M, N = size(D)
+    batch_size = Int(round(capacity / N))
+    model_losses = map(x->loss_map[x], model.data_assays[model.used_feature_idx])
+    mean_vec, var_vec = MF.column_meanvar(D, batch_size)
 
-    model_losses = map(x->loss_map[x], model.data_assays[model.used_feature_idx]) 
+    # Initialize values of mu, logsigma
     normal_columns = model_losses .== "normal"
-
-    model.matfac.col_transform.cshift.mu[normal_columns] .= vec(mapslices(nanmean, 
-                                                              D[:,normal_columns]; 
-                                                              dims=1)
-                                                   )
-
-    model.matfac.col_transform.cscale.logsigma[normal_columns] .= log.(sqrt.(vec(mapslices(nanvar,
-                                                                          D[:,normal_columns];
-                                                                          dims=1)
-                                                                     )
-                                                                 )
-                                                          )
+    model.matfac.col_transform.cshift.mu[normal_columns] .= mean_vec[normal_columns]
+    model.matfac.col_transform.cscale.logsigma[normal_columns] .= log.(sqrt.(var_vec[normal_columns]))
 
 end
 
@@ -47,22 +43,23 @@ function postprocess!(fitted_model)
 end
 
 
-function fit!(model::MultiomicModel, D::AbstractMatrix; kwargs...)
+function fit!(model::MultiomicModel, D::AbstractMatrix; capacity=Int(25e6), kwargs...)
+
+    # Move model and data to GPU (if one exists); 
+    D = gpu(D)
+    matfac_d = gpu(model.matfac)
 
     # Permute the data columns to match the model's
     # internal ordering
     println("Rearranging data columns...")
-    D = D[:,model.used_feature_idx]
+    D .= D[:,model.used_feature_idx]
+    
+    # Set some model parameters to the right ball-park
+    initialize_params!(model, D; capacity=capacity)
 
-    # First set some model parameters to the right ball-park
-    initialize_params!(model, D)
-
-    # Move model and data to GPU (if one exists); 
     # train the model; and then move back to CPU
-    matfac_d = gpu(model.matfac)
-    D = gpu(D)
     println("Fitting model to data...")
-    fit!(matfac_d, D; kwargs...)
+    fit!(matfac_d, D; capacity=capacity, kwargs...)
     D = nothing
     model.matfac = cpu(matfac_d)
 

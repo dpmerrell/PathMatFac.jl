@@ -20,6 +20,10 @@ SIM_PARAM_DIR = join(SIM_DIR, "true_parameters")
 SIM_INFER_DIR = join(SIM_DIR, "inferred_parameters")
 SIM_SCORE_DIR = join(SIM_DIR, "scores")
 
+####################################
+# Downloading data
+####################################
+REACTOME_URL = config["reactome_url"]
 
 ####################################
 # Unpack simulation study parameters
@@ -38,11 +42,30 @@ SIM_LAMBDA_X = SIM_MATFAC_PARAMS["lambda_X"]
 SIM_LAMBDA_Y = SIM_MATFAC_PARAMS["lambda_Y"]
 SIM_USED_K = SIM_MATFAC_PARAMS["used_K"]
 
+###################################################################################################
+# RULES
+###################################################################################################
+
 
 rule all:
     input:
-       inferred=expand(join(SIM_INFER_DIR,"usedk={usedk}_truek={truek}_snr={snr}_rep={rep}.hdf"),
+       inferred=expand(join(SIM_SCORE_DIR,"usedk={usedk}_truek={truek}_snr={snr}_rep={rep}.json"),
                        usedk=SIM_USED_K, truek=SIM_TRUE_K, snr=SIM_SNR, rep=SIM_REPS)
+
+
+###########################
+# Simulation study
+###########################
+
+rule score_matfac:
+    input:
+        src="scripts/score_matfac.py",
+        true_params=join(SIM_PARAM_DIR, "truek={truek}_snr={snr}_rep={rep}.hdf"),
+        pred_params=join(SIM_INFER_DIR, "usedk={usedk}_truek={truek}_snr={snr}_rep={rep}.hdf")
+    output:
+        score_json=join(SIM_SCORE_DIR, "usedk={usedk}_truek={truek}_snr={snr}_rep={rep}.json")
+    shell:
+        "python {input.src} {input.true_params} {input.pred_params} {output.score_json}" 
 
 rule run_matfac:
     input:
@@ -82,6 +105,10 @@ rule select_used_pwys:
         "python {input.src} {input.all_pwy_json} {input.feature_json} {wildcards.usedk} {output.pwy_json}"
 
 
+######################################
+# Download and preprocess Reactome
+######################################
+
 rule reactome_txt_to_json:
     input:
         src="scripts/reactome_txt_to_json.py",
@@ -91,5 +118,18 @@ rule reactome_txt_to_json:
     shell:
         "python {input.src} {input.txt} {output.json}"
 
+rule unzip_reactome:
+    input:
+        tarball=join(REACTOME_DIR, "reactome.hgnc.txt.tar.gz")
+    output:
+        tsv=join(REACTOME_DIR, "reactome.hgnc.txt")
+    shell:
+        "tar -xvzf {input.tarball}"
+
+rule download_reactome:
+    output:
+        tarball=join(REACTOME_DIR, "reactome.hgnc.txt.tar.gz")
+    shell:
+        "curl {REACTOME_URL} --output reactome.hgnc.txt.tar.gz"
 
 

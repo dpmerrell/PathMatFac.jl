@@ -384,7 +384,7 @@ function preprocess_tests()
 end
 
 
-function network_reg_tests()
+function reg_tests()
 
     test_sif_path = "test_pathway.sif"
         
@@ -513,6 +513,22 @@ function network_reg_tests()
         @test size(netreg.net_virtual[1]) == (n_unobs,)
         @test length(netreg.l1_feat_idx[1]) == n_obs 
         @test typeof(netreg.l1_feat_idx[1]) == Vector{Bool}
+
+    end
+
+    @testset "BatchArray regularizers" begin
+        col_batches = ["cat", "cat", "cat", "dog", "dog", "fish"]
+        row_batches = [[1,1,1,2,2], [1,1,2,2,2], [1,1,1,1,2]]
+        values = [Dict(1=>3.14, 2=>2.7), Dict(1=>0.0, 2=>0.5), Dict(1=>-1.0, 2=>1.0)]
+        
+        ba = PM.BatchArray(col_batches, row_batches, values)
+
+        ba_reg = PM.BatchArrayReg(ba; weight=1.0)
+
+        @test sum(map(sum, ba_reg.counts)) == 6*5
+        grads = Zygote.gradient((r,ba)->r(ba), ba_reg, ba)
+        println(grads)
+
     end
 end
 
@@ -703,11 +719,11 @@ function main()
     #batch_array_tests()
     #layers_tests()
     #preprocess_tests()
-    #network_reg_tests()
+    #reg_tests()
     #assemble_model_tests()
-    #fit_tests()
-    model_io_tests()
-    simulation_tests()
+    fit_tests()
+    #model_io_tests()
+    #simulation_tests()
 
 end
 

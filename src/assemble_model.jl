@@ -111,8 +111,10 @@ function assemble_model(pathway_sif_data,
     mu_reg = NetworkRegularizer([feature_group_edgelist]; observed=model_features,
                                                           weight=lambda_layer,
                                                           epsilon=0.0)
-    logdelta_reg = BatchArrayReg(weight=lambda_layer)
-    theta_reg = BatchArrayReg(weight=lambda_layer)
+    logdelta_reg = BatchArrayReg(col_layers.bscale.logdelta; 
+                                 weight=lambda_layer)
+    theta_reg = BatchArrayReg(col_layers.bshift.theta;
+                              weight=lambda_layer)
 
     layer_reg = PMLayerReg(logsigma_reg, mu_reg, logdelta_reg, theta_reg) 
 
