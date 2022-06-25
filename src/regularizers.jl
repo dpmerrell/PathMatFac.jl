@@ -65,7 +65,7 @@ function NetworkRegularizer(edgelists; observed=nothing,
     BB = Tuple(map(mat->csc_select(mat, n_obs+1:n_total, n_obs+1:n_total), spmats))
 
     K = length(edgelists)
-    B_matrix = randn(K, n_unobs)
+    B_matrix = zeros(K, n_unobs)
 
     return NetworkRegularizer(AA, AB, BB, B_matrix)
 end

@@ -38,10 +38,7 @@ end
 function main(args)
 
     ## Default Values for various parameters
-    #opts = Dict(:Xvar => 4.0,
-    #            :noisevar => 0.01
-    #           )
-    opts = Dict(:total_var => 5.0,
+    opts = Dict(:total_var => 25.0,
                 :snr => 999.0
                )
 

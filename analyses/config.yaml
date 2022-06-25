@@ -11,9 +11,9 @@ sim_params:
         true_K: [300]
         reps: 1
     matfac_params:
-        max_epochs: 10
+        max_epochs: 500
         lr: 0.07
-        lambda_layer: 100000.0 
+        lambda_layer: 2.0 
         lambda_X: 0.001
         lambda_Y: 0.2
         used_K: [300]

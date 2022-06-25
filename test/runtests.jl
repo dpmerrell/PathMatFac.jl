@@ -451,6 +451,30 @@ function reg_tests()
 
         @test size(netreg.B_matrix) == (1, n_unobs)
 
+        ################################################
+        # Gradient test
+        edgelists = [[[1, 2, 1.0],[1, 3, 1.0],[1, 4, 1.0]],
+                    ]
+        observed = [2,3,4]
+        nr = PM.NetworkRegularizer(edgelists; observed=observed)
+
+        @test length(nr.AA) == 1
+        @test nr.AA[1] == sparse([1.0 0.0 0.0;
+                                  0.0 1.0 0.0;
+                                  0.0 0.0 1.0])
+        @test nr.AB[1] == sparse(reshape([-1.0;
+                                          -1.0;
+                                          -1.0;], (3,1)))
+        @test nr.BB[1] == sparse(reshape([3.0], (1,1) ))
+        @test nr.B_matrix == Matrix(reshape([0.0], (1,1) ))
+
+        mu_regularizer = (x, reg) -> reg(x)
+
+        loss, grads = Zygote.withgradient(mu_regularizer, [1.0, 1.0, 1.0], nr)
+        @test loss == 0.5
+        @test isapprox(grads[1], [1.0, 1.0, 1.0] ./3.0 )
+        @test isapprox(grads[2].B_matrix, reshape([-1.0], (1,1)))
+
     end
     
     @testset "Network L1 regularizers" begin
@@ -527,7 +551,6 @@ function reg_tests()
 
         @test sum(map(sum, ba_reg.counts)) == 6*5
         grads = Zygote.gradient((r,ba)->r(ba), ba_reg, ba)
-        println(grads)
 
     end
 end
@@ -616,17 +639,55 @@ function fit_tests()
                                feature_genes, feature_assays,
                                sample_batch_dict;
                                lambda_layer=0.1)
-
+        println("UNTRAINED MODEL")
+        println(model)
         X_start = deepcopy(model.matfac.X)
         Y_start = deepcopy(model.matfac.Y)
 
+        fit!(model, omic_data; verbosity=1, lr=0.07, max_epochs=0)
+        println("INITIALIZED MODEL")
+        println(model)
+        
         fit!(model, omic_data; verbosity=1, lr=0.07, max_epochs=10)
 
+        println("TRAINED MODEL")
+        println(model)
         @test true
         @test !isapprox(model.matfac.X, X_start)
         @test !isapprox(model.matfac.Y, Y_start)
     end
 
+    @testset "Fit GPU" begin
+
+        model = MultiomicModel([test_sif_path, test_sif_path, test_sif_path],  
+                               [string(test_pwy_name,"_",i) for i=1:3],
+                               sample_ids, sample_conditions,
+                               feature_genes, feature_assays,
+                               sample_batch_dict;
+                               lambda_layer=0.1)
+
+        println("UNTRAINED MODEL")
+        println(model)
+        X_start = deepcopy(model.matfac.X)
+        Y_start = deepcopy(model.matfac.Y)
+
+        model = gpu(model)
+        omic_data = gpu(omic_data)
+        
+        fit!(model, omic_data; verbosity=1, lr=0.07, max_epochs=0)
+        println("INITIALIZED MODEL")
+        println(model)
+
+        fit!(model, omic_data; verbosity=1, lr=0.07, max_epochs=10)
+        model = cpu(model)
+
+        println("TRAINED MODEL")
+        println(model)
+
+        @test true
+        @test !isapprox(model.matfac.X, X_start)
+        @test !isapprox(model.matfac.Y, Y_start)
+    end
 end
 
 
@@ -719,9 +780,9 @@ function main()
     #batch_array_tests()
     #layers_tests()
     #preprocess_tests()
-    #reg_tests()
+    reg_tests()
     #assemble_model_tests()
-    fit_tests()
+    #fit_tests()
     #model_io_tests()
     #simulation_tests()
 

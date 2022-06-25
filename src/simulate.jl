@@ -204,8 +204,8 @@ function simulate_col_params!(model::MultiomicModel, model_assays; std=0.01)
     for a in unq_assays
         rel_idx = (model_assays .== a)
         N_a = sum(rel_idx)
-        lsig[rel_idx] .= log(ASSAY_SIGMA[a]) .+ randn(N_a).*std
-        mu[rel_idx] .= ASSAY_MU[a] .+ randn(N_a).*std
+        lsig[rel_idx] .= log(ASSAY_SIGMA[a]) .+ (randn(N_a).*std)
+        mu[rel_idx] .= ASSAY_MU[a] .+ (randn(N_a).*std)
     end
 
     model.matfac.col_transform.cscale.logsigma .= lsig

@@ -23,7 +23,7 @@ mutable struct MultiomicModel
 
 end
 
-@functor MultiomicModel
+@functor MultiomicModel (matfac,)
 
 
 function MultiomicModel(pathway_sif_data, 

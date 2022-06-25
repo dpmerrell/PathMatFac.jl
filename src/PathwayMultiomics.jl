@@ -6,8 +6,8 @@ using MatFac, CUDA, SparseArrays, Statistics,
       Zygote, Flux, Functors, LinearAlgebra
 
 MF = MatFac
+CuSparseMatrixCSC = CUDA.CUSPARSE.CuSparseMatrixCSC
 
-include("typedefs.jl")
 include("util.jl")
 include("batch_array.jl")
 include("layers.jl")
