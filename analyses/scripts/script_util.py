@@ -13,20 +13,14 @@ NICE_NAMES = {"gender": "Sex",
 """
 Convert a pathway into a list of gene IDs.
 """
-def pwy_to_geneset(pwy):
+def pwy_to_geneset(pwy, all_genes):
 
     gene_set = set([])
 
     for edge in pwy:
-        u = edge[0]
-        u_type = edge[1][0]
-        if u_type == "p":
-            gene_set.add(u)
-        
-        v = edge[2]
-        v_type = edge[1][1]
-        if v_type == "p":
-            gene_set.add(v)
+        for entity in edge[:2]:
+            if entity in all_genes:
+                gene_set.add(entity)
 
     return list(gene_set)
 

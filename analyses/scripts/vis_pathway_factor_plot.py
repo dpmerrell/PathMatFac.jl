@@ -38,9 +38,9 @@ def factor_lineplot(Y, features, pwy_names):
     return fig, df 
 
 
-def pathway_scatter(fig, df, pathways, pathway_names):
+def pathway_scatter(fig, df, pathways, pathway_names, all_genes):
 
-    pwy_genesets = [su.pwy_to_geneset(pwy) for pwy in pwys] 
+    pwy_genesets = [su.pwy_to_geneset(pwy, all_genes) for pwy in pwys] 
 
     full_x = np.arange(Y.shape[0],dtype=int) 
 
@@ -103,9 +103,6 @@ def add_pwy_menu(fig, factor_df, pwy_names):
     return
 
 
-def combine_plots():
-    pass
-
 
 if __name__=="__main__":
 
@@ -113,18 +110,22 @@ if __name__=="__main__":
     model_hdf = args[1]
     pwy_json = args[2]
     out_html = args[3]
+    top_k = int(args[4])
 
     features = su.load_features(model_hdf)
+    all_genes = set([feat.split("_")[0] for feat in features])
+
     Y = su.load_feature_factors(model_hdf)
+    Y = Y[:,:top_k]
 
     with open(pwy_json, "r") as f: 
         pwy_dict = json.load(f)
 
-    pwys = pwy_dict["pathways"]
-    pwy_names = pwy_dict["names"]
+    pwys = pwy_dict["pathways"][:top_k]
+    pwy_names = pwy_dict["names"][:top_k]
    
     fig, factor_df = factor_lineplot(Y, features, pwy_names)
-    pathway_scatter(fig, factor_df, pwys, pwy_names) 
+    pathway_scatter(fig, factor_df, pwys, pwy_names, all_genes) 
  
     add_pwy_menu(fig, factor_df, pwy_names)
 
