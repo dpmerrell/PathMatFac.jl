@@ -2,13 +2,13 @@
 
 export DEFAULT_ASSAYS, sort_features
 
-import BatchMatFac: is_contiguous
 
 DEFAULT_ASSAY_LOSSES = Dict("cna" => "ordinal3",
                             "mutation" => "bernoulli",
                             "methylation" => "bernoulli",
                             "mrnaseq" => "normal", 
                             "rppa" => "normal",
+                            "activation" => "noloss",
                             "" => "noloss"
                             )
 
@@ -20,6 +20,7 @@ LOSS_ORDER = Dict("normal" => 1,
                   )
 
 DOGMA_ORDER = ["dna", "mrna", "protein", "activation"]
+DOGMA_TO_IDX = Dict([v => i for (i,v) in enumerate(DOGMA_ORDER)])
 
 DEFAULT_ASSAYS = collect(keys(DEFAULT_ASSAY_LOSSES))
 DEFAULT_ASSAY_SET = Set(DEFAULT_ASSAYS)
@@ -33,21 +34,103 @@ DEFAULT_ASSAY_MAP = Dict("cna" => ("dna", 1),
 
 
 PWY_SIF_CODE = Dict("a" => "activation",
-                    "b" => "abstract",
-                    "c" => "compound",
-                    "h" => "chemical",
+                    "d" => "dna",
+                    "t" => "mrna",
                     "p" => "protein",
-                    "f" => "family",
-                    "t" => "transcription",
                     ">" => 1,
                     "|" => -1
                    )
 
 
-function value_to_idx(values)
-    return Dict(v => idx for (idx, v) in enumerate(values))
+"""
+Check that the values in `vec` occur in contiguous blocks.
+I.e., the unique values are grouped together, with no intermingling.
+I.e., for each unique value the set of indices mapping to that value
+occur consecutively.
+"""
+function is_contiguous(vec::AbstractVector{T}) where T
+
+    past_values = Set{T}()
+    
+    for i=1:(length(vec)-1)
+        next_value = vec[i+1]
+        if in(vec[i+1], past_values)
+            return false
+        end
+        if vec[i+1] != vec[i]
+            push!(past_values, vec[i])
+        end
+    end
+
+    return true
 end
 
+
+function ids_to_ranges(id_vec)
+
+    @assert is_contiguous(id_vec) "IDs in id_vec need to appear in contiguous chunks."
+
+    unique_ids = unique(id_vec)
+    start_idx = indexin(unique_ids, id_vec)
+    end_idx = length(id_vec) .- indexin(unique_ids, reverse(id_vec)) .+ 1
+    ranges = UnitRange[start:finish for (start,finish) in zip(start_idx, end_idx)]
+
+    return ranges
+end
+
+
+function ids_to_ind_mat(id_vec)
+
+    unq_ids = unique(id_vec)
+    ind_mat = zeros(Bool, length(id_vec), length(unq_ids))
+
+    for (i,name) in enumerate(unq_ids)
+        ind_mat[:,i] .= (id_vec .== name)
+    end
+
+    return ind_mat
+end
+
+
+function subset_ranges(ranges::Vector, rng::UnitRange) 
+   
+    r_min = rng.start
+    r_max = rng.stop
+    @assert r_min <= r_max
+
+    @assert r_min >= ranges[1].start
+    @assert r_max <= ranges[end].stop
+
+    starts = [rr.start for rr in ranges]
+    r_min_idx = searchsorted(starts, r_min).stop
+    
+    stops = [rr.stop for rr in ranges]
+    r_max_idx = searchsorted(stops, r_max).start
+
+    new_ranges = collect(ranges[r_min_idx:r_max_idx])
+    new_ranges[1] = r_min:new_ranges[1].stop
+    new_ranges[end] = new_ranges[end].start:r_max
+
+    return new_ranges, r_min_idx, r_max_idx
+end
+
+function subset_ranges(ranges::Tuple, rng::UnitRange)
+    new_ranges, r_min, r_max = subset_ranges(collect(ranges), rng)
+    return Tuple(new_ranges), r_min, r_max
+end
+
+function shift_range(rng, delta)
+    return (rng.start + delta):(rng.stop + delta) 
+end
+
+function value_to_idx(values::Vector{T}) where T
+    d = Dict{T,Int64}()
+    sizehint!(d, length(values))
+    for (i,v) in enumerate(values)
+        d[v] = i
+    end
+    return d
+end
 
 function keymatch(l_keys, r_keys)
 
@@ -118,53 +201,41 @@ function edgelist_to_spmat(edgelist, node_to_idx; epsilon=0.0)
     # make safe against redundancies.
     # in case of redundancy, keep the latest
     edge_dict = Dict()
-    pwy_idx = Set()
+    sizehint!(edge_dict, length(edgelist))
     for edge in edgelist
         e1 = node_to_idx[edge[1]]
         e2 = node_to_idx[edge[2]]
-        u = max(e1, e2)
-        v = min(e1, e2)
-        edge_dict[(u,v)] = edge[3]
-        push!(pwy_idx, e1)
-        push!(pwy_idx, e2)
+        i = max(e1, e2)
+        j = min(e1, e2)
+        edge_dict[(i,j)] = edge[3]
     end
+    enc_edgelist = [(i,j,v) for ((i,j),v) in edge_dict]
 
     # Store indices and nonzero values
-    I = Int64[] 
-    J = Int64[] 
-    V = Float64[] 
-
-    # Store values for the diagonal
-    diagonal = zeros(N)
-
-    # Off-diagonal entries
-    for (idx, value) in edge_dict
-        # below the diagonal
-        push!(I, idx[1])
-        push!(J, idx[2])
-        push!(V, -value)
-        
-        # above the diagonal
-        push!(I, idx[2])
-        push!(J, idx[1])
-        push!(V, -value)
-
-        # increment diagonal entries
-        # (maintain positive definite-ness)
-        ab = abs(value)
-        diagonal[idx[1]] += ab
-        diagonal[idx[2]] += ab
-    end
+    n_edges = length(enc_edgelist)
+    mid = N + n_edges
+    nnz = N + 2*n_edges
+    I = zeros(Int64, nnz) 
+    J = zeros(Int64, nnz)
+    V = zeros(Float64, nnz)
     
-    for idx in pwy_idx
-        diagonal[idx] += epsilon 
-    end
-    
-    # Diagonal entries
-    for i=1:N
-        push!(I, i)
-        push!(J, i)
-        push!(V, diagonal[i])
+    # Initialize diagonal entries:
+    I[1:N] .= 1:N
+    J[1:N] .= 1:N
+    V[1:N] .= epsilon
+
+    for (count, (i,j,v)) in enumerate(enc_edgelist)
+        I[N+count] = i
+        J[N+count] = j
+        V[N+count] = -v
+
+        I[mid+count] = j
+        J[mid+count] = i
+        V[mid+count] = -v
+
+        av = abs(v)
+        V[i] += av
+        V[j] += av
     end
 
     return sparse(I, J, V)
@@ -263,6 +334,40 @@ function get_all_nodes(edgelist)
         push!(result, edge[2])
     end
     return result
+end
+
+
+function csc_to_coo(A)
+    I = zero(A.rowval)
+    J = zero(A.rowval)
+    V = zero(A.nzval)
+
+    for j=1:A.n
+        cpt = (A.colptr[j]):(A.colptr[j+1]-1)
+        J[cpt] .= j
+        I[cpt] .= A.rowval[cpt]
+        V[cpt] .= A.nzval[cpt]
+    end
+
+    return I, J, V
+end
+
+function coo_select(I,J,V, rng1::UnitRange, rng2::UnitRange)
+
+    keep_idx = (((I .>= rng1.start) .& (I .<= rng1.stop)) .& (J .>= rng2.start)) .& (J .<= rng2.stop) 
+
+    I_new = I[keep_idx] .- (rng1.start - 1)
+    J_new = J[keep_idx] .- (rng2.start - 1)
+    V_new = V[keep_idx]
+
+    return I_new, J_new, V_new
+end
+
+function csc_select(A, rng1::UnitRange, rng2::UnitRange)
+
+    new_m = length(rng1)
+    new_n = length(rng2)
+    return sparse(coo_select(csc_to_coo(A)..., rng1, rng2)..., new_m, new_n) 
 end
 
 

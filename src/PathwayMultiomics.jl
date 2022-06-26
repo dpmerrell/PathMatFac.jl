@@ -1,17 +1,19 @@
 
 module PathwayMultiomics
 
-using BatchMatFac, CUDA, SparseArrays, Statistics, 
+using MatFac, CUDA, SparseArrays, Statistics, 
       HDF5, CSV, DataFrames, BSON, ChainRules, ChainRulesCore,
-      Flux, Functors, LinearAlgebra
+      Zygote, Flux, Functors, LinearAlgebra
 
-BMF = BatchMatFac
+MF = MatFac
+CuSparseMatrixCSC = CUDA.CUSPARSE.CuSparseMatrixCSC
 
-include("typedefs.jl")
 include("util.jl")
+include("batch_array.jl")
+include("layers.jl")
 include("prep_pathways.jl")
 include("assemble_model.jl")
-include("network_regularizer.jl")
+include("regularizers.jl")
 include("model.jl")
 include("model_io.jl")
 include("postprocess.jl")
