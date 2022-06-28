@@ -217,7 +217,6 @@ function NetworkL1Regularizer(data_features::Vector, network_edgelists::Vector;
     # For each of the networks
     for k=1:K
 
-        #println("\tBEGIN ITER")
         ####################################
         # Construct network regularization
         edgelist = network_edgelists[k]
@@ -233,18 +232,15 @@ function NetworkL1Regularizer(data_features::Vector, network_edgelists::Vector;
         net_virtual_nodes = sort(collect(net_virtual_nodes))
         all_nodes = vcat(data_features, net_virtual_nodes)
         node_to_idx = value_to_idx(all_nodes) 
-        #println("\t\tJUST GOT ALL NODES")
 
         # Construct a sparse matrix encoding this network
         spmat = edgelist_to_spmat(edgelist, node_to_idx; epsilon=epsilon)
-        #println("\t\tJUST CONVERTED TO SPMAT")
 
         # Split this matrix into observed/unobserved blocks
         N_total = size(spmat, 2)
         AA[k] = csc_select(spmat, 1:N, 1:N)
         AB[k] = csc_select(spmat, 1:N, N+1:N_total)
         BB[k] = csc_select(spmat, N+1:N_total, N+1:N_total)
-        #println("\t\tJUST SPLIT MATRIX")
 
         # Initialize a vector of virtual values
         N_virtual = length(net_virtual_nodes)
@@ -261,7 +257,6 @@ function NetworkL1Regularizer(data_features::Vector, network_edgelists::Vector;
             idx_vec = map(x->in(x, l1_feature_set), data_features)
             l1_feat_idxs[k] = idx_vec
         end
-        #println("\t\tJUST CONSTRUCTED L1 REG")
     end
 
     return NetworkL1Regularizer(Tuple(AA), 

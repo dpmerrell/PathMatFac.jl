@@ -23,8 +23,6 @@ function initialize_params!(model::MultiomicModel, D::AbstractMatrix;
     batch_size = Int(round(capacity / N))
     model_losses = map(x->loss_map[x], model.data_assays[model.used_feature_idx])
     mean_vec, var_vec = MF.column_meanvar(D, batch_size)
-    println(mean_vec)
-    println(var_vec)
 
     # Initialize values of mu, logsigma
     model.matfac.col_transform.cshift.mu .= mean_vec

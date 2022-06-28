@@ -19,6 +19,10 @@ SIM_PWY_DIR = join(SIM_DIR, "pathway_jsons")
 SIM_PARAM_DIR = join(SIM_DIR, "true_parameters")
 SIM_INFER_DIR = join(SIM_DIR, "inferred_parameters")
 SIM_SCORE_DIR = join(SIM_DIR, "scores")
+SIM_VIS_DIR = join(SIM_DIR, "visualizations")
+SIM_SCATTER_DIR = join(SIM_VIS_DIR, "embedding_scatter")
+SIM_FACTORPLOT_DIR = join(SIM_VIS_DIR, "factor_plots")
+
 
 ####################################
 # Downloading data
@@ -49,13 +53,42 @@ SIM_USED_K = SIM_MATFAC_PARAMS["used_K"]
 
 rule all:
     input:
-       inferred=expand(join(SIM_SCORE_DIR,"usedk={usedk}_truek={truek}_snr={snr}_rep={rep}.json"),
-                       usedk=SIM_USED_K, truek=SIM_TRUE_K, snr=SIM_SNR, rep=SIM_REPS)
+       inferred=expand(join(SIM_INFER_DIR,"usedk={usedk}_truek={truek}_snr={snr}_rep={rep}.hdf"),
+                       usedk=SIM_USED_K, truek=SIM_TRUE_K, snr=SIM_SNR, rep=SIM_REPS),
+       scores=expand(join(SIM_SCORE_DIR,"usedk={usedk}_truek={truek}_snr={snr}_rep={rep}.json"),
+                     usedk=SIM_USED_K, truek=SIM_TRUE_K, snr=SIM_SNR, rep=SIM_REPS),
+       scatters=expand(join(SIM_SCATTER_DIR,"usedk={usedk}_truek={truek}_snr={snr}_rep={rep}.html"),
+                       usedk=SIM_USED_K, truek=SIM_TRUE_K, snr=SIM_SNR, rep=SIM_REPS),
+       factorplots=expand(join(SIM_FACTORPLOT_DIR,"usedk={usedk}_truek={truek}_snr={snr}_rep={rep}.html"),
+                          usedk=SIM_USED_K, truek=SIM_TRUE_K, snr=SIM_SNR, rep=SIM_REPS),
 
 
 ###########################
 # Simulation study
 ###########################
+
+rule factor_plot:
+    input:
+        src="scripts/vis_pathway_factor_plot.py",
+        params_hdf=join(SIM_INFER_DIR, "usedk={usedk}_truek={truek}_snr={snr}_rep={rep}.hdf"),
+        pwy_json=join(SIM_PWY_DIR, "usedk={usedk}.json")
+    output:
+        factorplot=join(SIM_FACTORPLOT_DIR,"usedk={usedk}_truek={truek}_snr={snr}_rep={rep}.html")
+    params:
+        plottedk=lambda wc: int(wc["usedk"])//5
+    shell:
+        "python {input.src} {input.params_hdf} {input.pwy_json} {output.factorplot} {params.plottedk}"
+
+rule embedding_scatter:
+    input:
+        src="scripts/vis_embedding_scatter.py",
+        clinical_hdf=join(TCGA_DIR, "tcga_clinical.hdf"),
+        params_hdf=join(SIM_INFER_DIR, "usedk={usedk}_truek={truek}_snr={snr}_rep={rep}.hdf")
+    output:
+        scatter_html=join(SIM_SCATTER_DIR, "usedk={usedk}_truek={truek}_snr={snr}_rep={rep}.html")
+    shell:
+        "python {input.src} {input.params_hdf} {input.clinical_hdf} 0 {output.scatter_html}"
+
 
 rule score_matfac:
     input:
