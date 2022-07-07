@@ -51,7 +51,7 @@ function MultiomicModel(pathway_sif_data,
 
 end
 
-PMTypes = Union{MultiomicModel,NetworkRegularizer,NetworkL1Regularizer,
+PMTypes = Union{MultiomicModel,NetworkRegularizer,NetworkL1Regularizer, ClusterRegularizer,
                 PMLayers,PMLayerReg,ColScale,ColShift,BatchScale,BatchShift,
                 BatchArray,BatchArrayReg}
 

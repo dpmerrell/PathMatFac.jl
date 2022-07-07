@@ -23,6 +23,13 @@ SIM_VIS_DIR = join(SIM_DIR, "visualizations")
 SIM_SCATTER_DIR = join(SIM_VIS_DIR, "embedding_scatter")
 SIM_FACTORPLOT_DIR = join(SIM_VIS_DIR, "factor_plots")
 
+## TCGA run directories
+EXP_DIR = join(RESULT_DIR, "real_data_runs")
+EXP_INFER_DIR = join(EXP_DIR, "inferred_parameters")
+EXP_VIS_DIR = join(EXP_DIR, "visualizations")
+EXP_SCATTER_DIR = join(EXP_VIS_DIR, "embedding_scatter")
+EXP_FACTORPLOT_DIR = join(EXP_VIS_DIR, "factor_plots")
+
 
 ####################################
 # Downloading data
@@ -46,6 +53,23 @@ SIM_LAMBDA_X = SIM_MATFAC_PARAMS["lambda_X"]
 SIM_LAMBDA_Y = SIM_MATFAC_PARAMS["lambda_Y"]
 SIM_USED_K = SIM_MATFAC_PARAMS["used_K"]
 
+
+###################################
+# Unpack TCGA run parameters
+###################################
+EXP_PARAMS = config["tcga_params"]
+EXP_TCGA_PARAMS = EXP_PARAMS["data_params"]
+EXP_HELDOUT_CTYPES = EXP_TCGA_PARAMS["heldout_ctypes"]
+EXP_DROPCTYPES_STR = ":".join(EXP_HELDOUT_CTYPES)
+EXP_MATFAC_PARAMS = EXP_PARAMS["matfac_params"]
+EXP_MAX_EPOCHS = EXP_MATFAC_PARAMS["max_epochs"]
+EXP_LR = EXP_MATFAC_PARAMS["lr"]
+EXP_LAMBDA_LAYER = EXP_MATFAC_PARAMS["lambda_layer"]
+EXP_LAMBDA_X = EXP_MATFAC_PARAMS["lambda_X"]
+EXP_LAMBDA_Y = EXP_MATFAC_PARAMS["lambda_Y"]
+EXP_USED_K = EXP_MATFAC_PARAMS["used_K"]
+
+
 ###################################################################################################
 # RULES
 ###################################################################################################
@@ -53,14 +77,59 @@ SIM_USED_K = SIM_MATFAC_PARAMS["used_K"]
 
 rule all:
     input:
-       inferred=expand(join(SIM_INFER_DIR,"usedk={usedk}_truek={truek}_snr={snr}_rep={rep}.hdf"),
-                       usedk=SIM_USED_K, truek=SIM_TRUE_K, snr=SIM_SNR, rep=SIM_REPS),
-       scores=expand(join(SIM_SCORE_DIR,"usedk={usedk}_truek={truek}_snr={snr}_rep={rep}.json"),
-                     usedk=SIM_USED_K, truek=SIM_TRUE_K, snr=SIM_SNR, rep=SIM_REPS),
-       scatters=expand(join(SIM_SCATTER_DIR,"usedk={usedk}_truek={truek}_snr={snr}_rep={rep}.html"),
-                       usedk=SIM_USED_K, truek=SIM_TRUE_K, snr=SIM_SNR, rep=SIM_REPS),
-       factorplots=expand(join(SIM_FACTORPLOT_DIR,"usedk={usedk}_truek={truek}_snr={snr}_rep={rep}.html"),
-                          usedk=SIM_USED_K, truek=SIM_TRUE_K, snr=SIM_SNR, rep=SIM_REPS),
+       #sim_inferred=expand(join(SIM_INFER_DIR,"usedk={usedk}_truek={truek}_snr={snr}_rep={rep}.hdf"),
+       #                    usedk=SIM_USED_K, truek=SIM_TRUE_K, snr=SIM_SNR, rep=SIM_REPS),
+       #sim_scores=expand(join(SIM_SCORE_DIR,"usedk={usedk}_truek={truek}_snr={snr}_rep={rep}.json"),
+       #                  usedk=SIM_USED_K, truek=SIM_TRUE_K, snr=SIM_SNR, rep=SIM_REPS),
+       #sim_scatters=expand(join(SIM_SCATTER_DIR,"usedk={usedk}_truek={truek}_snr={snr}_rep={rep}.html"),
+       #                    usedk=SIM_USED_K, truek=SIM_TRUE_K, snr=SIM_SNR, rep=SIM_REPS),
+       #sim_factorplots=expand(join(SIM_FACTORPLOT_DIR,"usedk={usedk}_truek={truek}_snr={snr}_rep={rep}.html"),
+       #                       usedk=SIM_USED_K, truek=SIM_TRUE_K, snr=SIM_SNR, rep=SIM_REPS),
+       exp_inferred=expand(join(EXP_INFER_DIR,"usedk={usedk}.hdf"),
+                           usedk=EXP_USED_K),
+       exp_scatters=expand(join(EXP_SCATTER_DIR,"usedk={usedk}.html"),
+                           usedk=EXP_USED_K),
+       exp_factorplots=expand(join(EXP_FACTORPLOT_DIR,"usedk={usedk}.html"),
+                              usedk=EXP_USED_K)
+
+
+###########################
+# Runs on real (TCGA) data
+###########################
+
+rule exp_factor_plot:
+    input:
+        src="scripts/vis_pathway_factor_plot.py",
+        params_hdf=join(EXP_INFER_DIR, "usedk={usedk}.hdf"),
+        pwy_json=join(SIM_PWY_DIR, "usedk={usedk}.json")
+    output:
+        factorplot=join(EXP_FACTORPLOT_DIR,"usedk={usedk}.html")
+    params:
+        plottedk=lambda wc: int(wc["usedk"])//5
+    shell:
+        "python {input.src} {input.params_hdf} {input.pwy_json} {output.factorplot} {params.plottedk}"
+
+rule exp_embedding_scatter:
+    input:
+        src="scripts/vis_embedding_scatter.py",
+        clinical_hdf=join(TCGA_DIR, "tcga_clinical.hdf"),
+        params_hdf=join(EXP_INFER_DIR, "usedk={usedk}.hdf")
+    output:
+        scatter_html=join(EXP_SCATTER_DIR, "usedk={usedk}.html")
+    shell:
+        "python {input.src} {input.params_hdf} {input.clinical_hdf} 1 {output.scatter_html}"
+
+
+rule exp_run_matfac:
+    input:
+        src="scripts/run_matfac.jl",
+        data=join(TCGA_DIR, "tcga_omic_prep_dropctypes="+EXP_DROPCTYPES_STR+".hdf"),
+        pwy_json=join(SIM_PWY_DIR, "usedk={usedk}.json")
+    output:
+        inferred_bson=join(EXP_INFER_DIR, "usedk={usedk}.bson"),
+        inferred_hdf=join(EXP_INFER_DIR, "usedk={usedk}.hdf")
+    shell:
+        "julia --project=. {input.src} {input.data} {input.pwy_json} {output.inferred_bson} {output.inferred_hdf} max_epochs={EXP_MAX_EPOCHS} lr={EXP_LR} lambda_layer={EXP_LAMBDA_LAYER} lambda_X={EXP_LAMBDA_X} lambda_Y={EXP_LAMBDA_Y}"
 
 
 ###########################
@@ -100,7 +169,7 @@ rule score_matfac:
     shell:
         "python {input.src} {input.true_params} {input.pred_params} {output.score_json}" 
 
-rule run_matfac:
+rule sim_run_matfac:
     input:
         src="scripts/run_matfac.jl",
         data=join(SIM_DATA_DIR, "truek={truek}_snr={snr}_rep={rep}.hdf"),
@@ -108,29 +177,27 @@ rule run_matfac:
     output:
         inferred_bson=join(SIM_INFER_DIR, "usedk={usedk}_truek={truek}_snr={snr}_rep={rep}.bson"),
         inferred_hdf=join(SIM_INFER_DIR, "usedk={usedk}_truek={truek}_snr={snr}_rep={rep}.hdf")
-    threads: 4
     shell:
-        "julia --threads={threads} --project=. {input.src} {input.data} {input.pwy_json} {output.inferred_bson} {output.inferred_hdf} max_epochs={SIM_MAX_EPOCHS} lr={SIM_LR} lambda_layer={SIM_LAMBDA_LAYER} lambda_X={SIM_LAMBDA_X} lambda_Y={SIM_LAMBDA_Y}"
+        "julia --project=. {input.src} {input.data} {input.pwy_json} {output.inferred_bson} {output.inferred_hdf} max_epochs={SIM_MAX_EPOCHS} lr={SIM_LR} lambda_layer={SIM_LAMBDA_LAYER} lambda_X={SIM_LAMBDA_X} lambda_Y={SIM_LAMBDA_Y}"
 
 # NOTICE for now we have usedk==truek
 rule simulate_data:
     input:
         src="scripts/simulate_data.jl",
         pwy_json=join(SIM_PWY_DIR, "usedk={truek}.json"), 
-        sample_json=join(TCGA_DIR, "tcga_samples.json"),
-        feature_json=join(TCGA_DIR, "tcga_features.json")
+        sample_json=join(TCGA_DIR, "tcga_samples_dropctypes=.json"),
+        feature_json=join(TCGA_DIR, "tcga_features_dropctypes=.json")
     output:
         data_hdf=join(SIM_DATA_DIR, "truek={truek}_snr={snr}_rep={rep}.hdf"),
         param_hdf=join(SIM_PARAM_DIR, "truek={truek}_snr={snr}_rep={rep}.hdf")
-    threads: 4
     shell:
-        "julia --threads={threads} --project=. {input.src} {input.pwy_json} {input.sample_json} {input.feature_json} {output.data_hdf} {output.param_hdf} snr={wildcards.snr}"
+        "julia --project=. {input.src} {input.pwy_json} {input.sample_json} {input.feature_json} {output.data_hdf} {output.param_hdf} snr={wildcards.snr}"
    
 
 rule select_used_pwys:
     input:
         src="scripts/select_pathways.py",
-        feature_json=join(TCGA_DIR, "tcga_features.json"),
+        feature_json=join(TCGA_DIR, "tcga_features_dropctypes=.json"),
         all_pwy_json=join(REACTOME_DIR, "reactome.json"),
     output:
         pwy_json=join(SIM_PWY_DIR, "usedk={usedk}.json"),
@@ -164,5 +231,31 @@ rule download_reactome:
         tarball=join(REACTOME_DIR, "reactome.hgnc.txt.tar.gz")
     shell:
         "curl {REACTOME_URL} --output reactome.hgnc.txt.tar.gz"
+
+
+#####################################
+# Preprocess TCGA
+#####################################
+
+
+rule extract_samples_features:
+    input:
+        src="scripts/extract_samples_features.py",
+        tcga_hdf=join(TCGA_DIR, "tcga_omic_prep_dropctypes={dropctypes}.hdf")
+    output:
+        samples_json=join(TCGA_DIR, "tcga_samples_dropctypes={dropctypes}.json"),
+        features_json=join(TCGA_DIR, "tcga_features_dropctypes={dropctypes,[:A-Z]*}.json")
+    shell:
+        "python {input.src} {input.tcga_hdf} {output.samples_json} {output.features_json}"
+
+rule preprocess_tcga:
+    input:
+        src="scripts/preprocess_tcga.py",
+        tcga_hdf=join(TCGA_DIR, "tcga_omic.hdf")
+    output:
+        prep_hdf=join(TCGA_DIR, "tcga_omic_prep_dropctypes={dropctypes,[:A-Z]*}.hdf")
+    shell:
+        "python {input.src} {input.tcga_hdf} {output.prep_hdf} heldout_ctypes={wildcards.dropctypes} std_assays= "
+
 
 

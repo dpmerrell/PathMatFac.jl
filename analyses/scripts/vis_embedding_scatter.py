@@ -82,7 +82,6 @@ def embedding_scatter(U, instance_ids, instance_groups,
     fig.update_traces(marker=dict(line=dict(width=2,
                                             color='DarkSlateGrey')),
                       selector=dict(mode='markers')) 
-    print(fig.data)
 
     return fig
 
@@ -149,7 +148,6 @@ def combine_figs(scatter_fig, explained_var_fig, line_fig):
                                }
                       })
 
-    print(fig.layout)
 
     return fig
 

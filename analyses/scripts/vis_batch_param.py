@@ -93,8 +93,6 @@ def combine_figs(theta_fig, delta_fig, mu_fig, sigma_fig):
     fig.data[2]["coloraxis"] = "coloraxis1"
     fig.data[3]["coloraxis"] = "coloraxis2"
 
-    print(fig)
-   
     return fig 
 
 
@@ -113,7 +111,6 @@ if __name__=="__main__":
     internal_sample_idx = su.load_batch_matrix(model_hdf, "matfac", 
                                                "matfac/theta_values", 
                                                keytype=str, dtype=float)
-    print(feature_batch_ids)
     batch_df, theta_df = make_batch_dfs(feature_batch_ids,
                                         sample_batch_ids,
                                         theta_value_dicts,

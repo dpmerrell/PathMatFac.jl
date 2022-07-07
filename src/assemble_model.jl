@@ -104,26 +104,18 @@ function assemble_model(pathway_sif_data,
     col_layers = PMLayers(model_assays, sample_batch_ids) 
 
     # Construct a regularizer for the column layers
-    feature_group_edgelist = create_group_edgelist(model_features, model_assays)
-    logsigma_reg = NetworkRegularizer([feature_group_edgelist]; observed=model_features,
-                                                                weight=lambda_layer,
-                                                                epsilon=0.0)
-    mu_reg = NetworkRegularizer([feature_group_edgelist]; observed=model_features,
-                                                          weight=lambda_layer,
-                                                          epsilon=0.0)
+    logsigma_reg = ClusterRegularizer(model_assays; weight=0.67*lambda_layer)
+    mu_reg = ClusterRegularizer(model_assays; weight=0.67*lambda_layer)
     logdelta_reg = BatchArrayReg(col_layers.bscale.logdelta; 
-                                 weight=lambda_layer)
+                                 weight=1.33*lambda_layer)
     theta_reg = BatchArrayReg(col_layers.bshift.theta;
-                              weight=lambda_layer)
+                              weight=1.33*lambda_layer)
 
     layer_reg = PMLayerReg(logsigma_reg, mu_reg, logdelta_reg, theta_reg) 
 
     # Construct a regularizer for X
-    sample_edgelist = create_group_edgelist(sample_ids, sample_conditions)
-    X_reg = NetworkRegularizer(fill(sample_edgelist, K); observed=sample_ids,
-                                                         weight=lambda_X,
-                                                         epsilon=0.0)
-    
+    X_reg = ClusterRegularizer(sample_conditions)
+
     # Construct MatFacModel
     matfac = MatFacModel(M, N, K, feature_losses;
                          col_transform=col_layers,

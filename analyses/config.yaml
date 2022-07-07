@@ -17,4 +17,14 @@ sim_params:
         lambda_X: 0.01
         lambda_Y: 0.8
         used_K: [300]
- 
+
+tcga_params:
+    data_params:
+        heldout_ctypes: ["OV", "GBM", "LAML"]
+    matfac_params:
+        max_epochs: 500
+        lr: 0.05
+        lambda_layer: 16.0 
+        lambda_X: 0.1
+        lambda_Y: 8.0
+        used_K: [300]

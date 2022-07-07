@@ -33,7 +33,6 @@ def factor_lineplot(Y, features, pwy_names):
                           "value": "Value"
                          },
                  )
-    print(fig)
  
     return fig, df 
 
@@ -96,9 +95,8 @@ def add_pwy_menu(fig, factor_df, pwy_names):
                                   ]
                      )
 
-    print(fig)
-    for i, dat in enumerate(fig.data): 
-        print(i, " ", type(dat))
+    #for i, dat in enumerate(fig.data): 
+    #    print(i, " ", type(dat))
     
     return
 

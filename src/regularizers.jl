@@ -174,6 +174,83 @@ function ChainRules.rrule(nr::NetworkRegularizer, x::AbstractVector)
     return loss, netreg_vec_pullback
 end
 
+##########################################################
+# Cluster Regularizer
+##########################################################
+
+mutable struct ClusterRegularizer 
+    cluster_idx::AbstractMatrix{Float32}
+    cluster_sizes::AbstractVector{Int32}
+    weight::Number
+end
+
+@functor ClusterRegularizer
+Flux.trainable(cr::ClusterRegularizer) = ()
+
+function ClusterRegularizer(cluster_labels::AbstractVector; weight=1.0)
+    idx = ids_to_ind_mat(cluster_labels)
+    sizes = vec(sum(idx, dims=1))
+    idx = sparse(idx)
+    return ClusterRegularizer(idx, sizes, weight)
+end
+
+
+#####################################
+# regularize a vector
+function (cr::ClusterRegularizer)(x::AbstractVector)
+
+    means = (transpose(cr.cluster_idx) * x) ./ cr.cluster_sizes
+    mean_vec = cr.cluster_idx * means
+    diffs = x .- mean_vec
+    return 0.5*cr.weight*sum(diffs.*diffs) / length(x)
+end
+
+
+function ChainRulesCore.rrule(cr::ClusterRegularizer, x::AbstractVector)
+   
+    means = (transpose(cr.cluster_idx) * x) ./ cr.cluster_sizes
+    mean_vec = cr.cluster_idx * means
+    diffs = x .- mean_vec
+    inv_len = 1 / length(x)
+
+    function cluster_reg_pullback(loss_bar)
+        return ChainRulesCore.NoTangent(), 
+               (cr.weight*inv_len*loss_bar) .* diffs 
+    end
+    loss = 0.5*cr.weight*inv_len*sum(diffs.*diffs)
+
+    return loss, cluster_reg_pullback
+end
+
+
+####################################
+# Regularize rows of a matrix
+function (cr::ClusterRegularizer)(X::AbstractMatrix)
+
+    means = (transpose(cr.cluster_idx) * transpose(X)) ./ cr.cluster_sizes
+    mean_rows = transpose(cr.cluster_idx * means)
+    diffs = X .- mean_rows
+
+    return (0.5*cr.weight/prod(size(X)))*sum(diffs.*diffs) 
+end
+
+
+function ChainRulesCore.rrule(cr::ClusterRegularizer, X::AbstractMatrix)
+
+    means = (transpose(cr.cluster_idx) * transpose(X)) ./ cr.cluster_sizes
+    mean_rows = transpose(cr.cluster_idx * means)
+    diffs = X .- mean_rows
+
+    inv_size = 1/prod(size(X))
+    function cluster_reg_pullback(loss_bar)
+        return ChainRulesCore.NoTangent(), 
+               (cr.weight*loss_bar*inv_size) .* diffs
+    end
+    loss = 0.5*cr.weight*inv_size*sum(diffs.*diffs)
+
+    return loss, cluster_reg_pullback
+end
+
 
 ##########################################################
 # Network-L1 regularizer
@@ -279,15 +356,17 @@ function (nr::NetworkL1Regularizer)(X::AbstractMatrix)
     K,M = size(X)
     for k=1:K
         # Network-regularization
-        loss += quadratic(nr.AA[k], X[k,:])
-        loss += 2*quadratic(X[k,:], nr.AB[k], nr.net_virtual[k])
-        loss += quadratic(nr.BB[k], nr.net_virtual[k])
-        loss *= 0.5*nr.net_weight
+        net_loss = 0.0
+        net_loss += quadratic(nr.AA[k], X[k,:])
+        net_loss += 2*quadratic(X[k,:], nr.AB[k], nr.net_virtual[k])
+        net_loss += quadratic(nr.BB[k], nr.net_virtual[k])
+        net_loss *= 0.5*nr.net_weight
+        loss += net_loss
 
         # L1-regularization
         loss += nr.l1_weight*sum(abs.(X[k,:].*nr.l1_feat_idxs[k]))
     end
-    loss /= K*M
+    loss /= (K*M)
     return loss
 end
 
@@ -314,13 +393,15 @@ function ChainRules.rrule(nr::NetworkL1Regularizer, X::AbstractMatrix)
         BBu[k] .= nr.BB[k]*nr.net_virtual[k]
 
         # Full loss computation
-        loss += 0.5*dot(xAA[k,:], X[k,:])
-        loss += dot(X[k,:], ABu[:,k])
-        loss += 0.5*dot(nr.net_virtual[k], BBu[k])
-        loss *= nr.net_weight
+        net_loss = 0.0
+        net_loss += 0.5*dot(xAA[k,:], X[k,:])
+        net_loss += dot(X[k,:], ABu[:,k])
+        net_loss += 0.5*dot(nr.net_virtual[k], BBu[k])
+        net_loss *= nr.net_weight
+        loss += net_loss 
 
         # L1-regularization
-        loss += nr.l1_weight*sum(abs.(X[k,:].*nr.l1_feat_idx[k]))
+        loss += nr.l1_weight * sum(abs.(X[k,:]) .* nr.l1_feat_idx[k]) 
     end
     loss *= inv_KM
 
@@ -451,8 +532,10 @@ end
 ###########################################
 
 mutable struct PMLayerReg
-    cscale_reg::NetworkRegularizer
-    cshift_reg::NetworkRegularizer
+    #cscale_reg::NetworkRegularizer
+    #cshift_reg::NetworkRegularizer
+    cscale_reg::ClusterRegularizer
+    cshift_reg::ClusterRegularizer
     bscale_reg::BatchArrayReg
     bshift_reg::BatchArrayReg
 end
@@ -488,8 +571,9 @@ function ChainRulesCore.rrule(reg::PMLayerReg, layers::PMLayers)
         bscale_reg_bar, logdelta_bar = bscale_pullback(loss_bar)
         bshift_reg_bar, theta_bar = bshift_pullback(loss_bar)
      
-        return ChainRulesCore.Tangent{PMLayerReg}(cscale_reg=map(v->0.25.*v, cscale_reg_bar),
-                                                  cshift_reg=map(v->0.25.*v,cshift_reg_bar)),
+        return ChainRulesCore.NoTangent(),
+               #ChainRulesCore.Tangent{PMLayerReg}(cscale_reg=map(v->0.25.*v, cscale_reg_bar),
+               #                                   cshift_reg=map(v->0.25.*v,cshift_reg_bar)),
                ChainRulesCore.Tangent{PMLayers}(cshift=ChainRules.Tangent{ColShift}(mu=map(v->0.25.*v, mu_bar)),
                                                 cscale=ChainRules.Tangent{ColScale}(logsigma=map(v->0.25.*v, logsigma_bar)),
                                                 bshift=ChainRules.Tangent{BatchShift}(theta=map(v->0.25.*v, theta_bar)),

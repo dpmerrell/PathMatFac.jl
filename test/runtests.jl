@@ -11,7 +11,7 @@ function util_tests()
     b_values = ["dog","bird","cat"]
 
     feature_list = [ ("GENE1","mrnaseq"), ("GENE2","methylation"), 
-                     ("GENE3","cna"), ("GENE4", "mutation"), ("VIRTUAL1", "activation")]
+                    ("GENE3","cna"), ("GENE4", "mutation")] #, ("VIRTUAL1", "activation")]
 
     @testset "Utility functions" begin
 
@@ -58,7 +58,7 @@ function util_tests()
         # sort_features
         @test PM.sort_features(feature_list) == [("GENE1", "mrnaseq"),("GENE2","methylation"), 
                                                  ("GENE4", "mutation"), ("GENE3","cna"), 
-                                                 ("VIRTUAL1", "activation")
+                                                 #("VIRTUAL1", "activation")
                                                  ]
 
         # nansum
@@ -639,19 +639,13 @@ function fit_tests()
                                feature_genes, feature_assays,
                                sample_batch_dict;
                                lambda_layer=0.1)
-        println("UNTRAINED MODEL")
-        println(model)
         X_start = deepcopy(model.matfac.X)
         Y_start = deepcopy(model.matfac.Y)
 
         fit!(model, omic_data; verbosity=1, lr=0.07, max_epochs=0)
-        println("INITIALIZED MODEL")
-        println(model)
         
         fit!(model, omic_data; verbosity=1, lr=0.07, max_epochs=10)
 
-        println("TRAINED MODEL")
-        println(model)
         @test true
         @test !isapprox(model.matfac.X, X_start)
         @test !isapprox(model.matfac.Y, Y_start)
@@ -666,8 +660,6 @@ function fit_tests()
                                sample_batch_dict;
                                lambda_layer=0.1)
 
-        println("UNTRAINED MODEL")
-        println(model)
         X_start = deepcopy(model.matfac.X)
         Y_start = deepcopy(model.matfac.Y)
 
@@ -675,14 +667,10 @@ function fit_tests()
         omic_data = gpu(omic_data)
         
         fit!(model, omic_data; verbosity=1, lr=0.07, max_epochs=0)
-        println("INITIALIZED MODEL")
-        println(model)
 
         fit!(model, omic_data; verbosity=1, lr=0.07, max_epochs=10)
         model = cpu(model)
 
-        println("TRAINED MODEL")
-        println(model)
 
         @test true
         @test !isapprox(model.matfac.X, X_start)
@@ -767,7 +755,6 @@ function simulation_tests()
                                     feature_genes, 
                                     feature_assays,
                                     sample_batch_dict)
-        println(D[:,[1,2,6]])
         @test size(D) == (M,N)
         @test all(isinteger.(D[:,[1,2,6]]))
     end
@@ -776,15 +763,15 @@ end
 
 function main()
 
-    #util_tests()
-    #batch_array_tests()
-    #layers_tests()
-    #preprocess_tests()
+    util_tests()
+    batch_array_tests()
+    layers_tests()
+    preprocess_tests()
     reg_tests()
-    #assemble_model_tests()
-    #fit_tests()
-    #model_io_tests()
-    #simulation_tests()
+    assemble_model_tests()
+    fit_tests()
+    model_io_tests()
+    simulation_tests()
 
 end
 

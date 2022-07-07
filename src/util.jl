@@ -8,8 +8,6 @@ DEFAULT_ASSAY_LOSSES = Dict("cna" => "ordinal3",
                             "methylation" => "bernoulli",
                             "mrnaseq" => "normal", 
                             "rppa" => "normal",
-                            "activation" => "noloss",
-                            "" => "noloss"
                             )
 
 LOSS_ORDER = Dict("normal" => 1,
@@ -18,6 +16,34 @@ LOSS_ORDER = Dict("normal" => 1,
                   "ordinal3" => 4,
                   "noloss" => 5
                   )
+
+function inv_logistic(x::T) where T <: Number
+    return max(log(x / (1 - x)), T(-10.0))
+end
+
+function bernoulli_var_init(m::T, v::T) where T <: Number
+    if (m == 0) | (m==1)
+        return T(0)
+    else
+        denom = m*(1-m)
+        denom *= denom
+        var = v / denom
+        var = min(var, T(9.0))
+        return var
+    end
+end
+
+MEAN_INIT_MAP = Dict("normal" => (m,v) -> m,
+                     "bernoulli" => (m,v) -> inv_logistic(m),
+                     "ordinal3" => (m,v) -> m - 2.0,
+                     "poisson" => (m,v) -> log(m)
+                    )
+VAR_INIT_MAP = Dict("normal" => (m,v) -> v,
+                    "bernoulli" => (m,v) -> bernoulli_var_init(m,v),
+                    "ordinal3" => (m,v) -> v,
+                    "poisson" => (m,v) -> v .* (log.(m).^2)
+                   )
+
 
 DOGMA_ORDER = ["dna", "mrna", "protein", "activation"]
 DOGMA_TO_IDX = Dict([v => i for (i,v) in enumerate(DOGMA_ORDER)])

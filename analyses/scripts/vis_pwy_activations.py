@@ -127,7 +127,6 @@ if __name__=="__main__":
     df = prepare_df(X, samples, groups, pathways)
     fig = go.Figure(layout={"title":"Pathway Activations"})
 
-    print(df)
 
     if ctype != "all":
         fig = ctype_line_plot(df, fig, ctype)
