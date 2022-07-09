@@ -490,7 +490,9 @@ uuid = "d6f4376e-aef5-505a-96c1-9c027394607a"
 
 [[MatFac]]
 deps = ["BSON", "CUDA", "ChainRules", "ChainRulesCore", "Flux", "Functors", "ScikitLearnBase", "SparseArrays", "Zygote"]
-path = "../MatFac"
+git-tree-sha1 = "1e7c9a9cecd840a3bbd1cbaf7b6fa0ea09f5d5d5"
+repo-rev = "main"
+repo-url = "https://github.com/dpmerrell/MatFac.jl"
 uuid = "23734cf9-4c0e-45d4-b5ff-f416ac13e898"
 version = "0.1.0"
 
