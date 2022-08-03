@@ -18,6 +18,11 @@ function initialize_params!(model::MultiomicModel, D::AbstractMatrix;
     unq_losses = unique(model_losses)
     mean_vec, var_vec = MF.column_meanvar(D, batch_size)
 
+    println("MEAN VEC")
+    println(mean_vec)
+    println("VAR VEC")
+    println(var_vec)
+
     # Transform the means and variances appropriately for each assay
     for ul in unq_losses
         ul_idx = model_losses .== ul
@@ -59,27 +64,93 @@ function postprocess!(fitted_model)
 end
 
 
-function fit!(model::MultiomicModel, D::AbstractMatrix; capacity=Int(25e6), kwargs...)
-
+function fit!(model::MultiomicModel, D::AbstractMatrix; fit_hyperparam=false,
+                                                        capacity=Int(25e6), kwargs...)
     # Permute the data columns to match the model's
     # internal ordering
     println("Rearranging data columns...")
     D_r = D[:, model.used_feature_idx]
 
-    # De-allocate the original data
-    CUDA.unsafe_free!(D)
+    # If on GPU, de-allocate the original data
+    if typeof(D) <: CuArray
+        CUDA.unsafe_free!(D)
+    end
 
-    # Set some model parameters to the right ball-park
-    initialize_params!(model, D_r; capacity=capacity)
-
-    # train the model; and then move back to CPU
-    fit!(model.matfac, D_r; capacity=capacity, kwargs...)
-
-    # De-allocate the data now
-    CUDA.unsafe_free!(D_r)
+    if fit_hyperparam
+        fit_reg_path!(model, D_r; capacity=capacity, kwargs...)
+    else
+        fit_fixed_weight!(model, D_r; capacity=capacity, kwargs...)
+    end
+    
+    # de-allocate the rearranged data now
+    if typeof(D_r) <: CuArray
+        CUDA.unsafe_free!(D_r)
+    else
+        D_r = nothing
+    end
 
     # Postprocess the model 
     postprocess!(model)
+
+    return model
+end
+
+
+function fit_fixed_weight!(model::MultiomicModel, D::AbstractMatrix; capacity=Int(25e6), kwargs...)
+
+    # Set some model parameters to the right ball-park
+    initialize_params!(model, D; capacity=capacity)
+
+    # train the matrix factorization model
+    fit!(model.matfac, D; capacity=capacity, kwargs...)
+
+    return model
+end
+
+
+function fit_reg_path!(model::MultiomicModel, D::AbstractMatrix; capacity=Int(25e6), 
+                                                                 init_lambda_Y=10.0, 
+                                                                 term_condition=nothing, 
+                                                                 histories_json="histories.json",
+                                                                 kwargs...)
+    # If no termination condition is provided, then
+    # just run 10 iterations. This can be useful for
+    # exploration.
+    if term_condition == nothing
+        term_condition = (model, iter) -> iter >= 10 
+    end
+
+    # Initialize some loop variables
+    lambda = init_lambda_Y
+    iter = 1
+    histories = []
+
+    while true
+        # Set the regularizer weight
+        model.matfac.Y_reg.l1_weight = lambda
+        model.matfac.Y_reg.net_weight = lambda
+        
+        # Store the history for each call of `fit`
+        history_callback = MatFac.HistoryCallback()
+
+        # Fit the model
+        fit_fixed_weight!(model, D; capacity=capacity, callback=history_callback, kwargs...)
+        push!(histories, history_callback.history)
+
+        # Save histories to a JSON file
+        open(histories_json, "w") do f
+            JSON.print(f, histories)
+        end
+
+        # Check termination condition
+        if term_condition(model, iter)
+            break
+        else
+            iter += 1
+            lambda *= 0.5
+        end
+
+    end
 
     return model
 end

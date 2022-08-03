@@ -631,7 +631,7 @@ function fit_tests()
     n_ordinal = length(ordinal_cols)
     omic_data[:,ordinal_cols] .= rand([1.0, 2.0, 3.0], M, n_ordinal)
    
-    @testset "Fit" begin
+    @testset "Fit CPU" begin
 
         model = MultiomicModel([test_sif_path, test_sif_path, test_sif_path],  
                                [string(test_pwy_name,"_",i) for i=1:3],
@@ -663,14 +663,16 @@ function fit_tests()
         X_start = deepcopy(model.matfac.X)
         Y_start = deepcopy(model.matfac.Y)
 
-        model = gpu(model)
-        omic_data = gpu(omic_data)
-        
-        fit!(model, omic_data; verbosity=1, lr=0.07, max_epochs=0)
+        model_gpu = gpu(model)
+        omic_data_gpu = gpu(omic_data)
 
-        fit!(model, omic_data; verbosity=1, lr=0.07, max_epochs=10)
-        model = cpu(model)
+        fit!(model_gpu, omic_data_gpu; verbosity=1, lr=0.07, max_epochs=0)
 
+        omic_data_gpu = gpu(omic_data)
+
+        fit!(model_gpu, omic_data_gpu; verbosity=1, lr=0.07, max_epochs=10)
+
+        model = cpu(model_gpu)
 
         @test true
         @test !isapprox(model.matfac.X, X_start)
@@ -763,12 +765,12 @@ end
 
 function main()
 
-    util_tests()
-    batch_array_tests()
-    layers_tests()
-    preprocess_tests()
-    reg_tests()
-    assemble_model_tests()
+    #util_tests()
+    #batch_array_tests()
+    #layers_tests()
+    #preprocess_tests()
+    #reg_tests()
+    #assemble_model_tests()
     fit_tests()
     model_io_tests()
     simulation_tests()
