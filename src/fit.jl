@@ -18,11 +18,6 @@ function initialize_params!(model::MultiomicModel, D::AbstractMatrix;
     unq_losses = unique(model_losses)
     mean_vec, var_vec = MF.column_meanvar(D, batch_size)
 
-    println("MEAN VEC")
-    println(mean_vec)
-    println("VAR VEC")
-    println(var_vec)
-
     # Transform the means and variances appropriately for each assay
     for ul in unq_losses
         ul_idx = model_losses .== ul

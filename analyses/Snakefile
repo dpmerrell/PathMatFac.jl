@@ -89,8 +89,8 @@ rule all:
                            usedk=EXP_USED_K),
        exp_scatters=expand(join(EXP_SCATTER_DIR,"usedk={usedk}.html"),
                            usedk=EXP_USED_K),
-       exp_factorplots=expand(join(EXP_FACTORPLOT_DIR,"usedk={usedk}.html"),
-                              usedk=EXP_USED_K)
+       #exp_factorplots=expand(join(EXP_FACTORPLOT_DIR,"usedk={usedk}.html"),
+       #                       usedk=EXP_USED_K)
 
 
 ###########################
@@ -128,6 +128,9 @@ rule exp_run_matfac:
     output:
         inferred_bson=join(EXP_INFER_DIR, "usedk={usedk}.bson"),
         inferred_hdf=join(EXP_INFER_DIR, "usedk={usedk}.hdf")
+    resources:
+        mem_mb=10000,
+        gpu=1
     shell:
         "julia --project=. {input.src} {input.data} {input.pwy_json} {output.inferred_bson} {output.inferred_hdf} max_epochs={EXP_MAX_EPOCHS} lr={EXP_LR} lambda_layer={EXP_LAMBDA_LAYER} lambda_X={EXP_LAMBDA_X} lambda_Y={EXP_LAMBDA_Y}"
 
@@ -145,6 +148,8 @@ rule factor_plot:
         factorplot=join(SIM_FACTORPLOT_DIR,"usedk={usedk}_truek={truek}_snr={snr}_rep={rep}.html")
     params:
         plottedk=lambda wc: int(wc["usedk"])//5
+    resources:
+        mem_mb=2000
     shell:
         "python {input.src} {input.params_hdf} {input.pwy_json} {output.factorplot} {params.plottedk}"
 
@@ -155,6 +160,8 @@ rule embedding_scatter:
         params_hdf=join(SIM_INFER_DIR, "usedk={usedk}_truek={truek}_snr={snr}_rep={rep}.hdf")
     output:
         scatter_html=join(SIM_SCATTER_DIR, "usedk={usedk}_truek={truek}_snr={snr}_rep={rep}.html")
+    resources:
+        mem_mb=2000
     shell:
         "python {input.src} {input.params_hdf} {input.clinical_hdf} 0 {output.scatter_html}"
 
@@ -220,17 +227,17 @@ rule reactome_txt_to_json:
 
 rule unzip_reactome:
     input:
-        tarball=join(REACTOME_DIR, "reactome.hgnc.txt.tar.gz")
+        zipped=join(REACTOME_DIR, "reactome.hgnc.txt.gz")
     output:
         tsv=join(REACTOME_DIR, "reactome.hgnc.txt")
     shell:
-        "tar -xvzf {input.tarball}"
+        "gunzip {input.zipped}"
 
 rule download_reactome:
     output:
-        tarball=join(REACTOME_DIR, "reactome.hgnc.txt.tar.gz")
+        tarball=join(REACTOME_DIR, "reactome.hgnc.txt.gz")
     shell:
-        "curl {REACTOME_URL} --output reactome.hgnc.txt.tar.gz"
+        "curl {REACTOME_URL} --output {output.tarball}"
 
 
 #####################################

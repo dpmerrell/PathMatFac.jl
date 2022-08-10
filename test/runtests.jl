@@ -623,7 +623,7 @@ function fit_tests()
 
     omic_data = randn(M,N)
 
-    logistic_cols = Int[i for (i, a) in enumerate(feature_assays) if a in ("mutation",)]
+    logistic_cols = Int[i for (i, a) in enumerate(feature_assays) if a in ("mutation","methylation")]
     n_logistic = length(logistic_cols)
     omic_data[:,logistic_cols] .= rand([0.0,1.0], M, n_logistic)
 

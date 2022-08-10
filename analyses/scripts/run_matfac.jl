@@ -2,8 +2,6 @@
 using PathwayMultiomics
 using JSON
 using ScikitLearnBase
-using Profile
-using ProfileSVG
 using Flux
 
 include("script_util.jl")
