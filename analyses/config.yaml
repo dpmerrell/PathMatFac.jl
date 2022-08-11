@@ -28,3 +28,4 @@ tcga_params:
         lambda_X: 0.1
         lambda_Y: 8.0
         used_K: [300]
+        gpu_capacity: 50000000

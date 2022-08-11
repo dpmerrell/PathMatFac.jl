@@ -68,7 +68,7 @@ EXP_LAMBDA_LAYER = EXP_MATFAC_PARAMS["lambda_layer"]
 EXP_LAMBDA_X = EXP_MATFAC_PARAMS["lambda_X"]
 EXP_LAMBDA_Y = EXP_MATFAC_PARAMS["lambda_Y"]
 EXP_USED_K = EXP_MATFAC_PARAMS["used_K"]
-
+EXP_CAPACITY = EXP_MATFAC_PARAMS["gpu_capacity"]
 
 ###################################################################################################
 # RULES
@@ -77,20 +77,20 @@ EXP_USED_K = EXP_MATFAC_PARAMS["used_K"]
 
 rule all:
     input:
-       #sim_inferred=expand(join(SIM_INFER_DIR,"usedk={usedk}_truek={truek}_snr={snr}_rep={rep}.hdf"),
-       #                    usedk=SIM_USED_K, truek=SIM_TRUE_K, snr=SIM_SNR, rep=SIM_REPS),
-       #sim_scores=expand(join(SIM_SCORE_DIR,"usedk={usedk}_truek={truek}_snr={snr}_rep={rep}.json"),
-       #                  usedk=SIM_USED_K, truek=SIM_TRUE_K, snr=SIM_SNR, rep=SIM_REPS),
-       #sim_scatters=expand(join(SIM_SCATTER_DIR,"usedk={usedk}_truek={truek}_snr={snr}_rep={rep}.html"),
-       #                    usedk=SIM_USED_K, truek=SIM_TRUE_K, snr=SIM_SNR, rep=SIM_REPS),
-       #sim_factorplots=expand(join(SIM_FACTORPLOT_DIR,"usedk={usedk}_truek={truek}_snr={snr}_rep={rep}.html"),
-       #                       usedk=SIM_USED_K, truek=SIM_TRUE_K, snr=SIM_SNR, rep=SIM_REPS),
+       sim_inferred=expand(join(SIM_INFER_DIR,"usedk={usedk}_truek={truek}_snr={snr}_rep={rep}.hdf"),
+                           usedk=SIM_USED_K, truek=SIM_TRUE_K, snr=SIM_SNR, rep=SIM_REPS),
+       sim_scores=expand(join(SIM_SCORE_DIR,"usedk={usedk}_truek={truek}_snr={snr}_rep={rep}.json"),
+                         usedk=SIM_USED_K, truek=SIM_TRUE_K, snr=SIM_SNR, rep=SIM_REPS),
+       sim_scatters=expand(join(SIM_SCATTER_DIR,"usedk={usedk}_truek={truek}_snr={snr}_rep={rep}.html"),
+                           usedk=SIM_USED_K, truek=SIM_TRUE_K, snr=SIM_SNR, rep=SIM_REPS),
+       sim_factorplots=expand(join(SIM_FACTORPLOT_DIR,"usedk={usedk}_truek={truek}_snr={snr}_rep={rep}.html"),
+                              usedk=SIM_USED_K, truek=SIM_TRUE_K, snr=SIM_SNR, rep=SIM_REPS),
        exp_inferred=expand(join(EXP_INFER_DIR,"usedk={usedk}.hdf"),
                            usedk=EXP_USED_K),
        exp_scatters=expand(join(EXP_SCATTER_DIR,"usedk={usedk}.html"),
                            usedk=EXP_USED_K),
-       #exp_factorplots=expand(join(EXP_FACTORPLOT_DIR,"usedk={usedk}.html"),
-       #                       usedk=EXP_USED_K)
+       exp_factorplots=expand(join(EXP_FACTORPLOT_DIR,"usedk={usedk}.html"),
+                              usedk=EXP_USED_K)
 
 
 ###########################
@@ -106,6 +106,8 @@ rule exp_factor_plot:
         factorplot=join(EXP_FACTORPLOT_DIR,"usedk={usedk}.html")
     params:
         plottedk=lambda wc: int(wc["usedk"])//5
+    resources:
+        mem_mb=5000
     shell:
         "python {input.src} {input.params_hdf} {input.pwy_json} {output.factorplot} {params.plottedk}"
 
@@ -116,6 +118,8 @@ rule exp_embedding_scatter:
         params_hdf=join(EXP_INFER_DIR, "usedk={usedk}.hdf")
     output:
         scatter_html=join(EXP_SCATTER_DIR, "usedk={usedk}.html")
+    resources:
+        mem_mb=5000
     shell:
         "python {input.src} {input.params_hdf} {input.clinical_hdf} 1 {output.scatter_html}"
 
@@ -132,7 +136,7 @@ rule exp_run_matfac:
         mem_mb=10000,
         gpu=1
     shell:
-        "julia --project=. {input.src} {input.data} {input.pwy_json} {output.inferred_bson} {output.inferred_hdf} max_epochs={EXP_MAX_EPOCHS} lr={EXP_LR} lambda_layer={EXP_LAMBDA_LAYER} lambda_X={EXP_LAMBDA_X} lambda_Y={EXP_LAMBDA_Y}"
+        "julia --project=. {input.src} {input.data} {input.pwy_json} {output.inferred_bson} {output.inferred_hdf} max_epochs={EXP_MAX_EPOCHS} lr={EXP_LR} lambda_layer={EXP_LAMBDA_LAYER} lambda_X={EXP_LAMBDA_X} lambda_Y={EXP_LAMBDA_Y} capacity={EXP_CAPACITY}"
 
 
 ###########################
@@ -149,7 +153,7 @@ rule factor_plot:
     params:
         plottedk=lambda wc: int(wc["usedk"])//5
     resources:
-        mem_mb=2000
+        mem_mb=5000
     shell:
         "python {input.src} {input.params_hdf} {input.pwy_json} {output.factorplot} {params.plottedk}"
 
@@ -161,7 +165,7 @@ rule embedding_scatter:
     output:
         scatter_html=join(SIM_SCATTER_DIR, "usedk={usedk}_truek={truek}_snr={snr}_rep={rep}.html")
     resources:
-        mem_mb=2000
+        mem_mb=5000
     shell:
         "python {input.src} {input.params_hdf} {input.clinical_hdf} 0 {output.scatter_html}"
 
@@ -173,6 +177,8 @@ rule score_matfac:
         pred_params=join(SIM_INFER_DIR, "usedk={usedk}_truek={truek}_snr={snr}_rep={rep}.hdf")
     output:
         score_json=join(SIM_SCORE_DIR, "usedk={usedk}_truek={truek}_snr={snr}_rep={rep}.json")
+    resources:
+        mem_mb=2000
     shell:
         "python {input.src} {input.true_params} {input.pred_params} {output.score_json}" 
 
@@ -184,8 +190,10 @@ rule sim_run_matfac:
     output:
         inferred_bson=join(SIM_INFER_DIR, "usedk={usedk}_truek={truek}_snr={snr}_rep={rep}.bson"),
         inferred_hdf=join(SIM_INFER_DIR, "usedk={usedk}_truek={truek}_snr={snr}_rep={rep}.hdf")
+    resources:
+        mem_mb=10000
     shell:
-        "julia --project=. {input.src} {input.data} {input.pwy_json} {output.inferred_bson} {output.inferred_hdf} max_epochs={SIM_MAX_EPOCHS} lr={SIM_LR} lambda_layer={SIM_LAMBDA_LAYER} lambda_X={SIM_LAMBDA_X} lambda_Y={SIM_LAMBDA_Y}"
+        "julia --project=. {input.src} {input.data} {input.pwy_json} {output.inferred_bson} {output.inferred_hdf} max_epochs={SIM_MAX_EPOCHS} lr={SIM_LR} lambda_layer={SIM_LAMBDA_LAYER} lambda_X={SIM_LAMBDA_X} lambda_Y={SIM_LAMBDA_Y} capacity={EXP_CAPACITY}"
 
 # NOTICE for now we have usedk==truek
 rule simulate_data:
@@ -197,6 +205,8 @@ rule simulate_data:
     output:
         data_hdf=join(SIM_DATA_DIR, "truek={truek}_snr={snr}_rep={rep}.hdf"),
         param_hdf=join(SIM_PARAM_DIR, "truek={truek}_snr={snr}_rep={rep}.hdf")
+    resources:
+        mem_mb=10000
     shell:
         "julia --project=. {input.src} {input.pwy_json} {input.sample_json} {input.feature_json} {output.data_hdf} {output.param_hdf} snr={wildcards.snr}"
    
@@ -208,6 +218,8 @@ rule select_used_pwys:
         all_pwy_json=join(REACTOME_DIR, "reactome.json"),
     output:
         pwy_json=join(SIM_PWY_DIR, "usedk={usedk}.json"),
+    resources:
+        mem_mb=500
     shell:
         "python {input.src} {input.all_pwy_json} {input.feature_json} {wildcards.usedk} {output.pwy_json}"
 
@@ -261,6 +273,8 @@ rule preprocess_tcga:
         tcga_hdf=join(TCGA_DIR, "tcga_omic.hdf")
     output:
         prep_hdf=join(TCGA_DIR, "tcga_omic_prep_dropctypes={dropctypes,[:A-Z]*}.hdf")
+    resources:
+        mem_mb=5000
     shell:
         "python {input.src} {input.tcga_hdf} {output.prep_hdf} heldout_ctypes={wildcards.dropctypes} std_assays= "
 

@@ -1,0 +1,13 @@
+
+universe                = docker
+docker_image            = TODO
+executable              = chtc_script.sh
+should_transfer_files   = YES
+when_to_transfer_output = ON_EXIT
+output                  = out.$(Process)
+error                   = err.$(Process)
+log                     = log.$(Process)
+request_memory          = 32GB
+request_disk            = 128GB
+
+queue

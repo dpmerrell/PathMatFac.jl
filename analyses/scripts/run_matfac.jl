@@ -20,7 +20,8 @@ function main(args)
                 :lambda_Y =>0.2,
                 :lambda_layer =>5.0,
                 :lr => 0.07,
-                :capacity => 25000000,
+                #:capacity => 25000000,
+                :capacity => 50000000,
                 :verbosity => 1
                )
     if length(args) > 3
