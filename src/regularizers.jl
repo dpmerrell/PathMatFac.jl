@@ -532,8 +532,6 @@ end
 ###########################################
 
 mutable struct PMLayerReg
-    #cscale_reg::NetworkRegularizer
-    #cshift_reg::NetworkRegularizer
     cscale_reg::ClusterRegularizer
     cshift_reg::ClusterRegularizer
     bscale_reg::BatchArrayReg

@@ -96,7 +96,6 @@ function assemble_model(pathway_sif_data,
     println("\tConstructing regularizers...")
 
     Y_reg = NetworkL1Regularizer(model_features, ext_edgelists; 
-                                 net_weight=lambda_Y, l1_weight=lambda_Y,
                                  l1_features=nonpwy_features,
                                  epsilon=1.0)
 
@@ -104,12 +103,12 @@ function assemble_model(pathway_sif_data,
     col_layers = PMLayers(model_assays, sample_batch_ids) 
 
     # Construct a regularizer for the column layers
-    logsigma_reg = ClusterRegularizer(model_assays; weight=0.67*lambda_layer)
-    mu_reg = ClusterRegularizer(model_assays; weight=0.67*lambda_layer)
+    logsigma_reg = ClusterRegularizer(model_assays; weight=0.67)
+    mu_reg = ClusterRegularizer(model_assays; weight=0.67)
     logdelta_reg = BatchArrayReg(col_layers.bscale.logdelta; 
-                                 weight=1.33*lambda_layer)
+                                 weight=1.33)
     theta_reg = BatchArrayReg(col_layers.bshift.theta;
-                              weight=1.33*lambda_layer)
+                              weight=1.33)
 
     layer_reg = PMLayerReg(logsigma_reg, mu_reg, logdelta_reg, theta_reg) 
 
@@ -120,7 +119,9 @@ function assemble_model(pathway_sif_data,
     matfac = MatFacModel(M, N, K, feature_losses;
                          col_transform=col_layers,
                          X_reg=X_reg, Y_reg=Y_reg, 
-                         col_transform_reg=layer_reg)
+                         col_transform_reg=layer_reg,
+                         lambda_X=lambda_X, lambda_Y=lambda_Y,
+                         lambda_col=lambda_layer)
 
     pathway_weights = zeros(K)
 
