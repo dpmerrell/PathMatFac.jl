@@ -2,7 +2,7 @@
 module PathwayMultiomics
 
 using MatFac, CUDA, SparseArrays, Statistics, 
-      HDF5, CSV, DataFrames, BSON, ChainRules, ChainRulesCore,
+      HDF5, CSV, JSON, DataFrames, BSON, ChainRules, ChainRulesCore,
       Zygote, Flux, Functors, LinearAlgebra
 
 MF = MatFac
@@ -18,7 +18,9 @@ include("model.jl")
 include("model_io.jl")
 include("postprocess.jl")
 include("scores.jl")
+include("callbacks.jl")
 include("fit.jl")
+include("transform.jl")
 include("simulate.jl")
 
 end

@@ -122,8 +122,7 @@ function fit_reg_path!(model::MultiomicModel, D::AbstractMatrix; capacity=Int(25
 
     while true
         # Set the regularizer weight
-        model.matfac.Y_reg.l1_weight = lambda
-        model.matfac.Y_reg.net_weight = lambda
+        model.matfac.lambda_Y = lambda
         
         # Store the history for each call of `fit`
         history_callback = MatFac.HistoryCallback()

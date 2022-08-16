@@ -641,8 +641,6 @@ function fit_tests()
                                lambda_layer=0.1)
         X_start = deepcopy(model.matfac.X)
         Y_start = deepcopy(model.matfac.Y)
-
-        fit!(model, omic_data; verbosity=1, lr=0.07, max_epochs=0)
         
         fit!(model, omic_data; verbosity=1, lr=0.07, max_epochs=10)
 
@@ -666,15 +664,37 @@ function fit_tests()
         model_gpu = gpu(model)
         omic_data_gpu = gpu(omic_data)
 
-        fit!(model_gpu, omic_data_gpu; verbosity=1, lr=0.07, max_epochs=0)
-
-        omic_data_gpu = gpu(omic_data)
-
         fit!(model_gpu, omic_data_gpu; verbosity=1, lr=0.07, max_epochs=10)
 
         model = cpu(model_gpu)
 
         @test true
+        @test !isapprox(model.matfac.X, X_start)
+        @test !isapprox(model.matfac.Y, Y_start)
+    end
+
+    @testset "Fit Hyperparam" begin
+
+        model = MultiomicModel([test_sif_path, test_sif_path, test_sif_path],  
+                               [string(test_pwy_name,"_",i) for i=1:3],
+                               sample_ids, sample_conditions,
+                               feature_genes, feature_assays,
+                               sample_batch_dict;
+                               lambda_layer=0.1)
+
+        X_start = deepcopy(model.matfac.X)
+        Y_start = deepcopy(model.matfac.Y)
+        lambda_start = model.matfac.lambda_Y
+
+        model_gpu = gpu(model)
+        omic_data_gpu = gpu(omic_data)
+
+        fit!(model_gpu, omic_data_gpu; fit_hyperparam=true, verbosity=1, lr=0.01, max_epochs=10)
+
+        model = cpu(model_gpu)
+
+        @test true
+        @test !isapprox(model.matfac.lambda_Y, lambda_start)
         @test !isapprox(model.matfac.X, X_start)
         @test !isapprox(model.matfac.Y, Y_start)
     end

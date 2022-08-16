@@ -22,7 +22,8 @@ function main(args)
                 :lr => 0.07,
                 #:capacity => 25000000,
                 :capacity => 50000000,
-                :verbosity => 1
+                :verbosity => 1,
+                :fit_hyperparam => false
                )
     if length(args) > 3
         parse_opts!(opts, args[5:end])
