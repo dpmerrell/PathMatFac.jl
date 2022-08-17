@@ -103,45 +103,51 @@ function fit_fixed_weight!(model::MultiomicModel, D::AbstractMatrix; capacity=In
 end
 
 
-function fit_reg_path!(model::MultiomicModel, D::AbstractMatrix; capacity=Int(25e6), 
-                                                                 init_lambda_Y=10.0, 
-                                                                 term_condition=nothing, 
-                                                                 histories_json="histories.json",
-                                                                 kwargs...)
-    # If no termination condition is provided, then
-    # just run 10 iterations. This can be useful for
-    # exploration.
-    if term_condition == nothing
-        term_condition = (model, iter) -> iter >= 10 
+function verbose_print(args...; verbosity=1, level=1)
+    if verbosity >= level
+        print(string(args...))
     end
+end
 
+
+function fit_reg_path!(model::MultiomicModel, D::AbstractMatrix; capacity=Int(25e6), 
+                                                                 verbosity=1,
+                                                                 init_lambda_Y=64.0,
+                                                                 shrink_factor=0.5, 
+                                                                 term_condition=iter_termination, 
+                                                                 callback=MatFac.HistoryCallback,
+                                                                 outer_callback=OuterCallback,
+                                                                 history_json="histories.json",
+                                                                 kwargs...)
+    
     # Initialize some loop variables
     lambda = init_lambda_Y
     iter = 1
-    histories = []
+    macro_callback = outer_callback()
+    macro_callback.history_json = history_json
 
+    # Loop through values of lambda_Y
     while true
         # Set the regularizer weight
         model.matfac.lambda_Y = lambda
         
-        # Store the history for each call of `fit`
-        history_callback = MatFac.HistoryCallback()
+        # initialize an "inner" callback 
+        micro_callback = callback()
 
         # Fit the model
-        fit_fixed_weight!(model, D; capacity=capacity, callback=history_callback, kwargs...)
-        push!(histories, history_callback.history)
+        verbose_print("Outer iteration ", iter, "; λ_Y = ", lambda, "\n"; verbosity=verbosity, level=1)
+        fit_fixed_weight!(model, D; capacity=capacity, callback=micro_callback, 
+                                    verbosity=verbosity, kwargs...)
 
-        # Save histories to a JSON file
-        open(histories_json, "w") do f
-            JSON.print(f, histories)
-        end
+        # Call the outer callback for this iteration
+        macro_callback(model, micro_callback) 
 
         # Check termination condition
         if term_condition(model, iter)
             break
         else
             iter += 1
-            lambda *= 0.5
+            lambda *= shrink_factor
         end
 
     end

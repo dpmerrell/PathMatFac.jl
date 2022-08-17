@@ -10,27 +10,42 @@ in a positive classification.
 """
 function average_precision(y_pred::AbstractVector, y_true::AbstractVector)
 
-    srt_idx = argsort(y_pred)
+    srt_idx = sortperm(y_pred; rev=true)
     pred_srt = y_pred[srt_idx]
     true_srt = y_true[srt_idx]
 
-    TP = sum(y_true)
-    FP = length(y_true) - TP
-    FN = 0
-    Rminus = 1.0
+    cur_threshold = pred_srt[1] 
+    TP_total = sum(y_true)
+    TP = 0
+    FP = 0
+    FN = TP_total
+    R = 0.0
     ave_prec = 0.0
-    for i=1:length(y_true)
-        if true_srt[i]
-            FN += 1
-            TP -= 1
-        else
-            FP -= 1
+
+    for (i,yp) in enumerate(pred_srt)
+
+        if yp != cur_threshold
+            Rnew = TP / TP_total
+            P = TP / (TP + FP)
+            ave_prec += P*(Rnew - R)
+
+            R = Rnew
+            cur_threshold = yp 
         end
-        R = TP/(TP + FN)
-        prec = TP/(TP + FP)
-        ave_prec += (Rminus - R)*prec
-        Rminus = R
+
+        # Increment/decrement the counts
+        if true_srt[i]
+            TP += 1
+            FN -= 1
+        else
+            FP += 1
+        end
     end
+  
+    Rnew = 1.0
+    P = TP / (TP + FP)
+    ave_prec += P*(Rnew - R) 
+    
     return ave_prec
 end
 

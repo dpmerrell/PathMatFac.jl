@@ -597,6 +597,22 @@ function assemble_model_tests()
     end
 end
 
+function score_tests()
+
+    @testset "Average Precision tests" begin
+
+        y_pred = [0, 0, 0.5, 0.5, 1.0]
+        y_true = [false, false, false, true, true]
+
+        @test isapprox(PM.average_precision(y_pred, y_true), 5/6)
+        
+        y_pred = [0, 0.5, 0, 1.0, 0.5]
+        y_true = [false, false, false, true, true]
+
+        @test isapprox(PM.average_precision(y_pred, y_true), 5/6)
+    end
+
+end
 
 function fit_tests()
     
@@ -686,10 +702,37 @@ function fit_tests()
         Y_start = deepcopy(model.matfac.Y)
         lambda_start = model.matfac.lambda_Y
 
+
+        fit!(model, omic_data; fit_hyperparam=true, verbosity=1, 
+                               history_json="test_histories.json", 
+                               lr=0.01, max_epochs=10)
+
+        @test true
+        @test !isapprox(model.matfac.lambda_Y, lambda_start)
+        @test !isapprox(model.matfac.X, X_start)
+        @test !isapprox(model.matfac.Y, Y_start)
+        rm("test_histories.json")
+    end
+    
+    @testset "Fit hyperparam GPU" begin
+
+        model = MultiomicModel([test_sif_path, test_sif_path, test_sif_path],  
+                               [string(test_pwy_name,"_",i) for i=1:3],
+                               sample_ids, sample_conditions,
+                               feature_genes, feature_assays,
+                               sample_batch_dict;
+                               lambda_layer=0.1)
+
+        X_start = deepcopy(model.matfac.X)
+        Y_start = deepcopy(model.matfac.Y)
+        lambda_start = model.matfac.lambda_Y
+
         model_gpu = gpu(model)
         omic_data_gpu = gpu(omic_data)
 
-        fit!(model_gpu, omic_data_gpu; fit_hyperparam=true, verbosity=1, lr=0.01, max_epochs=10)
+        fit!(model_gpu, omic_data_gpu; fit_hyperparam=true, verbosity=1, 
+                                       history_json="test_histories.json", 
+                                       lr=0.01, max_epochs=10)
 
         model = cpu(model_gpu)
 
@@ -697,6 +740,7 @@ function fit_tests()
         @test !isapprox(model.matfac.lambda_Y, lambda_start)
         @test !isapprox(model.matfac.X, X_start)
         @test !isapprox(model.matfac.Y, Y_start)
+        rm("test_histories.json")
     end
 end
 
@@ -785,12 +829,13 @@ end
 
 function main()
 
-    #util_tests()
-    #batch_array_tests()
-    #layers_tests()
-    #preprocess_tests()
-    #reg_tests()
-    #assemble_model_tests()
+    util_tests()
+    batch_array_tests()
+    layers_tests()
+    preprocess_tests()
+    reg_tests()
+    assemble_model_tests()
+    score_tests()
     fit_tests()
     model_io_tests()
     simulation_tests()
