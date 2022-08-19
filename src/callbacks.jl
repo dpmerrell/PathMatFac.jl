@@ -26,8 +26,6 @@ function (ocb::OuterCallback)(model::MultiomicModel, inner_callback)
 
     Y_pred = cpu(model.matfac.Y)
     Y_true = cpu(map( v->(!).(v), model.matfac.Y_reg.l1_feat_idx))
-    #println(model.matfac.Y_reg.l1_feat_idx)
-    #println(Y_true)
     pathway_av_precs = [average_precision(Y_pred[i,:], y_t) for (i, y_t) in enumerate(Y_true)]
 
     results = Dict("lambda_Y" => model.matfac.lambda_Y,

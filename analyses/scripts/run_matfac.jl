@@ -1,7 +1,8 @@
 
 using PathwayMultiomics
-using JSON
 using ScikitLearnBase
+using CUDA
+using JSON
 using Flux
 
 include("script_util.jl")
@@ -14,17 +15,16 @@ function main(args)
     out_bson = args[3]
     out_hdf = args[4]
 
-    opts = Dict(:max_epochs => 1000, 
-                :rel_tol =>1e-8, 
-                :lambda_X =>0.001, 
-                :lambda_Y =>0.2,
-                :lambda_layer =>5.0,
-                :lr => 0.07,
-                #:capacity => 25000000,
-                :capacity => 50000000,
-                :verbosity => 1,
-                :fit_hyperparam => false
-               )
+    opts = Dict{Symbol,Any}(:max_epochs => 1000, 
+                            :rel_tol =>1e-8, 
+                            :lambda_X =>0.001, 
+                            :lambda_Y =>0.2,
+                            :lambda_layer =>5.0,
+                            :lr => 0.07,
+                            :capacity => 25000000,
+                            :verbosity => 1,
+                            :fit_hyperparam => true,
+                           )
     if length(args) > 3
         parse_opts!(opts, args[5:end])
     end
@@ -62,21 +62,46 @@ function main(args)
                            lambda_Y=lambda_Y,
                            lambda_layer=lambda_layer)
 
-    # Move to GPU
-    omic_data_d = gpu(omic_data)
-    omic_data = nothing
-    model_d = gpu(model)
-    model = nothing
+    # If a gpu_status file is provided, use it to 
+    # select an unoccupied GPU
+    status_file = nothing
+    gpu_idx = -1
+    if haskey(opts, :gpu_status_file)
+        status_file = pop!(opts, :gpu_status_file)
+        gpu_idx = get_available_device(status_file=status_file)
+        @assert gpu_idx != nothing
 
-    start_time = time()
-    ScikitLearnBase.fit!(model_d, omic_data_d; opts...)
-    end_time = time()
+        update_device_status(gpu_idx, '1'; status_file=status_file)
+        CUDA.device!(gpu_idx-1)
+        println(string("Using CUDA device ", gpu_idx-1))
+    end
 
-    println("ELAPSED TIME (s):")
-    println(end_time - start_time)
+    try
+        # Move to GPU
+        omic_data_d = gpu(omic_data)
+        omic_data = nothing
+        model_d = gpu(model)
+        model = nothing
 
-    # Move model back to CPU; save to disk
-    model = cpu(model_d)
+        start_time = time()
+        ScikitLearnBase.fit!(model_d, omic_data_d; opts...)
+        end_time = time()
+
+        println("ELAPSED TIME (s):")
+        println(end_time - start_time)
+    
+        # Move model back to CPU; save to disk
+        model = cpu(model_d)
+    catch e
+        if status_file != nothing
+            update_device_status(gpu_idx, '0'; status_file=status_file) 
+        end
+        throw(e)
+    end
+
+    if status_file != nothing
+        update_device_status(gpu_idx, '0'; status_file=status_file) 
+    end
     PathwayMultiomics.save_model(out_bson, model)
     save_params_hdf(out_hdf, model)
 
