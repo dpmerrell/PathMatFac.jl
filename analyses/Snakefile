@@ -43,6 +43,8 @@ REACTOME_URL = config["reactome_url"]
 ####################################
 SIM_PARAMS = config["sim_params"]
 SIM_DATA_PARAMS = SIM_PARAMS["data_params"]
+SIM_HELDOUT_CTYPES = SIM_DATA_PARAMS["heldout_ctypes"]
+SIM_DROPCTYPES_STR = ":".join(SIM_HELDOUT_CTYPES)
 SIM_REPS = list(range(SIM_DATA_PARAMS["reps"]))
 SIM_SNR = SIM_DATA_PARAMS["snr"]
 SIM_TRUE_K = SIM_DATA_PARAMS["true_K"]
@@ -88,12 +90,12 @@ rule all:
                            usedk=SIM_USED_K, truek=SIM_TRUE_K, snr=SIM_SNR, rep=SIM_REPS),
        sim_factorplots=expand(join(SIM_FACTORPLOT_DIR,"usedk={usedk}_truek={truek}_snr={snr}_rep={rep}.html"),
                               usedk=SIM_USED_K, truek=SIM_TRUE_K, snr=SIM_SNR, rep=SIM_REPS),
-       #exp_inferred=expand(join(EXP_INFER_DIR,"usedk={usedk}.hdf"),
-       #                    usedk=EXP_USED_K),
-       #exp_scatters=expand(join(EXP_SCATTER_DIR,"usedk={usedk}.html"),
-       #                    usedk=EXP_USED_K),
-       #exp_factorplots=expand(join(EXP_FACTORPLOT_DIR,"usedk={usedk}.html"),
-       #                       usedk=EXP_USED_K)
+       exp_inferred=expand(join(EXP_INFER_DIR,"usedk={usedk}.hdf"),
+                           usedk=EXP_USED_K),
+       exp_scatters=expand(join(EXP_SCATTER_DIR,"usedk={usedk}.html"),
+                           usedk=EXP_USED_K),
+       exp_factorplots=expand(join(EXP_FACTORPLOT_DIR,"usedk={usedk}.html"),
+                              usedk=EXP_USED_K)
 
 
 ###########################
@@ -281,7 +283,7 @@ rule extract_samples_features:
         src="scripts/extract_samples_features.py",
         tcga_hdf=join(TCGA_DIR, "tcga_omic_prep_dropctypes={dropctypes}.hdf")
     output:
-        samples_json=join(TCGA_DIR, "tcga_samples_dropctypes={dropctypes}.json"),
+        samples_json=join(TCGA_DIR, "tcga_samples_dropctypes={dropctypes,[:A-Z]*}.json"),
         features_json=join(TCGA_DIR, "tcga_features_dropctypes={dropctypes,[:A-Z]*}.json")
     shell:
         "python {input.src} {input.tcga_hdf} {output.samples_json} {output.features_json}"

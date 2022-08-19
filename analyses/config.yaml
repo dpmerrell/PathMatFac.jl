@@ -10,6 +10,7 @@ sim_params:
         snr: [99.0]
         true_K: [300]
         reps: 1
+        heldout_ctypes: []
     matfac_params:
         max_epochs: 500
         lr: 0.04

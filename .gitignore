@@ -3,7 +3,8 @@
 *.tab
 *.list
 *.json
-analyses/data/paradigm-scripts-master/*
 
 # Large data files
 *.hdf
+*.tar.gz
+analyses/data/
