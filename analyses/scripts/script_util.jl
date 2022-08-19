@@ -111,7 +111,7 @@ function parse_opts!(defaults, opt_list)
             try
                 new_v = parse(Float64, v)
             catch ArgumentError
-                new_v = v
+                new_v = string(v)
             end
         finally
             push!(parsed_v, new_v)
@@ -165,5 +165,39 @@ function save_params_hdf(hdf_filename, model::MultiomicModel)
     end
 
 end
+
+######################################
+# GPU management
+######################################
+
+function get_device_statuses(; status_file="gpu_status.txt")
+    
+    # Get current status
+    f = open(status_file, "r")
+    status_str = readline(f)
+    close(f)
+
+    return status_str
+end
+
+function update_device_status(device_idx::Integer, status::Char; status_file="gpu_status.txt")
+    
+    status_str = get_device_statuses(;status_file=status_file)
+
+    status_vec = collect(status_str)
+    status_vec[device_idx] = status
+
+    new_str = join(status_vec)
+    f = open(status_file, "w")
+    write(f, new_str)
+    close(f)
+
+end
+
+function get_available_device(; status_file="gpu_status.txt")
+    status_str = get_device_statuses(status_file=status_file)
+    return findfirst('0', status_str)
+end
+
 
 

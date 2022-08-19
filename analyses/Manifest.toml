@@ -534,7 +534,7 @@ uuid = "d6f4376e-aef5-505a-96c1-9c027394607a"
 
 [[MatFac]]
 deps = ["BSON", "CUDA", "ChainRules", "ChainRulesCore", "Flux", "Functors", "ScikitLearnBase", "SparseArrays", "Zygote"]
-git-tree-sha1 = "4c98efa73ded0a4cf21c559e56f7d3d7e1eae895"
+git-tree-sha1 = "36d6c3e0318a2506809f4ce5df8c90812ce83c56"
 repo-rev = "main"
 repo-url = "https://github.com/dpmerrell/MatFac.jl"
 uuid = "23734cf9-4c0e-45d4-b5ff-f416ac13e898"
@@ -687,9 +687,9 @@ version = "2.3.2"
 
 [[PathwayMultiomics]]
 deps = ["BSON", "CSV", "CUDA", "ChainRules", "ChainRulesCore", "DataFrames", "Distributions", "Flux", "Functors", "Gen", "HDF5", "IJulia", "JSON", "JuMP", "LinearAlgebra", "LowRankModels", "MatFac", "OSQP", "ScikitLearnBase", "SparseArrays", "Statistics", "StatsBase", "StatsFuns", "SuiteSparse", "Zygote"]
-git-tree-sha1 = "5b0bc44c53e378adbb41869f7512fa7eb65b9863"
+git-tree-sha1 = "844403e2ef9cac5f2caf4bfed4474fe2f7d02862"
 repo-rev = "master"
-repo-url = ".."
+repo-url = "https://github.com/dpmerrell/PathwayMultiomics.jl"
 uuid = "26ae61a0-bdaa-4ab9-b40a-f117d74136e1"
 version = "0.1.0"
 

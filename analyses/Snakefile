@@ -18,6 +18,7 @@ SIM_DATA_DIR = join(SIM_DIR, "data_hdfs")
 SIM_PWY_DIR = join(SIM_DIR, "pathway_jsons")
 SIM_PARAM_DIR = join(SIM_DIR, "true_parameters")
 SIM_INFER_DIR = join(SIM_DIR, "inferred_parameters")
+SIM_HISTORY_DIR = join(SIM_DIR, "training_histories")
 SIM_SCORE_DIR = join(SIM_DIR, "scores")
 SIM_VIS_DIR = join(SIM_DIR, "visualizations")
 SIM_SCATTER_DIR = join(SIM_VIS_DIR, "embedding_scatter")
@@ -26,6 +27,7 @@ SIM_FACTORPLOT_DIR = join(SIM_VIS_DIR, "factor_plots")
 ## TCGA run directories
 EXP_DIR = join(RESULT_DIR, "real_data_runs")
 EXP_INFER_DIR = join(EXP_DIR, "inferred_parameters")
+EXP_HISTORY_DIR = join(EXP_DIR, "training_histories")
 EXP_VIS_DIR = join(EXP_DIR, "visualizations")
 EXP_SCATTER_DIR = join(EXP_VIS_DIR, "embedding_scatter")
 EXP_FACTORPLOT_DIR = join(EXP_VIS_DIR, "factor_plots")
@@ -52,6 +54,7 @@ SIM_LAMBDA_LAYER = SIM_MATFAC_PARAMS["lambda_layer"]
 SIM_LAMBDA_X = SIM_MATFAC_PARAMS["lambda_X"]
 SIM_LAMBDA_Y = SIM_MATFAC_PARAMS["lambda_Y"]
 SIM_USED_K = SIM_MATFAC_PARAMS["used_K"]
+SIM_CAPACITY = SIM_MATFAC_PARAMS["gpu_capacity"]
 
 
 ###################################
@@ -85,12 +88,12 @@ rule all:
                            usedk=SIM_USED_K, truek=SIM_TRUE_K, snr=SIM_SNR, rep=SIM_REPS),
        sim_factorplots=expand(join(SIM_FACTORPLOT_DIR,"usedk={usedk}_truek={truek}_snr={snr}_rep={rep}.html"),
                               usedk=SIM_USED_K, truek=SIM_TRUE_K, snr=SIM_SNR, rep=SIM_REPS),
-       exp_inferred=expand(join(EXP_INFER_DIR,"usedk={usedk}.hdf"),
-                           usedk=EXP_USED_K),
-       exp_scatters=expand(join(EXP_SCATTER_DIR,"usedk={usedk}.html"),
-                           usedk=EXP_USED_K),
-       exp_factorplots=expand(join(EXP_FACTORPLOT_DIR,"usedk={usedk}.html"),
-                              usedk=EXP_USED_K)
+       #exp_inferred=expand(join(EXP_INFER_DIR,"usedk={usedk}.hdf"),
+       #                    usedk=EXP_USED_K),
+       #exp_scatters=expand(join(EXP_SCATTER_DIR,"usedk={usedk}.html"),
+       #                    usedk=EXP_USED_K),
+       #exp_factorplots=expand(join(EXP_FACTORPLOT_DIR,"usedk={usedk}.html"),
+       #                       usedk=EXP_USED_K)
 
 
 ###########################
@@ -127,16 +130,18 @@ rule exp_embedding_scatter:
 rule exp_run_matfac:
     input:
         src="scripts/run_matfac.jl",
+        status_file="gpu_status.txt",
         data=join(TCGA_DIR, "tcga_omic_prep_dropctypes="+EXP_DROPCTYPES_STR+".hdf"),
         pwy_json=join(SIM_PWY_DIR, "usedk={usedk}.json")
     output:
         inferred_bson=join(EXP_INFER_DIR, "usedk={usedk}.bson"),
-        inferred_hdf=join(EXP_INFER_DIR, "usedk={usedk}.hdf")
+        inferred_hdf=join(EXP_INFER_DIR, "usedk={usedk}.hdf"),
+        history_json=join(EXP_HISTORY_DIR, "usedk={usedk}.json")
     resources:
         mem_mb=10000,
         gpu=1
     shell:
-        "julia --project=. {input.src} {input.data} {input.pwy_json} {output.inferred_bson} {output.inferred_hdf} max_epochs={EXP_MAX_EPOCHS} lr={EXP_LR} lambda_layer={EXP_LAMBDA_LAYER} lambda_X={EXP_LAMBDA_X} lambda_Y={EXP_LAMBDA_Y} capacity={EXP_CAPACITY}"
+        "julia --project=. {input.src} {input.data} {input.pwy_json} {output.inferred_bson} {output.inferred_hdf} max_epochs={EXP_MAX_EPOCHS} lr={EXP_LR} lambda_layer={EXP_LAMBDA_LAYER} lambda_X={EXP_LAMBDA_X} lambda_Y={EXP_LAMBDA_Y} capacity={EXP_CAPACITY} history_json={output.history_json} gpu_status_file={input.status_file}"
 
 
 ###########################
@@ -185,15 +190,18 @@ rule score_matfac:
 rule sim_run_matfac:
     input:
         src="scripts/run_matfac.jl",
+        status_file="gpu_status.txt",
         data=join(SIM_DATA_DIR, "truek={truek}_snr={snr}_rep={rep}.hdf"),
         pwy_json=join(SIM_PWY_DIR, "usedk={usedk}.json")
     output:
         inferred_bson=join(SIM_INFER_DIR, "usedk={usedk}_truek={truek}_snr={snr}_rep={rep}.bson"),
-        inferred_hdf=join(SIM_INFER_DIR, "usedk={usedk}_truek={truek}_snr={snr}_rep={rep}.hdf")
+        inferred_hdf=join(SIM_INFER_DIR, "usedk={usedk}_truek={truek}_snr={snr}_rep={rep}.hdf"),
+        history_json=join(SIM_HISTORY_DIR, "usedk={usedk}_truek={truek}_snr={snr}_rep={rep}.json")
     resources:
-        mem_mb=10000
+        mem_mb=10000,
+        gpu=1
     shell:
-        "julia --project=. {input.src} {input.data} {input.pwy_json} {output.inferred_bson} {output.inferred_hdf} max_epochs={SIM_MAX_EPOCHS} lr={SIM_LR} lambda_layer={SIM_LAMBDA_LAYER} lambda_X={SIM_LAMBDA_X} lambda_Y={SIM_LAMBDA_Y} capacity={EXP_CAPACITY}"
+        "julia --project=. {input.src} {input.data} {input.pwy_json} {output.inferred_bson} {output.inferred_hdf} max_epochs={SIM_MAX_EPOCHS} lr={SIM_LR} lambda_layer={SIM_LAMBDA_LAYER} lambda_X={SIM_LAMBDA_X} lambda_Y={SIM_LAMBDA_Y} capacity={SIM_CAPACITY} history_json={output.history_json} gpu_status_file={input.status_file}"
 
 # NOTICE for now we have usedk==truek
 rule simulate_data:
@@ -223,6 +231,17 @@ rule select_used_pwys:
     shell:
         "python {input.src} {input.all_pwy_json} {input.feature_json} {wildcards.usedk} {output.pwy_json}"
 
+
+######################################
+# GPU status
+######################################
+rule initialize_gpu_status:
+    input:
+        src=join("scripts", "init_gpu_status.jl")
+    output:
+        status_file="gpu_status.txt"
+    shell:
+        "julia --project=. {input.src} > {output.status_file}"
 
 ######################################
 # Download and preprocess Reactome

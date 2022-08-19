@@ -12,20 +12,21 @@ sim_params:
         reps: 1
     matfac_params:
         max_epochs: 500
-        lr: 0.20
-        lambda_layer: 2.0 
-        lambda_X: 0.01
-        lambda_Y: 0.8
+        lr: 0.04
+        lambda_layer: 16.0 
+        lambda_X: 0.1
+        lambda_Y: 8.0
         used_K: [300]
+        gpu_capacity: 25000000
 
 tcga_params:
     data_params:
         heldout_ctypes: ["OV", "GBM", "LAML"]
     matfac_params:
         max_epochs: 500
-        lr: 0.05
+        lr: 0.04
         lambda_layer: 16.0 
         lambda_X: 0.1
         lambda_Y: 8.0
         used_K: [300]
-        gpu_capacity: 50000000
+        gpu_capacity: 25000000
