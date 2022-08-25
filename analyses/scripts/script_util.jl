@@ -100,7 +100,7 @@ end
 function parse_opts!(defaults, opt_list)
 
     opts_k = [Symbol(split(opt,"=")[1]) for opt in opt_list]
-    opts_v = [split(opt,"=")[end] for opt in opt_list]
+    opts_v = [join(split(opt,"=")[2:end],"=") for opt in opt_list]
 
     parsed_v = []
     for v in opts_v
