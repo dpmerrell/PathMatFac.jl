@@ -112,7 +112,7 @@ end
 
 function fit_reg_path!(model::MultiomicModel, D::AbstractMatrix; capacity=Int(25e6), 
                                                                  verbosity=1,
-                                                                 init_lambda_Y=64.0,
+                                                                 init_lambda_Y=128.0,
                                                                  shrink_factor=0.5, 
                                                                  term_condition=iter_termination, 
                                                                  callback=MatFac.HistoryCallback,

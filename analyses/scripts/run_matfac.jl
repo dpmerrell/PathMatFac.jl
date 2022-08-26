@@ -18,7 +18,7 @@ function main(args)
     opts = Dict{Symbol,Any}(:max_epochs => 1000, 
                             :rel_tol =>1e-8, 
                             :lambda_X =>0.001, 
-                            :lambda_Y =>0.2,
+                            :init_lambda_Y => 128.0,
                             :lambda_layer =>5.0,
                             :lr => 0.07,
                             :capacity => 25000000,
@@ -32,7 +32,6 @@ function main(args)
     println("OPTS:")
     println(opts)
     lambda_X = pop!(opts, :lambda_X)
-    lambda_Y = pop!(opts, :lambda_Y)
     lambda_layer = pop!(opts, :lambda_layer)
 
     println("Loading data...")
@@ -59,7 +58,7 @@ function main(args)
                            feature_genes, feature_assays,
                            batch_dict;
                            lambda_X=lambda_X, 
-                           lambda_Y=lambda_Y,
+                           lambda_Y=1.0,
                            lambda_layer=lambda_layer)
 
     # If a gpu_status file is provided, use it to 

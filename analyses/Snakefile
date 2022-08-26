@@ -54,7 +54,7 @@ SIM_MAX_EPOCHS = SIM_MATFAC_PARAMS["max_epochs"]
 SIM_LR = SIM_MATFAC_PARAMS["lr"]
 SIM_LAMBDA_LAYER = SIM_MATFAC_PARAMS["lambda_layer"]
 SIM_LAMBDA_X = SIM_MATFAC_PARAMS["lambda_X"]
-SIM_LAMBDA_Y = SIM_MATFAC_PARAMS["lambda_Y"]
+SIM_LAMBDA_Y = SIM_MATFAC_PARAMS["init_lambda_Y"]
 SIM_USED_K = SIM_MATFAC_PARAMS["used_K"]
 SIM_CAPACITY = SIM_MATFAC_PARAMS["gpu_capacity"]
 
@@ -143,7 +143,7 @@ rule exp_run_matfac:
         mem_mb=10000,
         gpu=1
     shell:
-        "julia --project=. {input.src} {input.data} {input.pwy_json} {output.inferred_bson} {output.inferred_hdf} max_epochs={EXP_MAX_EPOCHS} lr={EXP_LR} lambda_layer={EXP_LAMBDA_LAYER} lambda_X={EXP_LAMBDA_X} lambda_Y={EXP_LAMBDA_Y} capacity={EXP_CAPACITY} history_json={output.history_json} gpu_status_file={input.status_file}"
+        "julia --project=. {input.src} {input.data} {input.pwy_json} {output.inferred_bson} {output.inferred_hdf} max_epochs={EXP_MAX_EPOCHS} lr={EXP_LR} lambda_layer={EXP_LAMBDA_LAYER} lambda_X={EXP_LAMBDA_X} init_lambda_Y={EXP_LAMBDA_Y} capacity={EXP_CAPACITY} history_json={output.history_json} gpu_status_file={input.status_file}"
 
 
 ###########################
@@ -203,7 +203,7 @@ rule sim_run_matfac:
         mem_mb=10000,
         gpu=1
     shell:
-        "julia --project=. {input.src} {input.data} {input.pwy_json} {output.inferred_bson} {output.inferred_hdf} max_epochs={SIM_MAX_EPOCHS} lr={SIM_LR} lambda_layer={SIM_LAMBDA_LAYER} lambda_X={SIM_LAMBDA_X} lambda_Y={SIM_LAMBDA_Y} capacity={SIM_CAPACITY} history_json={output.history_json} gpu_status_file={input.status_file}"
+        "julia --project=. {input.src} {input.data} {input.pwy_json} {output.inferred_bson} {output.inferred_hdf} max_epochs={SIM_MAX_EPOCHS} lr={SIM_LR} lambda_layer={SIM_LAMBDA_LAYER} lambda_X={SIM_LAMBDA_X} init_lambda_Y={SIM_LAMBDA_Y} capacity={SIM_CAPACITY} history_json={output.history_json} gpu_status_file={input.status_file}"
 
 # NOTICE for now we have usedk==truek
 rule simulate_data:
