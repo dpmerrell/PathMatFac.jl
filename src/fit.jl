@@ -70,10 +70,15 @@ function fit!(model::MultiomicModel, D::AbstractMatrix; fit_hyperparam=false,
     if typeof(D) <: CuArray
         CUDA.unsafe_free!(D)
     end
+   
+    # Initialize the parameters     
+    initialize_params!(model, D_r; capacity=capacity)
 
+    # Perform the actual fit
     if fit_hyperparam
         fit_reg_path!(model, D_r; capacity=capacity, kwargs...)
     else
+        # Set some model parameters to the right ball-park
         fit_fixed_weight!(model, D_r; capacity=capacity, kwargs...)
     end
     
@@ -91,14 +96,10 @@ function fit!(model::MultiomicModel, D::AbstractMatrix; fit_hyperparam=false,
 end
 
 
-function fit_fixed_weight!(model::MultiomicModel, D::AbstractMatrix; capacity=Int(25e6), kwargs...)
-
-    # Set some model parameters to the right ball-park
-    initialize_params!(model, D; capacity=capacity)
+function fit_fixed_weight!(model::MultiomicModel, D::AbstractMatrix; kwargs...)
 
     # train the matrix factorization model
-    fit!(model.matfac, D; capacity=capacity, kwargs...)
-
+    fit!(model.matfac, D; kwargs...)
     return model
 end
 
@@ -110,8 +111,7 @@ function verbose_print(args...; verbosity=1, level=1)
 end
 
 
-function fit_reg_path!(model::MultiomicModel, D::AbstractMatrix; capacity=Int(25e6), 
-                                                                 verbosity=1,
+function fit_reg_path!(model::MultiomicModel, D::AbstractMatrix; verbosity=1,
                                                                  init_lambda_Y=128.0,
                                                                  shrink_factor=0.5, 
                                                                  term_condition=iter_termination, 
@@ -119,6 +119,11 @@ function fit_reg_path!(model::MultiomicModel, D::AbstractMatrix; capacity=Int(25
                                                                  outer_callback=OuterCallback,
                                                                  history_json="histories.json",
                                                                  kwargs...)
+
+    # Initialize the latent factors at zero
+    # (this is appropriate for regularizer-path hyperparameter selection)
+    model.matfac.X .= 0
+    model.matfac.Y .= 0
     
     # Initialize some loop variables
     lambda = init_lambda_Y
@@ -136,7 +141,7 @@ function fit_reg_path!(model::MultiomicModel, D::AbstractMatrix; capacity=Int(25
 
         # Fit the model
         verbose_print("Outer iteration ", iter, "; λ_Y = ", lambda, "\n"; verbosity=verbosity, level=1)
-        fit_fixed_weight!(model, D; capacity=capacity, callback=micro_callback, 
+        fit_fixed_weight!(model, D; callback=micro_callback, 
                                     verbosity=verbosity, kwargs...)
 
         # Call the outer callback for this iteration

@@ -37,6 +37,10 @@ function (ocb::OuterCallback)(model::MultiomicModel, inner_callback)
     open(ocb.history_json, "w") do f
         JSON.print(f, ocb.history)
     end
+
+    basename = join(split(ocb.history_json, ".")[1:end-1], ".")
+    save_model(string(basename, "_lambda_Y=", model.matfac.lambda_Y, ".bson"), model)
+
 end
 
 
