@@ -447,7 +447,7 @@ version = "2.3.2"
 
 [[PathwayMultiomics]]
 deps = ["BSON", "CSV", "CUDA", "ChainRules", "ChainRulesCore", "DataFrames", "Distributions", "Flux", "Functors", "HDF5", "JSON", "LinearAlgebra", "MatFac", "ScikitLearnBase", "SparseArrays", "Statistics", "Zygote"]
-git-tree-sha1 = "e7a4683f6108ed15c975fca6e8568c61797e6048"
+git-tree-sha1 = "a073297065842c76f5f958f91a68069506e4a2cb"
 repo-rev = "master"
 repo-url = "https://github.com/dpmerrell/PathwayMultiomics.jl"
 uuid = "26ae61a0-bdaa-4ab9-b40a-f117d74136e1"
