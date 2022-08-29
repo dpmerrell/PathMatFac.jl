@@ -1,4 +1,5 @@
 
+
 #######################################
 # Termination conditions
 #######################################
@@ -6,8 +7,9 @@ function iter_termination(model, iter)
     return iter >= 10
 end
 
-function precision_termination(model, iter)
-
+function precision_termination(model, iter; prec_threshold=0.3)
+    pathway_av_precs = model_Y_average_precs(model)
+    return minimum(pathway_av_precs) < prec_threshold
 end
 
 #######################################
@@ -24,9 +26,7 @@ end
 
 function (ocb::OuterCallback)(model::MultiomicModel, inner_callback)
 
-    Y_pred = cpu(model.matfac.Y)
-    Y_true = cpu(map( v->(!).(v), model.matfac.Y_reg.l1_feat_idx))
-    pathway_av_precs = [average_precision(Y_pred[i,:], y_t) for (i, y_t) in enumerate(Y_true)]
+    pathway_av_precs = model_Y_average_precs(model) 
 
     results = Dict("lambda_Y" => model.matfac.lambda_Y,
                    "history" => inner_callback.history,
@@ -38,8 +38,9 @@ function (ocb::OuterCallback)(model::MultiomicModel, inner_callback)
         JSON.print(f, ocb.history)
     end
 
-    basename = join(split(ocb.history_json, ".")[1:end-1], ".")
-    save_model(string(basename, "_lambda_Y=", model.matfac.lambda_Y, ".bson"), model)
+ 
+    #basename = join(split(ocb.history_json, ".")[1:end-1], ".")
+    #save_model(string(basename, "_lambda_Y=", model.matfac.lambda_Y, ".bson"), model)
 
 end
 

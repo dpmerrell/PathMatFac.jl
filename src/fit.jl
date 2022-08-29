@@ -120,11 +120,17 @@ function fit_reg_path!(model::MultiomicModel, D::AbstractMatrix; verbosity=1,
                                                                  history_json="histories.json",
                                                                  kwargs...)
 
-    # Initialize the latent factors at zero
+    # Initialize the latent factors to have very small entries
     # (this is appropriate for regularizer-path hyperparameter selection)
-    model.matfac.X .= 0
-    model.matfac.Y .= 0
-    
+    model.matfac.X .*= 1e-5
+    #model.matfac.Y .*= 1e-5
+    model.matfac.Y .= 0 
+        
+    println("INITIAL MATFAC X:")
+    println(model.matfac.X)
+    println("INITIAL MATFAC Y:")
+    println(model.matfac.Y)
+
     # Initialize some loop variables
     lambda = init_lambda_Y
     iter = 1
@@ -154,6 +160,13 @@ function fit_reg_path!(model::MultiomicModel, D::AbstractMatrix; verbosity=1,
             iter += 1
             lambda *= shrink_factor
         end
+
+        println("LAMBDA Y:")
+        println(model.matfac.lambda_Y)
+        println("MATFAC X:")
+        println(model.matfac.X)
+        println("MATFAC Y:")
+        println(model.matfac.Y)
 
     end
 
