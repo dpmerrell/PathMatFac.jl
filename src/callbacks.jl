@@ -1,16 +1,30 @@
 
+####################################################
+# Selection criteria (for hyperparameter selection)
+####################################################
 
-#######################################
-# Termination conditions
-#######################################
-function iter_termination(model, iter)
+function latest_model(model, best_model, D, iter)
+    return true
+end
+
+function precision_selection(model, best_model, D, iter)
+    new_av_precs = model_Y_average_precs(model)
+    best_av_precs = model_Y_average_precs(best_model)
+    return minimum(new_av_precs) > minimum(best_av_precs)
+end
+
+########################################################
+# Termination conditions (for hyperparameter selection)
+########################################################
+function iter_termination(model, best_model, D, iter)
     return iter >= 10
 end
 
-function precision_termination(model, iter; prec_threshold=0.3)
+function precision_termination(model, best_model, D, iter; prec_threshold=0.25)
     pathway_av_precs = model_Y_average_precs(model)
     return minimum(pathway_av_precs) < prec_threshold
 end
+
 
 #######################################
 # Callback structs
@@ -37,10 +51,6 @@ function (ocb::OuterCallback)(model::MultiomicModel, inner_callback)
     open(ocb.history_json, "w") do f
         JSON.print(f, ocb.history)
     end
-
- 
-    #basename = join(split(ocb.history_json, ".")[1:end-1], ".")
-    #save_model(string(basename, "_lambda_Y=", model.matfac.lambda_Y, ".bson"), model)
 
 end
 

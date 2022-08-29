@@ -17,7 +17,7 @@ def score_Y(true_Y, fitted_Y):
     true_norm_sq = np.sum(true_Y*true_Y, axis=0)
     pred_norm_sq = np.sum(fitted_Y*fitted_Y, axis=0)
     similarities = np.sum(true_Y*fitted_Y, axis=0) / np.sqrt(true_norm_sq*pred_norm_sq)
-    avg_sim = np.mean(similarities)
+    avg_sim = np.mean(np.abs(similarities)) # Remove sign ambiguities
     scores["Y_mean_cos_sim"] = avg_sim
 
     # average precision for identifying non-zero factor components

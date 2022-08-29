@@ -55,7 +55,6 @@ function zero(ba::BatchArray)
                       cvalues) 
 end
 
-
 #########################################
 # Addition
 function Base.:(+)(A::AbstractMatrix, B::BatchArray)

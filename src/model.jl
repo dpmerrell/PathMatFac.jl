@@ -1,7 +1,7 @@
 
 export MultiomicModel
 
-import Base: ==
+import Base: ==, deepcopy 
 
 mutable struct MultiomicModel
 
@@ -73,5 +73,8 @@ function Base.:(==)(a::T, b::T) where T <: PMTypes
     return true
 end
 
-
+function Base.deepcopy(a::T) where T <: PMTypes
+    field_values = [getfield(a, fn) for fn in fieldnames(T)]
+    return T(field_values...)
+end
 

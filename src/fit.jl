@@ -114,7 +114,8 @@ end
 function fit_reg_path!(model::MultiomicModel, D::AbstractMatrix; verbosity=1,
                                                                  init_lambda_Y=128.0,
                                                                  shrink_factor=0.5, 
-                                                                 term_condition=iter_termination, 
+                                                                 update_criterion=latest_model, 
+                                                                 term_condition=iter_termination,
                                                                  callback=MatFac.HistoryCallback,
                                                                  outer_callback=OuterCallback,
                                                                  history_json="histories.json",
@@ -123,14 +124,16 @@ function fit_reg_path!(model::MultiomicModel, D::AbstractMatrix; verbosity=1,
     # Initialize the latent factors to have very small entries
     # (this is appropriate for regularizer-path hyperparameter selection)
     model.matfac.X .*= 1e-5
-    #model.matfac.Y .*= 1e-5
-    model.matfac.Y .= 0 
+    model.matfac.Y .*= 1e-5
         
     # Initialize some loop variables
     lambda = init_lambda_Y
     iter = 1
     macro_callback = outer_callback()
     macro_callback.history_json = history_json
+
+    # Keep track of the best model we've seen thus far
+    best_model = deepcopy(cpu(model))
 
     # Loop through values of lambda_Y
     while true
@@ -148,8 +151,13 @@ function fit_reg_path!(model::MultiomicModel, D::AbstractMatrix; verbosity=1,
         # Call the outer callback for this iteration
         macro_callback(model, micro_callback) 
 
+        # Check whether to update the returned model
+        if update_criterion(model, best_model, D, iter)
+            best_model = deepcopy(cpu(model))
+        end 
+
         # Check termination condition
-        if term_condition(model, iter)
+        if term_condition(model, best_model, D, iter)
             break
         else
             iter += 1
@@ -157,6 +165,8 @@ function fit_reg_path!(model::MultiomicModel, D::AbstractMatrix; verbosity=1,
         end
 
     end
+
+    model.matfac = best_model.matfac
 
     return model
 end

@@ -114,9 +114,6 @@ if __name__=="__main__":
     if len(args) > 3:
         opts = parse_opts(opts, args[3:])
     ctype = opts["ctype"][0] 
-    #exclude_groups = opts["exclude"]
-    #keep_groups = opts["keep"]
-    #color_col = opts["color"][0]
 
     # Load information stored in the model
     X = su.load_embedding(model_hdf)
