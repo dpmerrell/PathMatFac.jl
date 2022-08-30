@@ -13,10 +13,10 @@ sim_params:
         heldout_ctypes: []
     matfac_params:
         max_epochs: 1000
-        lr: 0.08
+        lr: 0.05
         lambda_layer: 16.0 
         lambda_X: 0.1
-        init_lambda_Y: 128.0
+        init_lambda_Y: 256.0
         used_K: [300]
         gpu_capacity: 25000000
 
@@ -25,9 +25,9 @@ tcga_params:
         heldout_ctypes: ["OV", "GBM", "LAML"]
     matfac_params:
         max_epochs: 1000
-        lr: 0.08
+        lr: 0.05
         lambda_layer: 16.0 
         lambda_X: 0.1
-        init_lambda_Y: 128.0
+        init_lambda_Y: 256.0
         used_K: [300]
         gpu_capacity: 25000000
