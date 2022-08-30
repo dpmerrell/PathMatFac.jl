@@ -5,29 +5,35 @@ tcga_dir: "data/tcga/"
 reactome_url: "https://www.pathwaycommons.org/archives/PC2/v12/PathwayCommons12.reactome.hgnc.txt.gz" 
 reactome_dir: "data/reactome/"
 
-sim_params:
-    data_params:
-        snr: [99.0]
-        true_K: [300]
-        reps: 1
-        heldout_ctypes: []
-    matfac_params:
-        max_epochs: 1000
-        lr: 0.08
-        lambda_layer: 16.0 
-        lambda_X: 0.1
-        init_lambda_Y: 128.0
-        used_K: [300]
-        gpu_capacity: 25000000
+sim_data_params:
+    snr: [9.0, 99.0]
+    heldout_ctypes: []
 
-tcga_params:
-    data_params:
-        heldout_ctypes: ["OV", "GBM", "LAML"]
-    matfac_params:
-        max_epochs: 1000
-        lr: 0.08
-        lambda_layer: 16.0 
-        lambda_X: 0.1
-        init_lambda_Y: 128.0
-        used_K: [300]
-        gpu_capacity: 25000000
+tcga_data_params:
+    heldout_ctypes: ["OV", "GBM", "LAML"]
+
+pathway_params:
+    topk: [300]
+    addk: [10, 75]
+    removek: [10, 75]
+    addnode: [0.05, 0.25]
+    removenode: [0.05, 0.25]
+    reps: 1
+
+method_params:
+    matfac:
+        call: "julia --project=."
+        script: "scripts/run_matfac.jl"
+        opt_template: "max_epochs={max_epochs} lr={lr} lambda_layer={lambda_layer} lambda_X={lambda_X} init_lambda_Y={init_lambda_Y} capacity={gpu_capacity}"
+        params:
+            max_epochs: 1000
+            lr: 0.08
+            lambda_layer: 16.0 
+            lambda_X: 0.1
+            init_lambda_Y: 256.0
+            gpu_capacity: 25000000
+    prior:
+        call: "python"
+        script: "scripts/run_prior.py"
+        params: []
+

@@ -38,42 +38,47 @@ EXP_FACTORPLOT_DIR = join(EXP_VIS_DIR, "factor_plots")
 ####################################
 REACTOME_URL = config["reactome_url"]
 
+#######################################
+# Unpack pathway parameters
+#######################################
+PATHWAY_PARAMS = config["pathway_params"]
+PATHWAY_TOPK = PATHWAY_PARAMS["topk"]
+PATHWAY_ADDK = PATHWAY_PARAMS["addk"]
+PATHWAY_REMOVEK = PATHWAY_PARAMS["removek"]
+PATHWAY_ADDNODE = PATHWAY_PARAMS["addnode"]
+PATHWAY_REMOVENODE = PATHWAY_PARAMS["removenode"]
+PATHWAY_REPS = list(range(PATHWAY_PARAMS["reps"]))
+
 ####################################
-# Unpack simulation study parameters
+# Unpack data simulation parameters
 ####################################
-SIM_PARAMS = config["sim_params"]
-SIM_DATA_PARAMS = SIM_PARAMS["data_params"]
+SIM_DATA_PARAMS = config["sim_data_params"]
 SIM_HELDOUT_CTYPES = SIM_DATA_PARAMS["heldout_ctypes"]
 SIM_DROPCTYPES_STR = ":".join(SIM_HELDOUT_CTYPES)
-SIM_REPS = list(range(SIM_DATA_PARAMS["reps"]))
 SIM_SNR = SIM_DATA_PARAMS["snr"]
-SIM_TRUE_K = SIM_DATA_PARAMS["true_K"]
-
-SIM_MATFAC_PARAMS = SIM_PARAMS["matfac_params"]
-SIM_MAX_EPOCHS = SIM_MATFAC_PARAMS["max_epochs"]
-SIM_LR = SIM_MATFAC_PARAMS["lr"]
-SIM_LAMBDA_LAYER = SIM_MATFAC_PARAMS["lambda_layer"]
-SIM_LAMBDA_X = SIM_MATFAC_PARAMS["lambda_X"]
-SIM_LAMBDA_Y = SIM_MATFAC_PARAMS["init_lambda_Y"]
-SIM_USED_K = SIM_MATFAC_PARAMS["used_K"]
-SIM_CAPACITY = SIM_MATFAC_PARAMS["gpu_capacity"]
-
 
 ###################################
-# Unpack TCGA run parameters
+# TCGA data preprocessing parameters
 ###################################
-EXP_PARAMS = config["tcga_params"]
-EXP_TCGA_PARAMS = EXP_PARAMS["data_params"]
+EXP_TCGA_PARAMS = config["tcga_data_params"]
 EXP_HELDOUT_CTYPES = EXP_TCGA_PARAMS["heldout_ctypes"]
 EXP_DROPCTYPES_STR = ":".join(EXP_HELDOUT_CTYPES)
-EXP_MATFAC_PARAMS = EXP_PARAMS["matfac_params"]
-EXP_MAX_EPOCHS = EXP_MATFAC_PARAMS["max_epochs"]
-EXP_LR = EXP_MATFAC_PARAMS["lr"]
-EXP_LAMBDA_LAYER = EXP_MATFAC_PARAMS["lambda_layer"]
-EXP_LAMBDA_X = EXP_MATFAC_PARAMS["lambda_X"]
-EXP_LAMBDA_Y = EXP_MATFAC_PARAMS["init_lambda_Y"]
-EXP_USED_K = EXP_MATFAC_PARAMS["used_K"]
-EXP_CAPACITY = EXP_MATFAC_PARAMS["gpu_capacity"]
+
+##################################
+# Method parameters
+##################################
+METHOD_PARAMS = config["method_params"]
+METHODS = list(METHOD_PARAMS.keys())
+
+# Matrix factorization params
+MATFAC_PARAMS = METHOD_PARAMS["matfac"]
+MAX_EPOCHS = MATFAC_PARAMS["max_epochs"]
+LR = MATFAC_PARAMS["lr"]
+LAMBDA_LAYER = MATFAC_PARAMS["lambda_layer"]
+LAMBDA_X = MATFAC_PARAMS["lambda_X"]
+LAMBDA_Y = MATFAC_PARAMS["init_lambda_Y"]
+USED_K = MATFAC_PARAMS["used_K"]
+CAPACITY = MATFAC_PARAMS["gpu_capacity"]
 
 ###################################################################################################
 # RULES
@@ -82,20 +87,23 @@ EXP_CAPACITY = EXP_MATFAC_PARAMS["gpu_capacity"]
 
 rule all:
     input:
-       sim_inferred=expand(join(SIM_INFER_DIR,"usedk={usedk}_truek={truek}_snr={snr}_rep={rep}.hdf"),
-                           usedk=SIM_USED_K, truek=SIM_TRUE_K, snr=SIM_SNR, rep=SIM_REPS),
-       sim_scores=expand(join(SIM_SCORE_DIR,"usedk={usedk}_truek={truek}_snr={snr}_rep={rep}.json"),
-                         usedk=SIM_USED_K, truek=SIM_TRUE_K, snr=SIM_SNR, rep=SIM_REPS),
-       sim_scatters=expand(join(SIM_SCATTER_DIR,"usedk={usedk}_truek={truek}_snr={snr}_rep={rep}.html"),
-                           usedk=SIM_USED_K, truek=SIM_TRUE_K, snr=SIM_SNR, rep=SIM_REPS),
-       sim_factorplots=expand(join(SIM_FACTORPLOT_DIR,"usedk={usedk}_truek={truek}_snr={snr}_rep={rep}.html"),
-                              usedk=SIM_USED_K, truek=SIM_TRUE_K, snr=SIM_SNR, rep=SIM_REPS),
-       exp_inferred=expand(join(EXP_INFER_DIR,"usedk={usedk}.hdf"),
-                           usedk=EXP_USED_K),
-       exp_scatters=expand(join(EXP_SCATTER_DIR,"usedk={usedk}.html"),
-                           usedk=EXP_USED_K),
-       exp_factorplots=expand(join(EXP_FACTORPLOT_DIR,"usedk={usedk}.html"),
-                              usedk=EXP_USED_K)
+       sim_inferred=expand(join(SIM_INFER_DIR,"method={method}/topk={topk}_kadd={kadd}_krem={krem}_nadd={nadd}_nrem={nrem}_rep={rep}/snr={snr}.hdf"),
+		           method=METHODS,
+                           topk=PATHWAY_TOPK, kadd=PATHWAY_ADDK, krem=PATHWAY_REMOVEK,
+			   nadd=PATHWAY_ADDNODE, nrem=PATHWAY_REMOVENODE, rep=PATHWAY_REPS, 
+			   snr=SIM_SNR),
+       #sim_scores=expand(join(SIM_SCORE_DIR,"usedk={usedk}_truek={truek}_snr={snr}_rep={rep}.json"),
+       #                  usedk=SIM_USED_K, truek=SIM_TRUE_K, snr=SIM_SNR, rep=SIM_REPS),
+       #sim_scatters=expand(join(SIM_SCATTER_DIR,"usedk={usedk}_truek={truek}_snr={snr}_rep={rep}.html"),
+       #                    usedk=SIM_USED_K, truek=SIM_TRUE_K, snr=SIM_SNR, rep=SIM_REPS),
+       #sim_factorplots=expand(join(SIM_FACTORPLOT_DIR,"usedk={usedk}_truek={truek}_snr={snr}_rep={rep}.html"),
+       #                       usedk=SIM_USED_K, truek=SIM_TRUE_K, snr=SIM_SNR, rep=SIM_REPS),
+       #exp_inferred=expand(join(EXP_INFER_DIR,"usedk={usedk}.hdf"),
+       #                    usedk=EXP_USED_K),
+       #exp_scatters=expand(join(EXP_SCATTER_DIR,"usedk={usedk}.html"),
+       #                    usedk=EXP_USED_K),
+       #exp_factorplots=expand(join(EXP_FACTORPLOT_DIR,"usedk={usedk}.html"),
+       #                       usedk=EXP_USED_K)
 
 
 ###########################
@@ -143,7 +151,7 @@ rule exp_run_matfac:
         mem_mb=10000,
         gpu=1
     shell:
-        "julia --project=. {input.src} {input.data} {input.pwy_json} {output.inferred_bson} {output.inferred_hdf} max_epochs={EXP_MAX_EPOCHS} lr={EXP_LR} lambda_layer={EXP_LAMBDA_LAYER} lambda_X={EXP_LAMBDA_X} init_lambda_Y={EXP_LAMBDA_Y} capacity={EXP_CAPACITY} history_json={output.history_json} gpu_status_file={input.status_file}"
+        "julia --project=. {input.src} {input.data} {input.pwy_json} {output.inferred_bson} {output.inferred_hdf} max_epochs={MAX_EPOCHS} lr={LR} lambda_layer={LAMBDA_LAYER} lambda_X={LAMBDA_X} init_lambda_Y={LAMBDA_Y} capacity={CAPACITY} history_json={output.history_json} gpu_status_file={input.status_file}"
 
 
 ###########################
@@ -221,18 +229,6 @@ rule simulate_data:
         "julia --project=. {input.src} {input.pwy_json} {input.sample_json} {input.feature_json} {output.data_hdf} {output.param_hdf} snr={wildcards.snr}"
    
 
-rule select_used_pwys:
-    input:
-        src="scripts/select_pathways.py",
-        feature_json=join(TCGA_DIR, "tcga_features_dropctypes=.json"),
-        all_pwy_json=join(REACTOME_DIR, "reactome.json"),
-    output:
-        pwy_json=join(SIM_PWY_DIR, "usedk={usedk}.json"),
-    resources:
-        mem_mb=500
-    shell:
-        "python {input.src} {input.all_pwy_json} {input.feature_json} {wildcards.usedk} {output.pwy_json}"
-
 
 ######################################
 # GPU status
@@ -245,9 +241,45 @@ rule initialize_gpu_status:
     shell:
         "julia --project=. {input.src} > {output.status_file}"
 
+
 ######################################
 # Download and preprocess Reactome
 ######################################
+
+rule corrupt_pathways:
+    input:
+        src="scripts/corrupt_pathways.py",
+        pwy_json=join(REACTOME_DIR, "usedk={usedk}.json"),
+        ranked_json=join(REACTOME_DIR, "reactome_ranked.json")
+    output:
+        corr_json=join(SIM_PWY_DIR, "topk={topk,[0-9]+}_kadd={kadd,[0-9]+}_krem={krem,[0-9]+}_nadd={nadd,[.0-9]+}_nrem={nrem,[.0-9]+}_rep={rep,[0-9]+}.json")
+    shell:
+        "python {input.src} {input.pwy_json} {input.ranked_json} {wildcards.kadd} {wildcards.krem} {wildcards.nadd} {wildcards.nrem} {output.corr_json}"
+
+
+rule select_topk_pwys:
+    input:
+        src="scripts/select_pathways.py",
+        ranked_json=join(REACTOME_DIR, "reactome_ranked.json"),
+    output:
+        pwy_json=join(REACTOME_DIR, "topk={topk}.json"),
+    resources:
+        mem_mb=500
+    shell:
+        "python {input.src} {input.ranked_json} {wildcards.topk} {output.pwy_json}"
+
+rule rank_pwys:
+    input:
+        src="scripts/rank_pathways.py",
+        feature_json=join(TCGA_DIR, "tcga_features_dropctypes=.json"),
+        all_pwy_json=join(REACTOME_DIR, "reactome.json")
+    output:
+        ranked_json=join(REACTOME_DIR, "reactome_ranked.json")
+    resources:
+        mem_mb=500
+    shell:
+        "python {input.src} {input.all_pwy_json} {input.feature_json} {wildcards.usedk} {output.pwy_json}"
+
 
 rule reactome_txt_to_json:
     input:
