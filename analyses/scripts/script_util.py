@@ -59,8 +59,6 @@ def ids_to_idx_dict(id_vec):
 def load_batch_matrix(model_hdf, bmf_key, values_key, keytype=str, dtype=float):
 
     feature_batch_ids = load_hdf(model_hdf, f"{bmf_key}/feature_batch_ids", dtype=str)
-    #feature_idx = load_hdf(model_hdf, "internal_feature_idx", dtype=int)
-    #feature_batch_ids = feature_batch_ids[feature_idx-1] 
     _, unq_idx = np.unique(feature_batch_ids, return_index=True)
     feature_batch_ids = feature_batch_ids[np.sort(unq_idx)]
 
