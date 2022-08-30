@@ -5,6 +5,7 @@ tcga_dir: "data/tcga/"
 reactome_url: "https://www.pathwaycommons.org/archives/PC2/v12/PathwayCommons12.reactome.hgnc.txt.gz" 
 reactome_dir: "data/reactome/"
 
+<<<<<<< HEAD
 sim_data_params:
     snr: [9.0, 99.0]
     heldout_ctypes: []
@@ -27,7 +28,7 @@ method_params:
         opt_template: "max_epochs={max_epochs} lr={lr} lambda_layer={lambda_layer} lambda_X={lambda_X} init_lambda_Y={init_lambda_Y} capacity={gpu_capacity}"
         params:
             max_epochs: 1000
-            lr: 0.08
+            lr: 0.05
             lambda_layer: 16.0 
             lambda_X: 0.1
             init_lambda_Y: 256.0

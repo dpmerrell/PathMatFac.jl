@@ -128,7 +128,7 @@ end
 
 
 
-function simulate_Y!(model::MultiomicModel; average_non_pwy=10.0)
+function simulate_Y!(model::MultiomicModel; average_non_pwy=0.0)
 
     K, N = size(model.matfac.Y)
 
