@@ -53,8 +53,6 @@ PATHWAY_REPS = list(range(PATHWAY_PARAMS["reps"]))
 # Unpack data simulation parameters
 ####################################
 SIM_DATA_PARAMS = config["sim_data_params"]
-SIM_HELDOUT_CTYPES = SIM_DATA_PARAMS["heldout_ctypes"]
-SIM_DROPCTYPES_STR = ":".join(SIM_HELDOUT_CTYPES)
 SIM_SNR = SIM_DATA_PARAMS["snr"]
 
 ###################################
@@ -72,13 +70,12 @@ METHODS = list(METHOD_PARAMS.keys())
 
 # Matrix factorization params
 MATFAC_PARAMS = METHOD_PARAMS["matfac"]
-MAX_EPOCHS = MATFAC_PARAMS["max_epochs"]
-LR = MATFAC_PARAMS["lr"]
-LAMBDA_LAYER = MATFAC_PARAMS["lambda_layer"]
-LAMBDA_X = MATFAC_PARAMS["lambda_X"]
-LAMBDA_Y = MATFAC_PARAMS["init_lambda_Y"]
-USED_K = MATFAC_PARAMS["used_K"]
-CAPACITY = MATFAC_PARAMS["gpu_capacity"]
+MATFAC_MAX_EPOCHS = MATFAC_PARAMS["max_epochs"]
+MATFAC_LR = MATFAC_PARAMS["lr"]
+MATFAC_LAMBDA_LAYER = MATFAC_PARAMS["lambda_layer"]
+MATFAC_LAMBDA_X = MATFAC_PARAMS["lambda_X"]
+MATFAC_LAMBDA_Y = MATFAC_PARAMS["init_lambda_Y"]
+MATFAC_CAPACITY = MATFAC_PARAMS["gpu_capacity"]
 
 ###################################################################################################
 # RULES
@@ -87,11 +84,11 @@ CAPACITY = MATFAC_PARAMS["gpu_capacity"]
 
 rule all:
     input:
-       sim_inferred=expand(join(SIM_INFER_DIR,"method={method}/topk={topk}_kadd={kadd}_krem={krem}_nadd={nadd}_nrem={nrem}_rep={rep}/snr={snr}.hdf"),
+       sim_inferred=expand(join(SIM_INFER_DIR,"method={method}/snr={snr}/topk={topk}_kadd={kadd}_krem={krem}_nadd={nadd}_nrem={nrem}/rep={rep}.hdf"),
 		           method=METHODS,
                            topk=PATHWAY_TOPK, kadd=PATHWAY_ADDK, krem=PATHWAY_REMOVEK,
 			   nadd=PATHWAY_ADDNODE, nrem=PATHWAY_REMOVENODE, rep=PATHWAY_REPS, 
-			   snr=SIM_SNR),
+			   snr=SIM_SNR)
        #sim_scores=expand(join(SIM_SCORE_DIR,"usedk={usedk}_truek={truek}_snr={snr}_rep={rep}.json"),
        #                  usedk=SIM_USED_K, truek=SIM_TRUE_K, snr=SIM_SNR, rep=SIM_REPS),
        #sim_scatters=expand(join(SIM_SCATTER_DIR,"usedk={usedk}_truek={truek}_snr={snr}_rep={rep}.html"),
@@ -161,7 +158,7 @@ rule exp_run_matfac:
 rule factor_plot:
     input:
         src="scripts/vis_pathway_factor_plot.py",
-        params_hdf=join(SIM_INFER_DIR, "usedk={usedk}_truek={truek}_snr={snr}_rep={rep}.hdf"),
+        params_hdf=join(SIM_INFER_DIR, "usedk={usedk}_truek={truek}_snr={snr}/rep={rep}.hdf"),
         pwy_json=join(SIM_PWY_DIR, "usedk={usedk}.json")
     output:
         factorplot=join(SIM_FACTORPLOT_DIR,"usedk={usedk}_truek={truek}_snr={snr}_rep={rep}.html")
@@ -201,28 +198,28 @@ rule sim_run_matfac:
     input:
         src="scripts/run_matfac.jl",
         status_file="gpu_status.txt",
-        data=join(SIM_DATA_DIR, "truek={truek}_snr={snr}_rep={rep}.hdf"),
-        pwy_json=join(SIM_PWY_DIR, "usedk={usedk}.json")
+        data=join(SIM_DATA_DIR, "snr={snr}", "topk={topk}_{corruption_params}/rep={rep}.hdf"),
+        pwy_json=join(SIM_PWY_DIR, "topk={topk}_{corruption_params}/rep={rep}.json")
     output:
-        inferred_bson=join(SIM_INFER_DIR, "usedk={usedk}_truek={truek}_snr={snr}_rep={rep}.bson"),
-        inferred_hdf=join(SIM_INFER_DIR, "usedk={usedk}_truek={truek}_snr={snr}_rep={rep}.hdf"),
-        history_json=join(SIM_HISTORY_DIR, "usedk={usedk}_truek={truek}_snr={snr}_rep={rep}.json")
+        inferred_bson=join(SIM_INFER_DIR, "method=matfac", "snr={snr,[.0-9]+}", "topk={topk,[0-9]+}_{corruption_params, [_.=a-z0-9]+}/rep={rep, [0-9]+}.bson"),
+        inferred_hdf=join(SIM_INFER_DIR, "method=matfac", "snr={snr,[.0-9]+}", "topk={topk,[0-9]+}_{corruption_params, [_.=a-z0-9]+}/rep={rep, [0-9]+}.hdf"),
+        history_json=join(SIM_HISTORY_DIR, "method=matfac", "snr={snr,[.0-9]+}", "topk={topk,[0-9]+}_{corruption_params, [_.=a-z0-9]+}/rep={rep, [0-9]+}.json")
     resources:
         mem_mb=10000,
         gpu=1
     shell:
-        "julia --project=. {input.src} {input.data} {input.pwy_json} {output.inferred_bson} {output.inferred_hdf} max_epochs={SIM_MAX_EPOCHS} lr={SIM_LR} lambda_layer={SIM_LAMBDA_LAYER} lambda_X={SIM_LAMBDA_X} init_lambda_Y={SIM_LAMBDA_Y} capacity={SIM_CAPACITY} history_json={output.history_json} gpu_status_file={input.status_file}"
+        "julia --project=. {input.src} {input.data} {input.pwy_json} {output.inferred_bson} {output.inferred_hdf} max_epochs={MATFAC_MAX_EPOCHS} lr={MATFAC_LR} lambda_layer={MATFAC_LAMBDA_LAYER} lambda_X={MATFAC_LAMBDA_X} init_lambda_Y={MATFAC_LAMBDA_Y} capacity={MATFAC_CAPACITY} history_json={output.history_json} gpu_status_file={input.status_file}"
 
-# NOTICE for now we have usedk==truek
+
 rule simulate_data:
     input:
         src="scripts/simulate_data.jl",
-        pwy_json=join(SIM_PWY_DIR, "usedk={truek}.json"), 
+        pwy_json=join(REACTOME_DIR, "topk={topk}.json"), 
         sample_json=join(TCGA_DIR, "tcga_samples_dropctypes=.json"),
         feature_json=join(TCGA_DIR, "tcga_features_dropctypes=.json")
     output:
-        data_hdf=join(SIM_DATA_DIR, "truek={truek}_snr={snr}_rep={rep}.hdf"),
-        param_hdf=join(SIM_PARAM_DIR, "truek={truek}_snr={snr}_rep={rep}.hdf")
+        data_hdf=temp(join(SIM_DATA_DIR, "snr={snr,[.0-9]+}", "topk={topk,[0-9]+}_{corruption_params, [_.=a-z0-9]+}/rep={rep,[0-9]+}.hdf")),
+        param_hdf=join(SIM_PARAM_DIR,"snr={snr,[.0-9]+}", "topk={topk,[0-9]+}_{corruption_params, [_.=a-z0-9]+}/rep={rep,[0-9]+}.hdf")
     resources:
         mem_mb=10000
     shell:
@@ -249,10 +246,10 @@ rule initialize_gpu_status:
 rule corrupt_pathways:
     input:
         src="scripts/corrupt_pathways.py",
-        pwy_json=join(REACTOME_DIR, "usedk={usedk}.json"),
+        pwy_json=join(REACTOME_DIR, "topk={topk}.json"),
         ranked_json=join(REACTOME_DIR, "reactome_ranked.json")
     output:
-        corr_json=join(SIM_PWY_DIR, "topk={topk,[0-9]+}_kadd={kadd,[0-9]+}_krem={krem,[0-9]+}_nadd={nadd,[.0-9]+}_nrem={nrem,[.0-9]+}_rep={rep,[0-9]+}.json")
+        corr_json=join(SIM_PWY_DIR, "topk={topk,[0-9]+}_kadd={kadd,[0-9]+}_krem={krem,[0-9]+}_nadd={nadd,[.0-9]+}_nrem={nrem,[.0-9]+}/rep={rep,[0-9]+}.json")
     shell:
         "python {input.src} {input.pwy_json} {input.ranked_json} {wildcards.kadd} {wildcards.krem} {wildcards.nadd} {wildcards.nrem} {output.corr_json}"
 
@@ -262,7 +259,7 @@ rule select_topk_pwys:
         src="scripts/select_pathways.py",
         ranked_json=join(REACTOME_DIR, "reactome_ranked.json"),
     output:
-        pwy_json=join(REACTOME_DIR, "topk={topk}.json"),
+        pwy_json=join(REACTOME_DIR, "topk={topk, [0-9]+}.json"),
     resources:
         mem_mb=500
     shell:
@@ -278,7 +275,7 @@ rule rank_pwys:
     resources:
         mem_mb=500
     shell:
-        "python {input.src} {input.all_pwy_json} {input.feature_json} {wildcards.usedk} {output.pwy_json}"
+        "python {input.src} {input.all_pwy_json} {input.feature_json} {output.ranked_json}"
 
 
 rule reactome_txt_to_json:
