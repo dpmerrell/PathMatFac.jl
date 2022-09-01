@@ -4,7 +4,7 @@ randomize_pathways.py
 A script that receives a set of pathways
 and returns a "randomized" version of each one.
 Each pathway is randomized such that nodes' degrees
-are preserved.
+are preserved (and hence degree distribution is preserved).
 """
 
 from collections import defaultdict
@@ -48,7 +48,7 @@ def compute_degrees(edgelist):
     return degree_list
 
 
-def degree_preserving_random_graph(degrees):
+def degree_preserving_random_graph(degrees, verbose=False):
 
     V = len(degrees)
     deg = np.array(degrees, dtype=int)
@@ -65,10 +65,12 @@ def degree_preserving_random_graph(degrees):
         
         # Select second node at random from non-neighbors
         non_neighbors = np.ravel(np.argwhere(adjacency[:,i] == False))
-        weight_vec = deg[non_neighbors]
-        if np.all(weight_vec == 0):
-            print("WARNING: graph randomization: forced to violate node degree preservation")
+        weight_vec = (deg[non_neighbors] > 0)
+        if np.all(weight_vec == False):
+            if verbose:
+                print("WARNING: graph randomization: forced to violate node degree preservation")
             weight_vec = orig_deg[non_neighbors]
+
         weight_vec = weight_vec.astype(float)
         weight_vec /= np.sum(weight_vec)
         j = np.random.choice(non_neighbors, p=weight_vec)

@@ -1,4 +1,5 @@
 
+from collections import defaultdict
 import numpy as np
 import json
 import sys
@@ -7,19 +8,23 @@ import sys
 
 def update_graph(pwy, all_nodes, node_add, node_remove):
 
-    # Get the pathway nodes
+    # Get the pathway nodes and unique edges
     pwy_nodes = set()
+    unique_edges = set()
     for edge in pwy:
         pwy_nodes.add(edge[0])
         pwy_nodes.add(edge[2])
+        if edge[0] <= edge[2]:
+            unique_edges.add((edge[0],edge[2]))
+        else:
+            unique_edges.add((edge[2],edge[0]))
+
+
     pwy_node_ls = list(pwy_nodes)
     
     # Figure out how many we're adding and removing
     n_add = int(np.ceil(node_add * len(pwy_nodes)))
     n_remove = int(np.ceil(node_remove * len(pwy_nodes)))
-
-    # Get the average degree in the pathway
-    average_deg = max(int(len(pwy) / len(pwy_nodes)), 1)
 
     # Remove nodes
     to_remove = set(np.random.choice(pwy_node_ls, n_remove, replace=False))
@@ -28,13 +33,21 @@ def update_graph(pwy, all_nodes, node_add, node_remove):
         pwy_nodes.remove(rm_node)
     pwy_node_ls = list(pwy_nodes)
 
+    # Compute the degree of each node
+    degrees = defaultdict(lambda : 0)
+    for edge in unique_edges:
+        degrees[edge[0]] += 1
+        degrees[edge[1]] += 1
+    degree_vec = np.array([degrees[n] for n in pwy_node_ls])
+
     # Choose nodes to add
     complement = all_nodes.difference(pwy_nodes)
     nodes_to_add = set(np.random.choice(list(complement), n_add, replace=False))
-    
+
     # For each new node, add edges to it
     for new_node in nodes_to_add:
-        neighbors = np.random.choice(pwy_node_ls, average_deg, replace=False)
+        n_neighbors = np.random.choice(degree_vec)
+        neighbors = np.random.choice(pwy_node_ls, n_neighbors, replace=False, p=degree_vec/np.sum(degree_vec))
         for neighbor in neighbors:
             updated_pwy.append([neighbor, "a>", new_node])
         pwy_node_ls.append(new_node)

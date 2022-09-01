@@ -5,6 +5,8 @@ tcga_dir: "data/tcga/"
 reactome_url: "https://www.pathwaycommons.org/archives/PC2/v12/PathwayCommons12.reactome.hgnc.txt.gz" 
 reactome_dir: "data/reactome/"
 
+sim_replicates: 5
+
 sim_data_params:
     snr: [9.0, 99.0]
 
@@ -17,7 +19,6 @@ pathway_params:
     removek: [10, 75]
     addnode: [0.05, 0.25]
     removenode: [0.05, 0.25]
-    reps: 5
 
 method_params:
     matfac:

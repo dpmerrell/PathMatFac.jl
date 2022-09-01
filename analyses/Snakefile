@@ -39,7 +39,7 @@ EXP_FACTORPLOT_DIR = join(EXP_VIS_DIR, "factor_plots")
 REACTOME_URL = config["reactome_url"]
 
 #######################################
-# Unpack pathway parameters
+# Unpack pathway corruption parameters
 #######################################
 PATHWAY_PARAMS = config["pathway_params"]
 PATHWAY_TOPK = PATHWAY_PARAMS["topk"]
@@ -47,11 +47,17 @@ PATHWAY_ADDK = PATHWAY_PARAMS["addk"]
 PATHWAY_REMOVEK = PATHWAY_PARAMS["removek"]
 PATHWAY_ADDNODE = PATHWAY_PARAMS["addnode"]
 PATHWAY_REMOVENODE = PATHWAY_PARAMS["removenode"]
-PATHWAY_REPS = list(range(PATHWAY_PARAMS["reps"]))
+
+CORRUPTION_PARAMS = ["original", "randomized"]
+#CORRUPTION_PARAMS += [f"kadd={ka}_krem={kr}_nadd={na}_nrem={nr}" for ka in PATHWAY_ADDK\
+#		                                                 for kr in PATHWAY_REMOVEK\
+#								 for na in PATHWAY_ADDNODE\
+#								 for nr in PATHWAY_REMOVENODE]
 
 ####################################
 # Unpack data simulation parameters
 ####################################
+SIM_REPS = list(range(config["sim_replicates"]))
 SIM_DATA_PARAMS = config["sim_data_params"]
 SIM_SNR = SIM_DATA_PARAMS["snr"]
 
@@ -84,11 +90,10 @@ MATFAC_CAPACITY = MATFAC_PARAMS["gpu_capacity"]
 
 rule all:
     input:
-       sim_inferred=expand(join(SIM_INFER_DIR,"method={method}/snr={snr}/topk={topk}_kadd={kadd}_krem={krem}_nadd={nadd}_nrem={nrem}/rep={rep}.hdf"),
-		           method=METHODS,
-                           topk=PATHWAY_TOPK, kadd=PATHWAY_ADDK, krem=PATHWAY_REMOVEK,
-			   nadd=PATHWAY_ADDNODE, nrem=PATHWAY_REMOVENODE, rep=PATHWAY_REPS, 
-			   snr=SIM_SNR)
+       sim_inferred=expand(join(SIM_INFER_DIR,"method={method}/snr={snr}/topk={topk}_{corruption}/rep={rep}.hdf"),
+		           method=METHODS, snr=SIM_SNR, topk=PATHWAY_TOPK, 
+			   corruption=CORRUPTION_PARAMS, rep=SIM_REPS),
+
        #sim_scores=expand(join(SIM_SCORE_DIR,"usedk={usedk}_truek={truek}_snr={snr}_rep={rep}.json"),
        #                  usedk=SIM_USED_K, truek=SIM_TRUE_K, snr=SIM_SNR, rep=SIM_REPS),
        #sim_scatters=expand(join(SIM_SCATTER_DIR,"usedk={usedk}_truek={truek}_snr={snr}_rep={rep}.html"),
@@ -218,7 +223,7 @@ rule simulate_data:
         sample_json=join(TCGA_DIR, "tcga_samples_dropctypes=.json"),
         feature_json=join(TCGA_DIR, "tcga_features_dropctypes=.json")
     output:
-        data_hdf=temp(join(SIM_DATA_DIR, "snr={snr,[.0-9]+}", "topk={topk,[0-9]+}_{corruption_params, [_.=a-z0-9]+}/rep={rep,[0-9]+}.hdf")),
+        data_hdf=join(SIM_DATA_DIR, "snr={snr,[.0-9]+}", "topk={topk,[0-9]+}_{corruption_params, [_.=a-z0-9]+}/rep={rep,[0-9]+}.hdf")),
         param_hdf=join(SIM_PARAM_DIR,"snr={snr,[.0-9]+}", "topk={topk,[0-9]+}_{corruption_params, [_.=a-z0-9]+}/rep={rep,[0-9]+}.hdf")
     resources:
         mem_mb=10000
@@ -242,6 +247,27 @@ rule initialize_gpu_status:
 ######################################
 # Download and preprocess Reactome
 ######################################
+
+rule copy_pathways:
+    input:
+        pwy_json=join(REACTOME_DIR, "topk={topk}.json"),
+    output:
+        copied_json=join(SIM_PWY_DIR, "topk={topk,[0-9]+}_original/rep={rep,[0-9]+}.json")
+    shell:
+        "cp {input.pwy_json} {output.copied_json}"
+
+
+rule randomize_pathway_edges:
+    input:
+        src=join("scripts","randomize_pathways.py"),
+        pwy_json=join(REACTOME_DIR, "topk={topk}.json"),
+    output:
+        randomized_json=join(SIM_PWY_DIR, "topk={topk,[0-9]+}_randomized/rep={rep,[0-9]+}.json")
+    resources:
+        mem_mb=500
+    shell:
+        "python {input.src} {input.pwy_json} {output.randomized_json}"
+
 
 rule corrupt_pathways:
     input:
