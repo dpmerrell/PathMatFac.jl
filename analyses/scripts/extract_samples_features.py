@@ -36,6 +36,7 @@ if __name__=="__main__":
     sample_ids = get_sample_ids(in_hdf) 
     sample_groups = get_sample_groups(in_hdf)
     barcodes = get_barcodes(in_hdf) 
+
     sample_dict = { "sample_ids": sample_ids,
                     "sample_groups": sample_groups,
                     "barcodes": barcodes
