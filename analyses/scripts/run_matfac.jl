@@ -24,6 +24,7 @@ function main(args)
                             :capacity => 25000000,
                             :verbosity => 1,
                             :fit_hyperparam => true,
+                            :scale_column_losses => true
                            )
     if length(args) > 3
         parse_opts!(opts, args[5:end])
@@ -64,15 +65,16 @@ function main(args)
     # If a gpu_status file is provided, use it to 
     # select an unoccupied GPU
     status_file = nothing
-    gpu_idx = -1
-    if haskey(opts, :gpu_status_file)
+    gpu_idx = nothing
+    if haskey(opts, :gpu_status_file) 
         status_file = pop!(opts, :gpu_status_file)
         gpu_idx = get_available_device(status_file=status_file)
-        @assert gpu_idx != nothing
-
         update_device_status(gpu_idx, '1'; status_file=status_file)
-        CUDA.device!(gpu_idx-1)
-        println(string("Using CUDA device ", gpu_idx-1))
+
+        if gpu_idx != nothing
+            CUDA.device!(gpu_idx-1)
+            println(string("Using CUDA device ", gpu_idx-1))
+        end
     end
 
     try

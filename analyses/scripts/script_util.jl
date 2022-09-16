@@ -180,18 +180,19 @@ function get_device_statuses(; status_file="gpu_status.txt")
     return status_str
 end
 
-function update_device_status(device_idx::Integer, status::Char; status_file="gpu_status.txt")
+function update_device_status(device_idx::Union{Integer,Nothing}, status::Char; status_file="gpu_status.txt")
     
-    status_str = get_device_statuses(;status_file=status_file)
+    if device_idx != nothing
+        status_str = get_device_statuses(;status_file=status_file)
 
-    status_vec = collect(status_str)
-    status_vec[device_idx] = status
+        status_vec = collect(status_str)
+        status_vec[device_idx] = status
 
-    new_str = join(status_vec)
-    f = open(status_file, "w")
-    write(f, new_str)
-    close(f)
-
+        new_str = join(status_vec)
+        f = open(status_file, "w")
+        write(f, new_str)
+        close(f)
+    end
 end
 
 function get_available_device(; status_file="gpu_status.txt")

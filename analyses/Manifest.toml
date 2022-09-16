@@ -240,9 +240,9 @@ version = "0.16.10"
 
 [[HDF5_jll]]
 deps = ["Artifacts", "JLLWrappers", "LibCURL_jll", "Libdl", "OpenSSL_jll", "Pkg", "Zlib_jll"]
-git-tree-sha1 = "c003b31e2e818bc512b0ff99d7dce03b0c1359f5"
+git-tree-sha1 = "4cc2bb72df6ff40b055295fdef6d92955f9dede8"
 uuid = "0234f1f7-429e-5d53-9886-15a909be8d59"
-version = "1.12.2+1"
+version = "1.12.2+2"
 
 [[IRTools]]
 deps = ["InteractiveUtils", "MacroTools", "Test"]
@@ -364,7 +364,7 @@ uuid = "d6f4376e-aef5-505a-96c1-9c027394607a"
 
 [[MatFac]]
 deps = ["BSON", "CUDA", "ChainRules", "ChainRulesCore", "Flux", "Functors", "ScikitLearnBase", "SparseArrays", "Zygote"]
-git-tree-sha1 = "26c290adf5df27219626f9deb0f2b4fc3a15884a"
+git-tree-sha1 = "2cb32b12a88a82fb6ede57d2847524c6262da0f6"
 repo-rev = "main"
 repo-url = "https://github.com/dpmerrell/MatFac.jl"
 uuid = "23734cf9-4c0e-45d4-b5ff-f416ac13e898"
@@ -447,9 +447,7 @@ version = "2.3.2"
 
 [[PathwayMultiomics]]
 deps = ["BSON", "CSV", "CUDA", "ChainRules", "ChainRulesCore", "DataFrames", "Distributions", "Flux", "Functors", "HDF5", "JSON", "LinearAlgebra", "MatFac", "ScikitLearnBase", "SparseArrays", "Statistics", "Zygote"]
-git-tree-sha1 = "de15942ada0f0f634a849d7b9dd137efc80c55f2"
-repo-rev = "master"
-repo-url = "https://github.com/dpmerrell/PathwayMultiomics.jl"
+path = ".."
 uuid = "26ae61a0-bdaa-4ab9-b40a-f117d74136e1"
 version = "0.1.0"
 
