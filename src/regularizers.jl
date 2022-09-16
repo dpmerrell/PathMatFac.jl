@@ -407,15 +407,16 @@ function ChainRules.rrule(nr::NetworkL1Regularizer, X::AbstractMatrix)
 
     function netreg_mat_pullback(loss_bar)
 
+        # Gradient w.r.t. the network's virtual nodes
         virt_bar = map(similar, nr.net_virtual)
         for k=1:K
             virt_bar[k] .= (loss_bar*nr.net_weight*inv_KM).*(xAB[k] .+ BBu[k])
         end
         nr_bar = Tangent{NetworkL1Regularizer}(net_virtual=virt_bar)
 
-        # Network regularization
+        # Network regularization for the observed nodes
         X_bar = nr.net_weight.*(xAA .+ transpose(ABu))
-        # L1 regularization
+        # L1 regularization for the observed nodes
         for k=1:K
             X_bar[k,:] .+= nr.l1_weight.*(sign.(X[k,:]).*nr.l1_feat_idx[k])
         end

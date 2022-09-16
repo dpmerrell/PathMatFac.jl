@@ -24,7 +24,8 @@ function initialize_params!(model::MultiomicModel, D::AbstractMatrix;
         mean_vec[ul_idx] .= (mean_init_map[ul]).(mean_vec[ul_idx], var_vec[ul_idx])
         var_vec[ul_idx] .= (var_init_map[ul]).(mean_vec[ul_idx], var_vec[ul_idx])
     end
-    # Remove NaNs
+
+    # Remove NaNs from the variance and mean vectors
     nan_idx = isnan.(var_vec)
     MF.tozero!(var_vec, nan_idx)
     nan_idx = isnan.(mean_vec)
@@ -35,6 +36,13 @@ function initialize_params!(model::MultiomicModel, D::AbstractMatrix;
     map!(x->max(x,1e-3), var_vec, var_vec)
     logsigma = log.(sqrt.(var_vec))
     model.matfac.col_transform.cscale.logsigma .= logsigma 
+
+    # Initialize values of X and Y in such a way that they
+    # are consistent with pathway priors
+    model.matfac.X .= 0
+    for (k, idx_vec) in enumerate(model.matfac.Y_reg.l1_feat_idx)
+        model.matfac.Y[k,idx_vec] .= 0
+    end
 
 end
 

@@ -103,12 +103,12 @@ function assemble_model(pathway_sif_data,
     col_layers = PMLayers(model_assays, sample_batch_ids) 
 
     # Construct a regularizer for the column layers
-    logsigma_reg = ClusterRegularizer(model_assays; weight=0.67)
-    mu_reg = ClusterRegularizer(model_assays; weight=0.67)
+    logsigma_reg = ClusterRegularizer(model_assays; weight=1.0)
+    mu_reg = ClusterRegularizer(model_assays; weight=1.0)
     logdelta_reg = BatchArrayReg(col_layers.bscale.logdelta; 
-                                 weight=1.33)
+                                 weight=1.0)
     theta_reg = BatchArrayReg(col_layers.bshift.theta;
-                              weight=1.33)
+                              weight=1.0)
 
     layer_reg = PMLayerReg(logsigma_reg, mu_reg, logdelta_reg, theta_reg) 
 

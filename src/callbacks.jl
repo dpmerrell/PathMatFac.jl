@@ -17,7 +17,7 @@ end
 # Termination conditions (for hyperparameter selection)
 ########################################################
 function iter_termination(model, best_model, D, iter)
-    return iter >= 10
+    return iter >= 3 
 end
 
 function precision_termination(model, best_model, D, iter; prec_threshold=0.25)
