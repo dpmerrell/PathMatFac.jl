@@ -48,11 +48,11 @@ PATHWAY_REMOVEK = PATHWAY_PARAMS["removek"]
 PATHWAY_ADDNODE = PATHWAY_PARAMS["addnode"]
 PATHWAY_REMOVENODE = PATHWAY_PARAMS["removenode"]
 
-CORRUPTION_PARAMS = ["original", "randomized"]
 #CORRUPTION_PARAMS += [f"kadd={ka}_krem={kr}_nadd={na}_nrem={nr}" for ka in PATHWAY_ADDK\
 #		                                                 for kr in PATHWAY_REMOVEK\
 #								 for na in PATHWAY_ADDNODE\
 #								 for nr in PATHWAY_REMOVENODE]
+CORRUPTION_PARAMS = ["original"] #, "randomized"]
 
 ####################################
 # Unpack data simulation parameters
@@ -98,8 +98,9 @@ rule all:
        #                  usedk=SIM_USED_K, truek=SIM_TRUE_K, snr=SIM_SNR, rep=SIM_REPS),
        #sim_scatters=expand(join(SIM_SCATTER_DIR,"usedk={usedk}_truek={truek}_snr={snr}_rep={rep}.html"),
        #                    usedk=SIM_USED_K, truek=SIM_TRUE_K, snr=SIM_SNR, rep=SIM_REPS),
-       #sim_factorplots=expand(join(SIM_FACTORPLOT_DIR,"usedk={usedk}_truek={truek}_snr={snr}_rep={rep}.html"),
-       #                       usedk=SIM_USED_K, truek=SIM_TRUE_K, snr=SIM_SNR, rep=SIM_REPS),
+       sim_factorplots=expand(join(SIM_FACTORPLOT_DIR,"method={method}/snr={snr}/topk={topk}_{corruption}/rep={rep}.html"),
+		              method=METHODS, snr=SIM_SNR, topk=PATHWAY_TOPK, 
+			      corruption=CORRUPTION_PARAMS, rep=SIM_REPS),
        #exp_inferred=expand(join(EXP_INFER_DIR,"usedk={usedk}.hdf"),
        #                    usedk=EXP_USED_K),
        #exp_scatters=expand(join(EXP_SCATTER_DIR,"usedk={usedk}.html"),
@@ -163,12 +164,13 @@ rule exp_run_matfac:
 rule factor_plot:
     input:
         src="scripts/vis_pathway_factor_plot.py",
-        params_hdf=join(SIM_INFER_DIR, "usedk={usedk}_truek={truek}_snr={snr}/rep={rep}.hdf"),
-        pwy_json=join(SIM_PWY_DIR, "usedk={usedk}.json")
+        params_hdf=join(SIM_INFER_DIR, "method={method}/snr={snr}/topk={topk}_{corruption}/rep={rep}.hdf"),
+        pwy_json=join(SIM_PWY_DIR, "topk={topk}_{corruption}/rep={rep}.json")
     output:
-        factorplot=join(SIM_FACTORPLOT_DIR,"usedk={usedk}_truek={truek}_snr={snr}_rep={rep}.html")
+        factorplot=join(SIM_FACTORPLOT_DIR, "method={method}/snr={snr}/topk={topk}_{corruption}/rep={rep}.html")
     params:
-        plottedk=lambda wc: int(wc["usedk"])//5
+        #plottedk=lambda wc: int(wc["usedk"])//5
+        plottedk=lambda wc: 5
     resources:
         mem_mb=5000
     shell:
@@ -206,9 +208,9 @@ rule sim_run_matfac:
         data=join(SIM_DATA_DIR, "snr={snr}", "topk={topk}_{corruption_params}/rep={rep}.hdf"),
         pwy_json=join(SIM_PWY_DIR, "topk={topk}_{corruption_params}/rep={rep}.json")
     output:
-        inferred_bson=join(SIM_INFER_DIR, "method=matfac", "snr={snr,[.0-9]+}", "topk={topk,[0-9]+}_{corruption_params, [_.=a-z0-9]+}/rep={rep, [0-9]+}.bson"),
-        inferred_hdf=join(SIM_INFER_DIR, "method=matfac", "snr={snr,[.0-9]+}", "topk={topk,[0-9]+}_{corruption_params, [_.=a-z0-9]+}/rep={rep, [0-9]+}.hdf"),
-        history_json=join(SIM_HISTORY_DIR, "method=matfac", "snr={snr,[.0-9]+}", "topk={topk,[0-9]+}_{corruption_params, [_.=a-z0-9]+}/rep={rep, [0-9]+}.json")
+        inferred_bson=join(SIM_INFER_DIR, "method=matfac", "snr={snr,[.0-9]+}", "topk={topk,[a-z0-9]+}_{corruption_params, [_.=a-z0-9]+}/rep={rep, [0-9]+}.bson"),
+        inferred_hdf=join(SIM_INFER_DIR, "method=matfac", "snr={snr,[.0-9]+}", "topk={topk,[a-z0-9]+}_{corruption_params, [_.=a-z0-9]+}/rep={rep, [0-9]+}.hdf"),
+        history_json=join(SIM_HISTORY_DIR, "method=matfac", "snr={snr,[.0-9]+}", "topk={topk,[a-z0-9]+}_{corruption_params, [_.=a-z0-9]+}/rep={rep, [0-9]+}.json")
     resources:
         mem_mb=10000,
         gpu=1
@@ -220,11 +222,11 @@ rule simulate_data:
     input:
         src="scripts/simulate_data.jl",
         pwy_json=join(REACTOME_DIR, "topk={topk}.json"), 
-        sample_json=join(TCGA_DIR, "tcga_samples_dropctypes=.json"),
-        feature_json=join(TCGA_DIR, "tcga_features_dropctypes=.json")
+        sample_json=join(TCGA_DIR, "toy_samples.json"),
+        feature_json=join(TCGA_DIR, "toy_features.json")
     output:
-        data_hdf=join(SIM_DATA_DIR, "snr={snr,[.0-9]+}", "topk={topk,[0-9]+}_{corruption_params, [_.=a-z0-9]+}/rep={rep,[0-9]+}.hdf")),
-        param_hdf=join(SIM_PARAM_DIR,"snr={snr,[.0-9]+}", "topk={topk,[0-9]+}_{corruption_params, [_.=a-z0-9]+}/rep={rep,[0-9]+}.hdf")
+        data_hdf=join(SIM_DATA_DIR, "snr={snr,[.0-9]+}", "topk={topk,[a-z0-9]+}_{corruption_params, [_.=a-z0-9]+}/rep={rep,[0-9]+}.hdf"),
+        param_hdf=join(SIM_PARAM_DIR,"snr={snr,[.0-9]+}", "topk={topk,[0-z-9]+}_{corruption_params, [_.=a-z0-9]+}/rep={rep,[0-9]+}.hdf")
     resources:
         mem_mb=10000
     shell:
@@ -252,7 +254,7 @@ rule copy_pathways:
     input:
         pwy_json=join(REACTOME_DIR, "topk={topk}.json"),
     output:
-        copied_json=join(SIM_PWY_DIR, "topk={topk,[0-9]+}_original/rep={rep,[0-9]+}.json")
+        copied_json=join(SIM_PWY_DIR, "topk={topk,[a-z0-9]+}_original/rep={rep,[0-9]+}.json")
     shell:
         "cp {input.pwy_json} {output.copied_json}"
 

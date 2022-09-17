@@ -153,7 +153,9 @@ function fit_reg_path!(model::MultiomicModel, D::AbstractMatrix; verbosity=1,
 
         # Fit the model
         verbose_print("Outer iteration ", iter, "; λ_Y = ", lambda, "\n"; verbosity=verbosity, level=1)
-        fit_fixed_weight!(model, D; callback=micro_callback, 
+        reweight_columns = (iter == 1)
+        fit_fixed_weight!(model, D; callback=micro_callback,
+                                    scale_column_losses=reweight_columns, 
                                     verbosity=verbosity, kwargs...)
 
         # Call the outer callback for this iteration

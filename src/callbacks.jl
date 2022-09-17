@@ -17,7 +17,7 @@ end
 # Termination conditions (for hyperparameter selection)
 ########################################################
 function iter_termination(model, best_model, D, iter)
-    return iter >= 3 
+    return iter >= 10 
 end
 
 function precision_termination(model, best_model, D, iter; prec_threshold=0.25)
@@ -47,6 +47,9 @@ function (ocb::OuterCallback)(model::MultiomicModel, inner_callback)
                    "average_precisions" => pathway_av_precs)
 
     push!(ocb.history, results)
+
+    N = length(ocb.history)
+    save_params_hdf(model, string("fitted_model_",N,".hdf"))
 
     open(ocb.history_json, "w") do f
         JSON.print(f, ocb.history)

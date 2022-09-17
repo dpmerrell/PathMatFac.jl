@@ -24,7 +24,7 @@ function main(args)
                             :capacity => 25000000,
                             :verbosity => 1,
                             :fit_hyperparam => true,
-                            :scale_column_losses => true
+                            :calibrate_losses => true
                            )
     if length(args) > 3
         parse_opts!(opts, args[5:end])
@@ -103,8 +103,8 @@ function main(args)
     if status_file != nothing
         update_device_status(gpu_idx, '0'; status_file=status_file) 
     end
-    PathwayMultiomics.save_model(out_bson, model)
-    save_params_hdf(out_hdf, model)
+    PathwayMultiomics.save_model(model, out_bson)
+    PathwayMultiomics.save_params_hdf(model, out_hdf)
 
 end
 
