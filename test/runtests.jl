@@ -658,7 +658,7 @@ function fit_tests()
         X_start = deepcopy(model.matfac.X)
         Y_start = deepcopy(model.matfac.Y)
         
-        fit!(model, omic_data; verbosity=1, lr=0.07, max_epochs=10)
+        fit!(model, omic_data; verbosity=1, lr=0.07, max_epochs=10, fit_hyperparam=false)
 
         @test true
         @test !isapprox(model.matfac.X, X_start)
@@ -680,7 +680,7 @@ function fit_tests()
         model_gpu = gpu(model)
         omic_data_gpu = gpu(omic_data)
 
-        fit!(model_gpu, omic_data_gpu; verbosity=1, lr=0.07, max_epochs=10)
+        fit!(model_gpu, omic_data_gpu; verbosity=1, lr=0.07, max_epochs=10, fit_hyperparam=false)
 
         model = cpu(model_gpu)
 
@@ -701,7 +701,6 @@ function fit_tests()
         X_start = deepcopy(model.matfac.X)
         Y_start = deepcopy(model.matfac.Y)
         lambda_start = model.matfac.lambda_Y
-
 
         fit!(model, omic_data; fit_hyperparam=true, verbosity=1, 
                                history_json="test_histories.json", 
@@ -742,6 +741,7 @@ function fit_tests()
         @test !isapprox(model.matfac.Y, Y_start)
         rm("test_histories.json")
     end
+
 end
 
 
@@ -775,7 +775,7 @@ function model_io_tests()
                                feature_genes, feature_assays,
                                sample_batch_dict)
 
-        save_model(test_bson_path, model)
+        save_model(model, test_bson_path)
 
         recovered_model = load_model(test_bson_path)
 
@@ -829,13 +829,13 @@ end
 
 function main()
 
-    util_tests()
-    batch_array_tests()
-    layers_tests()
-    preprocess_tests()
-    reg_tests()
-    assemble_model_tests()
-    score_tests()
+    #util_tests()
+    #batch_array_tests()
+    #layers_tests()
+    #preprocess_tests()
+    #reg_tests()
+    #assemble_model_tests()
+    #score_tests()
     fit_tests()
     model_io_tests()
     simulation_tests()

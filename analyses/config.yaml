@@ -33,7 +33,7 @@ method_params:
         lr: 0.01
         lambda_layer: 0.25 
         lambda_X: 0.1
-        init_lambda_Y: 64.0
+        #init_lambda_Y: 64.0
         gpu_capacity: 25000000
     #prior: NULL
 

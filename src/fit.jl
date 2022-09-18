@@ -2,15 +2,66 @@
 import ScikitLearnBase: fit!
 
 
+function verbose_print(args...; verbosity=1, level=1)
+    if verbosity >= level
+        print(string(args...))
+    end
+end
+
+function randn_like(A::AbstractMatrix)
+    M, N = size(A)
+    if typeof(A) <: CuArray
+        return CUDA.randn(M,N)
+    end
+    randn(M,N)
+end
+
+function select_lambda_max(model::MultiomicModel, D::AbstractMatrix;
+                           capacity=Int(25e6), verbosity=1)
+    
+    verbose_print("Setting λ_Y max...\n"; verbosity=verbosity, level=1)
+
+    M, N = size(D) 
+    row_batch_size = div(capacity,N)
+    K, N = size(model.matfac.Y)
+    Y_zero_grad = zero(model.matfac.Y)
+    Y_zero = zero(model.matfac.Y)
+
+    test_X = randn_like(model.matfac.X)
+
+    # Compute the full gradient of the data-loss w.r.t. Y at Y=0 and random X.
+    for row_batch in MF.BatchIter(M, row_batch_size)
+
+        X_view = view(test_X, :, row_batch)
+        row_trans_view = view(model.matfac.row_transform, row_batch, 1:N)
+        col_trans_view = view(model.matfac.col_transform, row_batch, 1:N)
+        D_view = view(D, row_batch, 1:N)
+
+        data_loss_Y_fn = Y -> MF.data_loss(X_view, Y,
+                                                row_trans_view,
+                                                col_trans_view,
+                                                model.matfac.noise_model,
+                                           D_view)
+
+        (g,) = gradient(data_loss_Y_fn, Y_zero)
+
+        Y_zero_grad .+= g 
+    end    
+
+    # The size of lambda_max is governed by the largest entry of the gradient:
+    lambda_max = maximum(abs.(Y_zero_grad)) * (K/M)
+    verbose_print("λ_Y max = ", lambda_max, "\n"; verbosity=verbosity, level=1)
+
+    return lambda_max 
+end
+
 function initialize_params!(model::MultiomicModel, D::AbstractMatrix;
-                            capacity=Int(25e6), verbose=true,
+                            capacity=Int(25e6), verbosity=1,
                             loss_map=DEFAULT_ASSAY_LOSSES,
                             mean_init_map=MEAN_INIT_MAP,
                             var_init_map=VAR_INIT_MAP)
 
-    if verbose
-        println("Setting initial values for mu and sigma...")
-    end
+   verbose_print("Setting initial values for mu and sigma...\n"; verbosity=verbosity, level=1)
     
     M, N = size(D)
     batch_size = Int(round(capacity / N))
@@ -39,7 +90,6 @@ function initialize_params!(model::MultiomicModel, D::AbstractMatrix;
 
     # Initialize values of X and Y in such a way that they
     # are consistent with pathway priors
-    model.matfac.X .= 0
     for (k, idx_vec) in enumerate(model.matfac.Y_reg.l1_feat_idx)
         model.matfac.Y[k,idx_vec] .= 0
     end
@@ -67,11 +117,13 @@ function postprocess!(fitted_model)
 end
 
 
-function fit!(model::MultiomicModel, D::AbstractMatrix; fit_hyperparam=false,
-                                                        capacity=Int(25e6), kwargs...)
+function fit!(model::MultiomicModel, D::AbstractMatrix; fit_hyperparam=true,
+                                                        capacity=Int(25e6), 
+                                                        verbosity=1, kwargs...)
     # Permute the data columns to match the model's
     # internal ordering
-    println("Rearranging data columns...")
+    verbose_print("Rearranging data columns...\n"; verbosity=verbosity)
+
     D_r = D[:, model.used_feature_idx]
 
     # If on GPU, de-allocate the original data
@@ -112,22 +164,22 @@ function fit_fixed_weight!(model::MultiomicModel, D::AbstractMatrix; kwargs...)
 end
 
 
-function verbose_print(args...; verbosity=1, level=1)
-    if verbosity >= level
-        print(string(args...))
-    end
-end
 
 
 function fit_reg_path!(model::MultiomicModel, D::AbstractMatrix; verbosity=1,
-                                                                 init_lambda_Y=128.0,
+                                                                 init_lambda_Y=nothing,
                                                                  shrink_factor=0.5, 
                                                                  update_criterion=latest_model, 
                                                                  term_condition=iter_termination,
                                                                  callback=MatFac.HistoryCallback,
                                                                  outer_callback=OuterCallback,
                                                                  history_json="histories.json",
+                                                                 capacity=Int(25e6),
                                                                  kwargs...)
+    # Default parameter values
+    if init_lambda_Y == nothing
+        init_lambda_Y = select_lambda_max(model, D; capacity=capacity, verbosity=verbosity) 
+    end
 
     # Initialize the latent factors to have very small entries
     # (this is appropriate for regularizer-path hyperparameter selection)
