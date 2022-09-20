@@ -13,18 +13,6 @@ function precision_selection(model, best_model, D, iter)
     return minimum(new_av_precs) > minimum(best_av_precs)
 end
 
-########################################################
-# Termination conditions (for hyperparameter selection)
-########################################################
-function iter_termination(model, best_model, D, iter)
-    return iter >= 10 
-end
-
-function precision_termination(model, best_model, D, iter; prec_threshold=0.25)
-    pathway_av_precs = model_Y_average_precs(model)
-    return minimum(pathway_av_precs) < prec_threshold
-end
-
 
 #######################################
 # Callback structs

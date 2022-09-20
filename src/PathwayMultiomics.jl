@@ -1,7 +1,7 @@
 
 module PathwayMultiomics
 
-using MatFac, CUDA, SparseArrays, Statistics, 
+using MatFac, CUDA, SparseArrays, Statistics, Distributions, 
       HDF5, CSV, JSON, DataFrames, BSON, ChainRules, ChainRulesCore,
       Zygote, Flux, Functors, LinearAlgebra
 

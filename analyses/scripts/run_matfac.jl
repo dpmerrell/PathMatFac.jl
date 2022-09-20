@@ -19,6 +19,7 @@ function main(args)
                             :rel_tol =>1e-8, 
                             :lambda_X =>0.001, 
                             :init_lambda_Y => nothing,
+                            :n_lambda => 8,
                             :lambda_layer =>5.0,
                             :lr => 0.07,
                             :capacity => 25000000,

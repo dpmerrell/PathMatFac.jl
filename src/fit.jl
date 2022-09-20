@@ -16,6 +16,21 @@ function randn_like(A::AbstractMatrix)
     randn(M,N)
 end
 
+
+"""
+    Approximate the mean of the maximal order
+    statistic for N samples from a standard
+    normal distribution. 
+
+    Got this formula from this blog post: https://www.gwern.net/Order-statistics
+    And this paper: https://www.gwern.net/docs/statistics/order/1961-harter.pdf
+"""
+function approx_max_stat(N)
+    alpha = pi*0.125
+    return quantile(Normal(), (N - alpha)/(N - 2*alpha + 1))
+end
+
+
 function select_lambda_max(model::MultiomicModel, D::AbstractMatrix;
                            capacity=Int(25e6), verbosity=1)
     
@@ -28,6 +43,8 @@ function select_lambda_max(model::MultiomicModel, D::AbstractMatrix;
     Y_zero = zero(model.matfac.Y)
 
     test_X = randn_like(model.matfac.X)
+    test_X ./= approx_max_stat(K*M) # Divide by the expected maximal entry so 
+                                    # that lambda_max doesn't grow out of control 
 
     # Compute the full gradient of the data-loss w.r.t. Y at Y=0 and random X.
     for row_batch in MF.BatchIter(M, row_batch_size)
@@ -167,18 +184,18 @@ end
 
 
 function fit_reg_path!(model::MultiomicModel, D::AbstractMatrix; verbosity=1,
-                                                                 init_lambda_Y=nothing,
-                                                                 shrink_factor=0.5, 
+                                                                 max_lambda_Y=nothing,
+                                                                 min_lambda_Y=0.01,
+                                                                 n_lambda=8,
                                                                  update_criterion=latest_model, 
-                                                                 term_condition=iter_termination,
                                                                  callback=MatFac.HistoryCallback,
                                                                  outer_callback=OuterCallback,
                                                                  history_json="histories.json",
                                                                  capacity=Int(25e6),
                                                                  kwargs...)
     # Default parameter values
-    if init_lambda_Y == nothing
-        init_lambda_Y = select_lambda_max(model, D; capacity=capacity, verbosity=verbosity) 
+    if max_lambda_Y == nothing
+        max_lambda_Y = select_lambda_max(model, D; capacity=capacity, verbosity=verbosity) 
     end
 
     # Initialize the latent factors to have very small entries
@@ -187,8 +204,8 @@ function fit_reg_path!(model::MultiomicModel, D::AbstractMatrix; verbosity=1,
     model.matfac.Y .*= 1e-5
         
     # Initialize some loop variables
-    lambda = init_lambda_Y
-    iter = 1
+    log_lambdas = collect(range(log(max_lambda_Y), log(min_lambda_Y); length=n_lambda))
+    lambdas = exp.(log_lambdas)
     macro_callback = outer_callback()
     macro_callback.history_json = history_json
 
@@ -196,15 +213,15 @@ function fit_reg_path!(model::MultiomicModel, D::AbstractMatrix; verbosity=1,
     best_model = deepcopy(cpu(model))
 
     # Loop through values of lambda_Y
-    while true
+    for iter=1:n_lambda
         # Set the regularizer weight
-        model.matfac.lambda_Y = lambda
+        model.matfac.lambda_Y = lambdas[iter]
         
         # initialize an "inner" callback 
         micro_callback = callback()
 
         # Fit the model
-        verbose_print("Outer iteration ", iter, "; λ_Y = ", lambda, "\n"; verbosity=verbosity, level=1)
+        verbose_print("Outer iteration ", iter, "; λ_Y = ", lambdas[iter], "\n"; verbosity=verbosity, level=1)
         reweight_columns = (iter == 1)
         fit_fixed_weight!(model, D; callback=micro_callback,
                                     scale_column_losses=reweight_columns, 
@@ -217,14 +234,6 @@ function fit_reg_path!(model::MultiomicModel, D::AbstractMatrix; verbosity=1,
         if update_criterion(model, best_model, D, iter)
             best_model = deepcopy(cpu(model))
         end 
-
-        # Check termination condition
-        if term_condition(model, best_model, D, iter)
-            break
-        else
-            iter += 1
-            lambda *= shrink_factor
-        end
 
     end
 
