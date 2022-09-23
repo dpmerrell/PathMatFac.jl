@@ -1,6 +1,10 @@
 
 import ScikitLearnBase: fit!
 
+export fit!
+
+##########################
+# Helper functions
 
 function verbose_print(args...; verbosity=1, level=1)
     if verbosity >= level
@@ -16,14 +20,15 @@ function randn_like(A::AbstractMatrix)
     randn(M,N)
 end
 
-
 """
     Approximate the mean of the maximal order
     statistic for N samples from a standard
     normal distribution. 
 
-    Got this formula from this blog post: https://www.gwern.net/Order-statistics
-    And this paper: https://www.gwern.net/docs/statistics/order/1961-harter.pdf
+    Part of our calculations for lambda_Y_max
+
+    Got the formula from this blog post: https://www.gwern.net/Order-statistics
+    and this paper: https://www.gwern.net/docs/statistics/order/1961-harter.pdf
 """
 function approx_max_stat(N)
     alpha = pi*0.125
@@ -72,6 +77,7 @@ function select_lambda_max(model::MultiomicModel, D::AbstractMatrix;
     return lambda_max 
 end
 
+
 function initialize_params!(model::MultiomicModel, D::AbstractMatrix;
                             capacity=Int(25e6), verbosity=1,
                             loss_map=DEFAULT_ASSAY_LOSSES,
@@ -110,33 +116,25 @@ function initialize_params!(model::MultiomicModel, D::AbstractMatrix;
     for (k, idx_vec) in enumerate(model.matfac.Y_reg.l1_feat_idx)
         model.matfac.Y[k,idx_vec] .= 0
     end
-
 end
 
 
-function postprocess!(fitted_model)
+"""
+    fit!(model::MultiomicModel, D::AbstractMatrix;
+                                fit_hyperparam=true,
+                                lambda_Y_max=nothing,
+                                n_lambda=8,
+                                lambda_Y_min=0.01,
+                                capacity=25e6,
+                                verbosity=1, kwargs...)
 
-    # Remove sign ambiguity from factorization:
-    # choose the sign that maximizes the number
-    # of pathway members with positive Y-components.
-    non_pwy_idx = fitted_model.matfac.Y_reg.l1_feat_idx
-    K = size(fitted_model.matfac.X,1)
+    Fit a model to data. By default, tune the lambda_Y
+    hyperparameter. 
+"""
+function fit!(model::MultiomicModel, D::AbstractMatrix; 
+              fit_hyperparam=true, capacity=Int(25e6), 
+              verbosity=1, kwargs...)
 
-    for k=1:K
-        pwy_idx = (!).(non_pwy_idx[k])
-
-        if dot(pwy_idx, sign.(fitted_model.matfac.Y[k,:])) < 0
-            fitted_model.matfac.Y[k,:] .*= -1
-            fitted_model.matfac.X[k,:] .*= -1
-        end
-    end
-
-end
-
-
-function fit!(model::MultiomicModel, D::AbstractMatrix; fit_hyperparam=true,
-                                                        capacity=Int(25e6), 
-                                                        verbosity=1, kwargs...)
     # Permute the data columns to match the model's
     # internal ordering
     verbose_print("Rearranging data columns...\n"; verbosity=verbosity)
@@ -173,6 +171,25 @@ function fit!(model::MultiomicModel, D::AbstractMatrix; fit_hyperparam=true,
 end
 
 
+function postprocess!(fitted_model)
+
+    # Remove sign ambiguity from factorization:
+    # choose the sign that maximizes the number
+    # of pathway members with positive Y-components.
+    non_pwy_idx = fitted_model.matfac.Y_reg.l1_feat_idx
+    K = size(fitted_model.matfac.X,1)
+
+    for k=1:K
+        pwy_idx = (!).(non_pwy_idx[k])
+
+        if dot(pwy_idx, sign.(fitted_model.matfac.Y[k,:])) < 0
+            fitted_model.matfac.Y[k,:] .*= -1
+            fitted_model.matfac.X[k,:] .*= -1
+        end
+    end
+end
+
+
 function fit_fixed_weight!(model::MultiomicModel, D::AbstractMatrix; kwargs...)
 
     # train the matrix factorization model
@@ -181,21 +198,19 @@ function fit_fixed_weight!(model::MultiomicModel, D::AbstractMatrix; kwargs...)
 end
 
 
-
-
 function fit_reg_path!(model::MultiomicModel, D::AbstractMatrix; verbosity=1,
-                                                                 max_lambda_Y=nothing,
-                                                                 min_lambda_Y=0.01,
-                                                                 n_lambda=8,
-                                                                 update_criterion=latest_model, 
-                                                                 callback=MatFac.HistoryCallback,
-                                                                 outer_callback=OuterCallback,
-                                                                 history_json="histories.json",
-                                                                 capacity=Int(25e6),
-                                                                 kwargs...)
+                       lambda_Y_max=nothing, lambda_Y_min=0.01,
+                       n_lambda=8, update_criterion=latest_model, 
+                       inner_callback_type=MatFac.HistoryCallback,
+                       outer_callback=nothing, capacity=Int(25e6),
+                       kwargs...)
+
     # Default parameter values
-    if max_lambda_Y == nothing
-        max_lambda_Y = select_lambda_max(model, D; capacity=capacity, verbosity=verbosity) 
+    if lambda_Y_max == nothing
+        lambda_Y_max = select_lambda_max(model, D; capacity=capacity, verbosity=verbosity) 
+    end
+    if outer_callback == nothing
+        outer_callback = OuterCallBack()
     end
 
     # Initialize the latent factors to have very small entries
@@ -204,10 +219,10 @@ function fit_reg_path!(model::MultiomicModel, D::AbstractMatrix; verbosity=1,
     model.matfac.Y .*= 1e-5
         
     # Initialize some loop variables
-    log_lambdas = collect(range(log(max_lambda_Y), log(min_lambda_Y); length=n_lambda))
+    log_lambdas = collect(range(log(lambda_Y_max), 
+                                log(lambda_Y_min); 
+                                length=n_lambda))
     lambdas = exp.(log_lambdas)
-    macro_callback = outer_callback()
-    macro_callback.history_json = history_json
 
     # Keep track of the best model we've seen thus far
     best_model = deepcopy(cpu(model))
@@ -218,14 +233,19 @@ function fit_reg_path!(model::MultiomicModel, D::AbstractMatrix; verbosity=1,
         model.matfac.lambda_Y = lambdas[iter]
         
         # initialize an "inner" callback 
-        micro_callback = callback()
+        inner_callback = inner_callback_type()
+
+        # Outer loop printout
+        verbose_print("Outer iteration ", iter, "; λ_Y = ", 
+                      round(lambdas[iter]; digits=2), "\n"; 
+                      verbosity=verbosity, level=1)
 
         # Fit the model
-        verbose_print("Outer iteration ", iter, "; λ_Y = ", lambdas[iter], "\n"; verbosity=verbosity, level=1)
         reweight_columns = (iter == 1)
-        fit_fixed_weight!(model, D; callback=micro_callback,
+        fit_fixed_weight!(model, D; callback=inner_callback,
                                     scale_column_losses=reweight_columns, 
-                                    verbosity=verbosity, kwargs...)
+                                    verbosity=verbosity, 
+                                    capacity=capacity, kwargs...)
 
         # Call the outer callback for this iteration
         macro_callback(model, micro_callback) 
@@ -234,11 +254,9 @@ function fit_reg_path!(model::MultiomicModel, D::AbstractMatrix; verbosity=1,
         if update_criterion(model, best_model, D, iter)
             best_model = deepcopy(cpu(model))
         end 
-
     end
 
     model.matfac = best_model.matfac
-
     return model
 end
 

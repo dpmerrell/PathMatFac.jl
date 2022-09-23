@@ -80,7 +80,6 @@ MATFAC_MAX_EPOCHS = MATFAC_PARAMS["max_epochs"]
 MATFAC_LR = MATFAC_PARAMS["lr"]
 MATFAC_LAMBDA_LAYER = MATFAC_PARAMS["lambda_layer"]
 MATFAC_LAMBDA_X = MATFAC_PARAMS["lambda_X"]
-#MATFAC_LAMBDA_Y = MATFAC_PARAMS["init_lambda_Y"]
 MATFAC_CAPACITY = MATFAC_PARAMS["gpu_capacity"]
 
 ###################################################################################################
@@ -217,7 +216,7 @@ rule sim_run_matfac:
         gpu=1
     shell:
         "julia --project=. {input.src} {input.data} {input.pwy_json} {output.inferred_bson} {output.inferred_hdf} max_epochs={MATFAC_MAX_EPOCHS} lr={MATFAC_LR} lambda_layer={MATFAC_LAMBDA_LAYER} lambda_X={MATFAC_LAMBDA_X} capacity={MATFAC_CAPACITY} history_json={output.history_json} gpu_status_file={input.status_file}"
-	#"julia --project=. {input.src} {input.data} {input.pwy_json} {output.inferred_bson} {output.inferred_hdf} max_epochs={MATFAC_MAX_EPOCHS} lr={MATFAC_LR} lambda_layer={MATFAC_LAMBDA_LAYER} lambda_X={MATFAC_LAMBDA_X} init_lambda_Y={MATFAC_LAMBDA_Y} capacity={MATFAC_CAPACITY} history_json={output.history_json} gpu_status_file={input.status_file}"
+	#"julia --project=. {input.src} {input.data} {input.pwy_json} {output.inferred_bson} {output.inferred_hdf} max_epochs={MATFAC_MAX_EPOCHS} lr={MATFAC_LR} lambda_layer={MATFAC_LAMBDA_LAYER} lambda_X={MATFAC_LAMBDA_X} capacity={MATFAC_CAPACITY} history_json={output.history_json} gpu_status_file={input.status_file}"
 
 
 rule simulate_data:
