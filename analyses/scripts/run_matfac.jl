@@ -18,7 +18,7 @@ function main(args)
                             :rel_tol => 1e-8, 
                             :lambda_X => 0.1, 
                             :fit_hyperparam => true,
-                            :lambda_Y_max => nothing,
+                            :max_lambda_Y => nothing,
                             :n_lambda => 8,
                             :lambda_layer =>0.5,
                             :lr => 0.07,
