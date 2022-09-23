@@ -18,7 +18,7 @@ function main(args)
     opts = Dict{Symbol,Any}(:max_epochs => 1000, 
                             :rel_tol =>1e-8, 
                             :lambda_X =>0.001, 
-                            :init_lambda_Y => nothing,
+                            :max_lambda_Y => nothing,
                             :n_lambda => 8,
                             :lambda_layer =>5.0,
                             :lr => 0.07,

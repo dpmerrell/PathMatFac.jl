@@ -37,40 +37,31 @@ function select_lambda_max(model::MultiomicModel, D::AbstractMatrix;
     verbose_print("Setting λ_Y max...\n"; verbosity=verbosity, level=1)
 
     M, N = size(D) 
-    row_batch_size = div(capacity,N)
     K, N = size(model.matfac.Y)
-    Y_zero_grad = zero(model.matfac.Y)
+
+    # Set X to be random
+    X_temp = copy(model.matfac.X)                    
+    model.matfac.X .= randn_like(model.matfac.X) ./ approx_max_stat(K*M)
+                                                 # Divide by the expected maximal entry so
+                                                 # that lambda_max doesn't grow out of control
+    
+    # Curry the data loss to be a function of Y and the data 
+    Y_loss_fn = (m, Y, D) -> MF.data_loss(m.X, Y, 
+                                          m.row_transform, m.col_transform,
+                                          m.noise_model, D)
+                                                 
+    # Compute the full gradient of the data-loss w.r.t. Y, at Y=0 and random X.
     Y_zero = zero(model.matfac.Y)
-
-    test_X = randn_like(model.matfac.X)
-    test_X ./= approx_max_stat(K*M) # Divide by the expected maximal entry so 
-                                    # that lambda_max doesn't grow out of control 
-
-    # Compute the full gradient of the data-loss w.r.t. Y at Y=0 and random X.
-    for row_batch in MF.BatchIter(M, row_batch_size)
-
-        X_view = view(test_X, :, row_batch)
-        row_trans_view = view(model.matfac.row_transform, row_batch, 1:N)
-        col_trans_view = view(model.matfac.col_transform, row_batch, 1:N)
-        D_view = view(D, row_batch, 1:N)
-
-        data_loss_Y_fn = Y -> MF.data_loss(X_view, Y,
-                                                row_trans_view,
-                                                col_trans_view,
-                                                model.matfac.noise_model,
-                                           D_view)
-
-        (g,) = gradient(data_loss_Y_fn, Y_zero)
-
-        Y_zero_grad .+= g 
-    end    
+    Y_zero_grad = MF.batched_reduce((g, m, D) -> g .+ gradient(Y -> Y_loss_fn(m, Y, D), Y_zero)[1], 
+                                    model.matfac, D; capacity=capacity, start=zero(model.matfac.Y))
 
     # The size of lambda_max is governed by the largest entry of the gradient:
-    lambda_max = maximum(abs.(Y_zero_grad)) * (K/M)
+    lambda_max = 2 * maximum(abs.(Y_zero_grad)) * (K/M)
     verbose_print("λ_Y max = ", lambda_max, "\n"; verbosity=verbosity, level=1)
 
     return lambda_max 
 end
+
 
 function initialize_params!(model::MultiomicModel, D::AbstractMatrix;
                             capacity=Int(25e6), verbosity=1,
@@ -78,13 +69,11 @@ function initialize_params!(model::MultiomicModel, D::AbstractMatrix;
                             mean_init_map=MEAN_INIT_MAP,
                             var_init_map=VAR_INIT_MAP)
 
-   verbose_print("Setting initial values for mu and sigma...\n"; verbosity=verbosity, level=1)
+    verbose_print("Setting initial values for mu and sigma...\n"; verbosity=verbosity, level=1)
     
-    M, N = size(D)
-    batch_size = Int(round(capacity / N))
     model_losses = map(x->loss_map[x], model.data_assays[model.used_feature_idx])
     unq_losses = unique(model_losses)
-    mean_vec, var_vec = MF.column_meanvar(D, batch_size)
+    mean_vec, var_vec = MF.batched_column_meanvar(D; capacity=capacity)
 
     # Transform the means and variances appropriately for each assay
     for ul in unq_losses
@@ -181,8 +170,6 @@ function fit_fixed_weight!(model::MultiomicModel, D::AbstractMatrix; kwargs...)
 end
 
 
-
-
 function fit_reg_path!(model::MultiomicModel, D::AbstractMatrix; verbosity=1,
                                                                  max_lambda_Y=nothing,
                                                                  min_lambda_Y=0.01,
@@ -221,7 +208,9 @@ function fit_reg_path!(model::MultiomicModel, D::AbstractMatrix; verbosity=1,
         micro_callback = callback()
 
         # Fit the model
-        verbose_print("Outer iteration ", iter, "; λ_Y = ", lambdas[iter], "\n"; verbosity=verbosity, level=1)
+        verbose_print("Outer iteration ", iter, "; λ_Y = ", 
+                      round(lambdas[iter]; digits=5), 
+                      "\n"; verbosity=verbosity, level=1)
         reweight_columns = (iter == 1)
         fit_fixed_weight!(model, D; callback=micro_callback,
                                     scale_column_losses=reweight_columns, 
