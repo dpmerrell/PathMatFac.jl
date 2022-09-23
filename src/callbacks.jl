@@ -15,10 +15,12 @@ end
     while (b) maintaining the Y matrix average precision
     above a certain threshold. 
 """
-function precision_selection(model, best_model, D, iter; prec_threshold=0.8)
+function precision_selection(model, best_model, D, iter; 
+                             prec_threshold=0.75, capacity=Int(25e6))
+    best_loss = MF.batched_data_loss(best_model.matfac, D)
+    new_loss = MF.batched_data_loss(model.matfac, D)
     new_av_precs = model_Y_average_precs(model)
-    best_av_precs = model_Y_average_precs(best_model)
-    return minimum(new_av_precs) > minimum(best_av_precs)
+    return (minimum(new_av_precs) > prec_threshold) & (new_loss > best_loss)
 end
 
 

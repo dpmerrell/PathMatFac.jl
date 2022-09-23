@@ -6,6 +6,7 @@ using Flux
 
 include("script_util.jl")
 
+PM = PathwayMultiomics
 
 function main(args)
    
@@ -18,7 +19,7 @@ function main(args)
                             :rel_tol => 1e-8, 
                             :lambda_X => 0.1, 
                             :fit_hyperparam => true,
-                            :max_lambda_Y => nothing,
+                            :lambda_Y_max => nothing,
                             :n_lambda => 8,
                             :lambda_layer =>0.5,
                             :lr => 0.07,
@@ -90,7 +91,7 @@ function main(args)
         model = nothing
 
         start_time = time()
-        fit!(model_d, omic_data_d; opts...)
+        PM.fit!(model_d, omic_data_d; opts...)
         end_time = time()
 
         println("ELAPSED TIME (s):")

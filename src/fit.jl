@@ -1,7 +1,6 @@
 
-import ScikitLearnBase: fit!
+import StatsBase: fit!
 
-export fit!
 
 ##########################
 # Helper functions
@@ -188,7 +187,7 @@ end
 
 function fit_reg_path!(model::MultiomicModel, D::AbstractMatrix; verbosity=1,
                        lambda_Y_max=nothing, lambda_Y_min=0.01,
-                       n_lambda=8, update_criterion=latest_model, 
+                       n_lambda=8, update_criterion=precision_selection, 
                        inner_callback_type=MatFac.HistoryCallback,
                        outer_callback=nothing, capacity=Int(25e6),
                        kwargs...)
@@ -198,7 +197,7 @@ function fit_reg_path!(model::MultiomicModel, D::AbstractMatrix; verbosity=1,
         lambda_Y_max = select_lambda_max(model, D; capacity=capacity, verbosity=verbosity) 
     end
     if outer_callback == nothing
-        outer_callback = OuterCallBack()
+        outer_callback = OuterCallback()
     end
 
     # Initialize the latent factors to have very small entries
@@ -234,7 +233,7 @@ function fit_reg_path!(model::MultiomicModel, D::AbstractMatrix; verbosity=1,
                                     capacity=capacity, kwargs...)
 
         # Call the outer callback for this iteration
-        macro_callback(model, micro_callback) 
+        outer_callback(model, inner_callback) 
 
         # Check whether to update the returned model
         if update_criterion(model, best_model, D, iter)
