@@ -1,6 +1,5 @@
 
 using PathwayMultiomics
-using ScikitLearnBase
 using CUDA
 using JSON
 using Flux
@@ -16,16 +15,17 @@ function main(args)
     out_hdf = args[4]
 
     opts = Dict{Symbol,Any}(:max_epochs => 1000, 
-                            :rel_tol =>1e-8, 
-                            :lambda_X =>0.001, 
-                            :init_lambda_Y => nothing,
+                            :rel_tol => 1e-8, 
+                            :lambda_X => 0.1, 
+                            :fit_hyperparam => true,
+                            :lambda_Y_max => nothing,
                             :n_lambda => 8,
-                            :lambda_layer =>5.0,
+                            :lambda_layer =>0.5,
                             :lr => 0.07,
                             :capacity => 25000000,
                             :verbosity => 1,
-                            :fit_hyperparam => true,
-                            :calibrate_losses => true
+                            :calibrate_losses => true,
+                            :history_json => "history.json"
                            )
     if length(args) > 3
         parse_opts!(opts, args[5:end])
@@ -35,6 +35,7 @@ function main(args)
     println(opts)
     lambda_X = pop!(opts, :lambda_X)
     lambda_layer = pop!(opts, :lambda_layer)
+    history_json = pop!(opts, :history_json)
 
     println("Loading data...")
     feature_genes = get_omic_feature_genes(omic_hdf_filename)
@@ -79,6 +80,9 @@ function main(args)
     end
 
     try
+        # Construct the callback object
+        callback = PathwayMultiomics.OuterCallback(history_json=history_json)
+
         # Move to GPU
         omic_data_d = gpu(omic_data)
         omic_data = nothing
@@ -86,7 +90,7 @@ function main(args)
         model = nothing
 
         start_time = time()
-        ScikitLearnBase.fit!(model_d, omic_data_d; opts...)
+        fit!(model_d, omic_data_d; opts...)
         end_time = time()
 
         println("ELAPSED TIME (s):")
@@ -104,7 +108,7 @@ function main(args)
     if status_file != nothing
         update_device_status(gpu_idx, '0'; status_file=status_file) 
     end
-    PathwayMultiomics.save_model(model, out_bson)
+    save_model(model, out_bson)
     PathwayMultiomics.save_params_hdf(model, out_hdf)
 
 end
