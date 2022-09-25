@@ -1,6 +1,6 @@
 
 
-using Test, PathwayMultiomics, SparseArrays, LinearAlgebra, ScikitLearnBase, Zygote, Flux
+using Test, PathwayMultiomics, SparseArrays, LinearAlgebra, Zygote, Flux, StatsBase
 
 PM = PathwayMultiomics
 
@@ -703,14 +703,11 @@ function fit_tests()
         lambda_start = model.matfac.lambda_Y
 
         fit!(model, omic_data; fit_hyperparam=true, verbosity=1, 
-                               history_json="test_histories.json", 
                                lr=0.01, max_epochs=10)
 
         @test true
-        @test !isapprox(model.matfac.lambda_Y, lambda_start)
         @test !isapprox(model.matfac.X, X_start)
         @test !isapprox(model.matfac.Y, Y_start)
-        rm("test_histories.json")
     end
     
     @testset "Fit hyperparam GPU" begin
@@ -730,16 +727,13 @@ function fit_tests()
         omic_data_gpu = gpu(omic_data)
 
         fit!(model_gpu, omic_data_gpu; fit_hyperparam=true, verbosity=1, 
-                                       history_json="test_histories.json", 
                                        lr=0.01, max_epochs=10)
 
         model = cpu(model_gpu)
 
         @test true
-        @test !isapprox(model.matfac.lambda_Y, lambda_start)
         @test !isapprox(model.matfac.X, X_start)
         @test !isapprox(model.matfac.Y, Y_start)
-        rm("test_histories.json")
     end
 
 end

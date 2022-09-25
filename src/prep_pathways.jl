@@ -10,7 +10,7 @@
     vector of vectors
 """
 function read_sif_file(sif_file::String)
-    df = DataFrame!(CSV.File(sif_file; header=0))
+    df = DataFrame(CSV.File(sif_file; header=0))
     return [ collect(df[i,:]) for i=1:size(df,1) ]
 end
 
