@@ -91,7 +91,7 @@ function main(args)
         model = nothing
 
         start_time = time()
-        PM.fit!(model_d, omic_data_d; opts...)
+        PM.fit!(model_d, omic_data_d; outer_callback=callback, opts...)
         end_time = time()
 
         println("ELAPSED TIME (s):")

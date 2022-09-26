@@ -91,7 +91,7 @@ function main(args)
                                feature_genes, feature_assays,
                                sample_batch_dict)
     println("Saving parameters to HDF")
-    save_params_hdf(model_hdf, model)
+    PM.save_params_hdf(model, model_hdf)
 end
 
 

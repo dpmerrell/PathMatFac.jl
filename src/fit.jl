@@ -19,21 +19,6 @@ function randn_like(A::AbstractMatrix)
     randn(M,N)
 end
 
-"""
-    Approximate the mean of the maximal order
-    statistic for N samples from a standard
-    normal distribution. 
-
-    Part of our calculations for lambda_Y_max
-
-    Got the formula from this blog post: https://www.gwern.net/Order-statistics
-    and this paper: https://www.gwern.net/docs/statistics/order/1961-harter.pdf
-"""
-function approx_max_stat(N)
-    alpha = pi*0.125
-    return quantile(Normal(), (N - alpha)/(N - 2*alpha + 1))
-end
-
 
 function select_lambda_max(model::MultiomicModel, D::AbstractMatrix;
                            capacity=Int(25e6), verbosity=1)
@@ -43,11 +28,9 @@ function select_lambda_max(model::MultiomicModel, D::AbstractMatrix;
     M, N = size(D) 
     K, N = size(model.matfac.Y)
 
-    # Set X to be random
+    # Set all entries of X to 1
     X_temp = copy(model.matfac.X)                    
-    model.matfac.X .= randn_like(model.matfac.X) ./ approx_max_stat(K*M)
-                                                 # Divide by the expected maximal entry so
-                                                 # that lambda_max doesn't grow out of control
+    model.matfac.X .= 1 
     
     # Curry the data loss to be a function of Y and the data 
     Y_loss_fn = (m, Y, D) -> MF.data_loss(m.X, Y, 
@@ -60,8 +43,11 @@ function select_lambda_max(model::MultiomicModel, D::AbstractMatrix;
                                     model.matfac, D; capacity=capacity, start=zero(model.matfac.Y))
 
     # The size of lambda_max is governed by the largest entry of the gradient:
-    lambda_max = 2 * maximum(abs.(Y_zero_grad)) * (K/M)
+    lambda_max = 2.0 * maximum(abs.(Y_zero_grad)) * (K/M)
     verbose_print("λ_Y max = ", lambda_max, "\n"; verbosity=verbosity, level=1)
+
+    # Restore the entries of X
+    model.matfac.X .= X_temp
 
     return lambda_max 
 end
@@ -216,9 +202,11 @@ function fit_reg_path!(model::MultiomicModel, D::AbstractMatrix; verbosity=1,
 
     # Loop through values of lambda_Y
     for iter=1:n_lambda
-        # Set the regularizer weight
+        # Set the regularizer weights
         model.matfac.lambda_Y = lambdas[iter]
-        
+        model.matfac.lambda_row = lambdas[iter]
+        model.matfac.lambda_col = lambdas[iter]
+ 
         # initialize an "inner" callback 
         inner_callback = inner_callback_type()
 
@@ -231,14 +219,18 @@ function fit_reg_path!(model::MultiomicModel, D::AbstractMatrix; verbosity=1,
                                     scale_column_losses=reweight_columns, 
                                     verbosity=verbosity, 
                                     capacity=capacity, kwargs...)
+        if reweight_columns
+            best_model.matfac.noise_model = deepcopy(cpu(model.matfac.noise_model))
+        end
 
         # Call the outer callback for this iteration
         outer_callback(model, inner_callback) 
 
         # Check whether to update the returned model
-        if update_criterion(model, best_model, D, iter)
+        if update_criterion(model, gpu(best_model), D, iter; capacity=capacity)
             best_model = deepcopy(cpu(model))
-        end 
+        end
+
     end
 
     model.matfac = best_model.matfac

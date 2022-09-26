@@ -31,8 +31,7 @@ method_params:
     matfac:
         max_epochs: 5000
         lr: 0.01
-        lambda_layer: 0.25 
-        lambda_X: 0.1
+        lambda_X: 0.01
         n_lambda: 8
         gpu_capacity: 25000000
     #prior: NULL
