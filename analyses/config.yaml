@@ -10,6 +10,9 @@ sim_replicates: 1
 
 sim_data_params:
     #snr: [9.0, 99.0]
+    M: [10, 100, 1000, 10000]
+    K: [10, 50, 300]
+    N: [75, 750, 7500, 75000]
     snr: [99.0]
 
 tcga_data_params:

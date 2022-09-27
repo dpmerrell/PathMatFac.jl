@@ -60,6 +60,10 @@ CORRUPTION_PARAMS = ["original"] #, "randomized"]
 SIM_REPS = list(range(config["sim_replicates"]))
 SIM_DATA_PARAMS = config["sim_data_params"]
 SIM_SNR = SIM_DATA_PARAMS["snr"]
+SIM_M = SIM_DATA_PARAMS["M"]
+SIM_K = SIM_DATA_PARAMS["K"]
+SIM_N = SIM_DATA_PARAMS["N"]
+SIM_MKN = [f"m={m}_k={k}_n={n}" for m,k,n in zip(SIM_M, SIM_K, SIMN)]
 
 ###################################
 # TCGA data preprocessing parameters
@@ -88,16 +92,16 @@ MATFAC_CAPACITY = MATFAC_PARAMS["gpu_capacity"]
 
 rule all:
     input:
-       sim_inferred=expand(join(SIM_INFER_DIR,"method={method}/snr={snr}/topk={topk}_{corruption}/rep={rep}.hdf"),
-		           method=METHODS, snr=SIM_SNR, topk=PATHWAY_TOPK, 
+       sim_inferred=expand(join(SIM_INFER_DIR,"method={method}/{mkn}_snr={snr}/topk={topk}_{corruption}/rep={rep}.hdf"),
+		           method=METHODS, mkn=SIM_MKN, snr=SIM_SNR, topk=PATHWAY_TOPK, 
 			   corruption=CORRUPTION_PARAMS, rep=SIM_REPS),
 
        #sim_scores=expand(join(SIM_SCORE_DIR,"usedk={usedk}_truek={truek}_snr={snr}_rep={rep}.json"),
        #                  usedk=SIM_USED_K, truek=SIM_TRUE_K, snr=SIM_SNR, rep=SIM_REPS),
        #sim_scatters=expand(join(SIM_SCATTER_DIR,"usedk={usedk}_truek={truek}_snr={snr}_rep={rep}.html"),
        #                    usedk=SIM_USED_K, truek=SIM_TRUE_K, snr=SIM_SNR, rep=SIM_REPS),
-       sim_factorplots=expand(join(SIM_FACTORPLOT_DIR,"method={method}/snr={snr}/topk={topk}_{corruption}/rep={rep}.html"),
-		              method=METHODS, snr=SIM_SNR, topk=PATHWAY_TOPK, 
+       sim_factorplots=expand(join(SIM_FACTORPLOT_DIR,"method={method}/{mkn}_snr={snr}/topk={topk}_{corruption}/rep={rep}.html"),
+		              method=METHODS, mkn=SIM_MKN, snr=SIM_SNR, topk=PATHWAY_TOPK, 
 			      corruption=CORRUPTION_PARAMS, rep=SIM_REPS),
        #exp_inferred=expand(join(EXP_INFER_DIR,"usedk={usedk}.hdf"),
        #                    usedk=EXP_USED_K),
@@ -163,10 +167,10 @@ rule exp_run_matfac:
 rule factor_plot:
     input:
         src="scripts/vis_pathway_factor_plot.py",
-        params_hdf=join(SIM_INFER_DIR, "method={method}/snr={snr}/topk={topk}_{corruption}/rep={rep}.hdf"),
+        params_hdf=join(SIM_INFER_DIR, "method={method}/{mkn}_snr={snr}/topk={topk}_{corruption}/rep={rep}.hdf"),
         pwy_json=join(SIM_PWY_DIR, "topk={topk}_{corruption}/rep={rep}.json")
     output:
-        factorplot=join(SIM_FACTORPLOT_DIR, "method={method}/snr={snr}/topk={topk}_{corruption}/rep={rep}.html")
+        factorplot=join(SIM_FACTORPLOT_DIR, "method={method}/{mkn,[_=a-z0-9]+}_snr={snr}/topk={topk}_{corruption}/rep={rep}.html")
     params:
         #plottedk=lambda wc: int(wc["usedk"])//5
         plottedk=lambda wc: 5
@@ -204,12 +208,12 @@ rule sim_run_matfac:
     input:
         src="scripts/run_matfac.jl",
         status_file="gpu_status.txt",
-        data=join(SIM_DATA_DIR, "snr={snr}", "topk={topk}_{corruption_params}/rep={rep}.hdf"),
+        data=join(SIM_DATA_DIR, "{mkn}_snr={snr}", "topk={topk}_{corruption_params}/rep={rep}.hdf"),
         pwy_json=join(SIM_PWY_DIR, "topk={topk}_{corruption_params}/rep={rep}.json")
     output:
-        inferred_bson=join(SIM_INFER_DIR, "method=matfac", "snr={snr,[.0-9]+}", "topk={topk,[a-z0-9]+}_{corruption_params, [_.=a-z0-9]+}/rep={rep, [0-9]+}.bson"),
-        inferred_hdf=join(SIM_INFER_DIR, "method=matfac", "snr={snr,[.0-9]+}", "topk={topk,[a-z0-9]+}_{corruption_params, [_.=a-z0-9]+}/rep={rep, [0-9]+}.hdf"),
-        history_json=join(SIM_HISTORY_DIR, "method=matfac", "snr={snr,[.0-9]+}", "topk={topk,[a-z0-9]+}_{corruption_params, [_.=a-z0-9]+}/rep={rep, [0-9]+}.json")
+        inferred_bson=join(SIM_INFER_DIR, "method=matfac", "{mkn,[_=a-z0-9]+}_snr={snr,[.0-9]+}", "topk={topk,[a-z0-9]+}_{corruption_params, [_.=a-z0-9]+}/rep={rep, [0-9]+}.bson"),
+        inferred_hdf=join(SIM_INFER_DIR, "method=matfac", "{mkn,[_=a-z0-9]+}_snr={snr,[.0-9]+}", "topk={topk,[a-z0-9]+}_{corruption_params, [_.=a-z0-9]+}/rep={rep, [0-9]+}.hdf"),
+        history_json=join(SIM_HISTORY_DIR, "method=matfac", "{mkn,[_=a-z0-9]+}_snr={snr,[.0-9]+}", "topk={topk,[a-z0-9]+}_{corruption_params, [_.=a-z0-9]+}/rep={rep, [0-9]+}.json")
     resources:
         mem_mb=10000,
         gpu=1
@@ -221,12 +225,12 @@ rule sim_run_matfac:
 rule simulate_data:
     input:
         src="scripts/simulate_data.jl",
-        pwy_json=join(REACTOME_DIR, "topk={topk}.json"), 
-        sample_json=join(TCGA_DIR, "toy_samples.json"),
-        feature_json=join(TCGA_DIR, "toy_features.json")
+        pwy_json=join(REACTOME_DIR, "{mkn}.json"), 
+        sample_json=join(TCGA_DIR, "{mkn}_samples.json"),
+        feature_json=join(TCGA_DIR, "{mkn}_features.json")
     output:
-        data_hdf=join(SIM_DATA_DIR, "snr={snr,[.0-9]+}", "topk={topk,[a-z0-9]+}_{corruption_params, [_.=a-z0-9]+}/rep={rep,[0-9]+}.hdf"),
-        param_hdf=join(SIM_PARAM_DIR,"snr={snr,[.0-9]+}", "topk={topk,[0-z-9]+}_{corruption_params, [_.=a-z0-9]+}/rep={rep,[0-9]+}.hdf")
+        data_hdf=join(SIM_DATA_DIR, "{mkn,[_=a-z0-9]+}_snr={snr,[.0-9]+}", "topk={topk,[a-z0-9]+}_{corruption_params, [_.=a-z0-9]+}/rep={rep,[0-9]+}.hdf"),
+        param_hdf=join(SIM_PARAM_DIR,"{mkn,[_=a-z0-9]+}_snr={snr,[.0-9]+}", "topk={topk,[0-z-9]+}_{corruption_params, [_.=a-z0-9]+}/rep={rep,[0-9]+}.hdf")
     resources:
         mem_mb=10000
     shell:
@@ -280,6 +284,19 @@ rule corrupt_pathways:
         corr_json=join(SIM_PWY_DIR, "topk={topk,[0-9]+}_kadd={kadd,[0-9]+}_krem={krem,[0-9]+}_nadd={nadd,[.0-9]+}_nrem={nrem,[.0-9]+}/rep={rep,[0-9]+}.json")
     shell:
         "python {input.src} {input.pwy_json} {input.ranked_json} {wildcards.kadd} {wildcards.krem} {wildcards.nadd} {wildcards.nrem} {output.corr_json}"
+
+rule prep_sim_inputs:
+    input:
+        src="scripts/prep_simulation_inputs.py",
+        full_pwy_json=join(),
+        full_samples_json=join(),
+        full_features_json=join()
+    output:
+        pwy_json=join(),
+        samples_json=join(),
+        features_json=join()
+    shell:
+        "python {input.src} {input.full_pwy_json} {input.full_samples_json} {input.full_features_json} {wildcards.m} {wildcards.k} {wildcards.n} {output.pwy_json} {output.samples_json} {output.features_json}"
 
 
 rule select_topk_pwys:
