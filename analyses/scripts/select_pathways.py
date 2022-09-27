@@ -1,3 +1,11 @@
+"""
+    Inputs:
+        * A JSON of ranked pathways
+        * A number K
+    Outputs:
+        * A JSON containing only the top K pathways
+"""
+
 
 import json
 import sys

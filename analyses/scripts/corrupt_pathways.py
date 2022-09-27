@@ -1,3 +1,12 @@
+"""
+    Inputs:
+        * A JSON of true pathways
+        * A JSON of all pathways (superset of true pathways)
+        * various corruption parameters
+    Output:
+        * A JSON of corrupted pathways
+"""
+
 
 from collections import defaultdict
 import numpy as np

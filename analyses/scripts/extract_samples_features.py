@@ -1,3 +1,9 @@
+"""
+    Given an HDF5 file of TCGA data, extract its
+    samples, barcodes, and features and save them 
+    to JSON files.
+"""
+
 
 import script_util as su
 import h5py

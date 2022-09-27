@@ -1,3 +1,14 @@
+"""
+    Inputs:
+        * A JSON of pathways
+        * A JSON of features (i.e., genes)
+    Outputs:
+        * A JSON of pathways, *ranked* by their
+          coverage of the genes. I.e., we run a greedy
+          set coverage algorithm which produces an
+          ordering on the pathways; ties are broken
+          by pathway size.
+"""
 
 import json
 import sys
@@ -23,7 +34,7 @@ def rank_genesets(genesets, top_k=None):
     covered = set()
 
     if top_k is None:
-        top_k = length(genesets)
+        top_k = len(genesets)
 
     i = 0
     while i < top_k:
