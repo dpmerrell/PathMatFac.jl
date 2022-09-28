@@ -10,11 +10,10 @@ sim_replicates: 1
 pathway_corruption_replicates: 1
 
 sim_data_params:
-    #snr: [9.0, 99.0]
-    M: [10, 100, 1000, 10000]
-    K: [5, 50, 300]
-    N: [75, 750, 7500, 75000]
-    snr: [99.0]
+    M: [10] #, 100, 1000, 10000]
+    K: [5] #, 50, 300]
+    N: [75] #, 750, 7500, 75000]
+    snr: [99.0] #, 9.0] 
 
 tcga_data_params:
     heldout_ctypes: ["OV", "GBM", "LAML"]

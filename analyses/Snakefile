@@ -168,10 +168,10 @@ rule exp_run_matfac:
 rule factor_plot:
     input:
         src="scripts/vis_pathway_factor_plot.py",
-        params_hdf=join(SIM_INFER_DIR, "method=matfac/{sim_params}/srep={srep}/{corruption}/crep={crep}.hdf"),
-        pwy_json=join(SIM_PWY_DIR, "method=matfac/{sim_params}/srep={srep}/original.json")
+        params_hdf=join(SIM_INFER_DIR, "method=matfac/{schema_params}_snr={snr}/srep={srep}/{corruption}/crep={crep}.hdf"),
+        pwy_json=join(SIM_SCHEMA_DIR, "{schema_params}/srep={srep}/pathways.json")
     output:
-        factorplot=join(SIM_FACTORPLOT_DIR, "method=matfac/{sim_params,[_.=a-z0-9]+}/srep={srep,[0-9]+}/{corruption,[_.=a-z0-9]+}/crep={crep,[0-9]+}.html")
+        factorplot=join(SIM_FACTORPLOT_DIR, "method=matfac/{schema_params,[_.=a-z0-9]+}_snr={snr,[.0-9]+}/srep={srep,[0-9]+}/{corruption,[_.=a-z0-9]+}/crep={crep,[0-9]+}.html")
     params:
         #plottedk=lambda wc: int(wc["usedk"])//5
         plottedk=lambda wc: 5
@@ -239,7 +239,7 @@ rule corrupt_pathways:
     input:
         src="scripts/corrupt_pathways.py",
         pwy_json=join(SIM_SCHEMA_DIR, "{sim_params}/srep={srep}/pathways.json"),
-        ranked_json=join(REACTOME_DIR, "topk="+str(PATHWAY_TOPK)+".json")
+        ranked_json=join(REACTOME_DIR, "reactome_ranked.json")
     output:
         corr_json=join(SIM_PWY_DIR, "{sim_params,[_.=a-z0-9]+}_snr={snr,[.0-9]+}/srep={srep,[0-9]+}/kadd={kadd,[.0-9]+}_krem={krem,[.0-9]+}_nadd={nadd,[.0-9]+}_nrem={nrem,[.0-9]+}/crep={crep,[0-9]+}.json")
     shell:
@@ -269,8 +269,8 @@ rule prep_sim_inputs:
         full_features_json=join(TCGA_DIR, "tcga_features_dropctypes=.json")
     output:
         pwy_json=join(SIM_SCHEMA_DIR, "m={m,[0-9]+}_k={k,[0-9]+}_n={n,[0-9]+}/srep={srep,[0-9]+}/pathways.json"), 
-        sample_json=join(SIM_SCHEMA_DIR, "m={m,[0-9]+}_k={k,[0-9]+}_n={n,[0-9]+}/srep={srep,[0-9]+}/samples.json"),
-        feature_json=join(SIM_SCHEMA_DIR, "m={m,[0-9]+}_k={k,[0-9]+}_n={n,[0-9]+}/srep={srep,[0-9]+}/features.json")
+        samples_json=join(SIM_SCHEMA_DIR, "m={m,[0-9]+}_k={k,[0-9]+}_n={n,[0-9]+}/srep={srep,[0-9]+}/samples.json"),
+        features_json=join(SIM_SCHEMA_DIR, "m={m,[0-9]+}_k={k,[0-9]+}_n={n,[0-9]+}/srep={srep,[0-9]+}/features.json")
     shell:
         "python {input.src} {input.full_pwy_json} {input.full_samples_json} {input.full_features_json} {wildcards.m} {wildcards.k} {wildcards.n} {output.pwy_json} {output.samples_json} {output.features_json}"
 
