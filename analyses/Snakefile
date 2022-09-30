@@ -355,6 +355,28 @@ rule preprocess_tcga:
     shell:
         "python {input.src} {input.tcga_hdf} {output.prep_hdf} heldout_ctypes={wildcards.dropctypes} std_assays= "
 
+rule unzip_hdf:
+    input:
+        zipped="{path}/{head}.tar.gz"
+    output:
+        unzipped="{path}/{head}.hdf"
+    shell:
+        "tar -xvzf {input.zipped} -C {wildcards.path}"
+
+rule download_tcga_omic:
+    output:
+        tcga_omic=join(TCGA_DIR, "tcga_omic.tar.gz"),
+    shell:
+        "curl https://zenodo.org/record/6977490/files/tcga_omic.tar.gz?download=1 -o {output.tcga_omic}"
+
+
+rule download_tcga_clinical:
+    output:
+        tcga_clinical=join(TCGA_DIR, "tcga_clinical.tar.gz")
+    shell:
+        "curl https://zenodo.org/record/6977490/files/tcga_clinical.tar.gz?download=1 -o {output.tcga_clinical}"
+
+
 
 ######################################
 # GPU status

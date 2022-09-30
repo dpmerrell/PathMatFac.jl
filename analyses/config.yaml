@@ -20,10 +20,10 @@ tcga_data_params:
 
 pathway_params:
     topk: 300
-    addk: [0.05, 0.2]
-    removek: [0.05, 0.2]
-    addnode: [0.05, 0.25]
-    removenode: [0.05, 0.25]
+    addk: [0.05] #, 0.2]
+    removek: [0.05] #, 0.2]
+    addnode: [0.05] #, 0.25]
+    removenode: [0.05] #, 0.25]
 
 method_params:
     matfac:
