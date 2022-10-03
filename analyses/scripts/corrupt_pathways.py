@@ -43,12 +43,12 @@ def get_node_degrees(pwy):
     return degrees
 
 
-def update_graph(pwy, all_nodes, node_add, node_remove):
+def update_graph(pwy, all_pwy_nodes, node_add, node_remove):
 
     # Get the pathway nodes and unique edges
     pwy_nodes = get_pwy_nodes(pwy)
     pwy_node_ls = sorted(list(pwy_nodes))
-    complement_ls = sorted(list(all_nodes.difference(pwy_nodes)))
+    complement_ls = sorted(list(all_pwy_nodes.difference(pwy_nodes)))
 
     # Compute the set of nodes to remove
     n_remove = int(np.ceil(node_remove * len(pwy_nodes)))
@@ -84,16 +84,10 @@ def update_graph(pwy, all_nodes, node_add, node_remove):
 
 
 
-def update_graphs(used_pwys, node_add, node_remove):
-
-    all_nodes = set()
-    for pwy in used_pwys["pathways"]:
-        for edge in pwy:
-            all_nodes.add(edge[0])
-            all_nodes.add(edge[1])
+def update_graphs(used_pwys, data_genes, node_add, node_remove):
 
     return {"names": used_pwys["names"],
-            "pathways": [update_graph(pwy, all_nodes, node_add, node_remove) for pwy in used_pwys["pathways"]]}
+            "pathways": [update_graph(pwy, data_genes, node_add, node_remove) for pwy in used_pwys["pathways"]]}
 
 
 
@@ -157,9 +151,10 @@ def main():
     true_pwy_dict = json.load(open(true_pwy_json, "r"))
     all_pwys_dict = json.load(open(all_pwys_json, "r"))
     features_dict = json.load(open(features_json, "r"))
+    data_genes = set(features_dict["feature_genes"])
 
     used_pwys = update_k(true_pwy_dict, all_pwys_dict, features_dict, k_add, k_remove)
-    used_pwys = update_graphs(used_pwys, node_add, node_remove)
+    used_pwys = update_graphs(used_pwys, data_genes, node_add, node_remove)
 
     json.dump(used_pwys, open(out_json, "w"))
 
