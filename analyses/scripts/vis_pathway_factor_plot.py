@@ -106,19 +106,23 @@ if __name__=="__main__":
 
     args = sys.argv
     model_hdf = args[1]
-    pwy_json = args[2]
-    out_html = args[3]
-    top_k = int(args[4])
+    true_pwy_json = args[2]
+    used_pwy_json = args[3]
+    out_html = args[4]
 
     features = su.load_features(model_hdf)
     all_genes = set([feat.split("_")[0] for feat in features])
 
     Y = su.load_feature_factors(model_hdf)
-    Y = Y[:,:top_k]
 
-    with open(pwy_json, "r") as f: 
+    with open(used_pwy_json, "r") as f: 
         pwy_dict = json.load(f)
 
+    top_k = len(pwy_dict["names"])
+    if len(args) >= 6:
+        top_k = int(args[5])
+
+    Y = Y[:,:top_k]
     pwys = pwy_dict["pathways"][:top_k]
     pwy_names = pwy_dict["names"][:top_k]
    

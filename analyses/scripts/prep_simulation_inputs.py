@@ -133,8 +133,8 @@ if __name__ == "__main__":
     in_samples_json = sys.argv[2]
     in_features_json = sys.argv[3]
 
-    k_pwys = int(sys.argv[4])
-    m_samples = int(sys.argv[5])
+    m_samples = int(sys.argv[4])
+    k_pwys = int(sys.argv[5])
     n_features = int(sys.argv[6])
 
     out_pwy_json = sys.argv[7]

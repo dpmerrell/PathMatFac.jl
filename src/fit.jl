@@ -43,7 +43,7 @@ function select_lambda_max(model::MultiomicModel, D::AbstractMatrix;
                                     model.matfac, D; capacity=capacity, start=zero(model.matfac.Y))
 
     # The size of lambda_max is governed by the largest entry of the gradient:
-    lambda_max = 2.0 * maximum(abs.(Y_zero_grad)) * (K/M)
+    lambda_max = 4.0 * maximum(abs.(Y_zero_grad)) * (K/M)
     verbose_print("λ_Y max = ", lambda_max, "\n"; verbosity=verbosity, level=1)
 
     # Restore the entries of X
@@ -172,7 +172,7 @@ end
 
 
 function fit_reg_path!(model::MultiomicModel, D::AbstractMatrix; verbosity=1,
-                       lambda_Y_max=nothing, lambda_Y_min=0.01,
+                       lambda_Y_max=nothing, lambda_Y_min=0.1,
                        n_lambda=8, update_criterion=precision_selection, 
                        inner_callback_type=MatFac.HistoryCallback,
                        outer_callback=nothing, capacity=Int(25e6),

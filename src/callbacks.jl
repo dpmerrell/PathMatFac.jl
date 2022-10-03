@@ -16,11 +16,11 @@ end
     above a certain threshold. 
 """
 function precision_selection(model, best_model, D, iter; 
-                             prec_threshold=0.75, capacity=Int(25e6))
+                             qntl=0.25, prec_threshold=0.75, capacity=Int(25e6))
     best_loss = MF.batched_data_loss(best_model.matfac, D; capacity=capacity)
     new_loss = MF.batched_data_loss(model.matfac, D; capacity=capacity)
     new_av_precs = model_Y_average_precs(model)
-    return (minimum(new_av_precs) > prec_threshold) & (new_loss < best_loss)
+    return (quantile(new_av_precs, qntl) > prec_threshold) & (new_loss < best_loss)
 end
 
 

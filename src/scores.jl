@@ -18,12 +18,13 @@ function average_precision(y_pred::AbstractVector, y_true::AbstractVector)
     TP_total = sum(y_true)
     TP = 0
     FP = 0
-    FN = TP_total
     R = 0.0
     ave_prec = 0.0
 
+    # Iterate through thresholds (decreasing order)
     for (i,yp) in enumerate(pred_srt)
 
+        # Update sums if we reach a new threshold
         if yp != cur_threshold
             Rnew = TP / TP_total
             P = TP / (TP + FP)
@@ -33,10 +34,9 @@ function average_precision(y_pred::AbstractVector, y_true::AbstractVector)
             cur_threshold = yp 
         end
 
-        # Increment/decrement the counts
+        # Increment the counts
         if true_srt[i]
             TP += 1
-            FN -= 1
         else
             FP += 1
         end

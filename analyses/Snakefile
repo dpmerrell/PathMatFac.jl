@@ -157,8 +157,8 @@ rule exp_run_matfac:
         mem_mb=10000,
         gpu=1
     shell:
-        "julia --project=. {input.src} {input.data} {input.pwy_json} {output.inferred_bson} {output.inferred_hdf} max_epochs={MAX_EPOCHS} lr={LR} lambda_layer={LAMBDA_LAYER} lambda_X={LAMBDA_X} capacity={CAPACITY} history_json={output.history_json} gpu_status_file={input.status_file}"
-    #"julia --project=. {input.src} {input.data} {input.pwy_json} {output.inferred_bson} {output.inferred_hdf} max_epochs={MAX_EPOCHS} lr={LR} lambda_layer={LAMBDA_LAYER} lambda_X={LAMBDA_X} init_lambda_Y={LAMBDA_Y} capacity={CAPACITY} history_json={output.history_json} gpu_status_file={input.status_file}"
+        "julia --project=. -t 1 {input.src} {input.data} {input.pwy_json} {output.inferred_bson} {output.inferred_hdf} max_epochs={MAX_EPOCHS} lr={LR} lambda_layer={LAMBDA_LAYER} lambda_X={LAMBDA_X} capacity={CAPACITY} history_json={output.history_json} gpu_status_file={input.status_file}"
+    #"julia --project=. -t 1 {input.src} {input.data} {input.pwy_json} {output.inferred_bson} {output.inferred_hdf} max_epochs={MAX_EPOCHS} lr={LR} lambda_layer={LAMBDA_LAYER} lambda_X={LAMBDA_X} init_lambda_Y={LAMBDA_Y} capacity={CAPACITY} history_json={output.history_json} gpu_status_file={input.status_file}"
 
 
 ###########################
@@ -169,16 +169,17 @@ rule factor_plot:
     input:
         src="scripts/vis_pathway_factor_plot.py",
         params_hdf=join(SIM_INFER_DIR, "method=matfac/{schema_params}_snr={snr}/srep={srep}/{corruption}/crep={crep}.hdf"),
-        pwy_json=join(SIM_SCHEMA_DIR, "{schema_params}/srep={srep}/pathways.json")
+        true_pwy_json=join(SIM_SCHEMA_DIR, "{schema_params}/srep={srep}/pathways.json"),
+        used_pwy_json=join(SIM_PWY_DIR, "{schema_params}_snr={snr}/srep={srep}/{corruption}/crep={crep}.json")
     output:
         factorplot=join(SIM_FACTORPLOT_DIR, "method=matfac/{schema_params,[_.=a-z0-9]+}_snr={snr,[.0-9]+}/srep={srep,[0-9]+}/{corruption,[_.=a-z0-9]+}/crep={crep,[0-9]+}.html")
-    params:
-        #plottedk=lambda wc: int(wc["usedk"])//5
-        plottedk=lambda wc: 5
+    #params:
+        #plottedk=lambda wc: int(wc["k"])
+	#plottedk=lambda wc: 5
     resources:
         mem_mb=5000
     shell:
-        "python {input.src} {input.params_hdf} {input.pwy_json} {output.factorplot} {params.plottedk}"
+        "python {input.src} {input.params_hdf} {input.true_pwy_json} {input.used_pwy_json} {output.factorplot}"
 
 #TODO
 #rule embedding_scatter:
@@ -220,8 +221,8 @@ rule sim_run_matfac:
         mem_mb=10000,
         gpu=1
     shell:
-        "julia --project=. {input.src} {input.data} {input.pwy_json} {output.inferred_bson} {output.inferred_hdf} max_epochs={MATFAC_MAX_EPOCHS} lr={MATFAC_LR} lambda_X={MATFAC_LAMBDA_X} capacity={MATFAC_CAPACITY} history_json={output.history_json} gpu_status_file={input.status_file}"
-        #"julia --project=. {input.src} {input.data} {input.pwy_json} {output.inferred_bson} {output.inferred_hdf} max_epochs={MATFAC_MAX_EPOCHS} lr={MATFAC_LR} lambda_layer={MATFAC_LAMBDA_LAYER} lambda_X={MATFAC_LAMBDA_X} capacity={MATFAC_CAPACITY} history_json={output.history_json} gpu_status_file={input.status_file}"
+        "julia --project=. -t 1 {input.src} {input.data} {input.pwy_json} {output.inferred_bson} {output.inferred_hdf} max_epochs={MATFAC_MAX_EPOCHS} lr={MATFAC_LR} lambda_X={MATFAC_LAMBDA_X} capacity={MATFAC_CAPACITY} history_json={output.history_json} gpu_status_file={input.status_file}"
+        #"julia --project=. -t 1 {input.src} {input.data} {input.pwy_json} {output.inferred_bson} {output.inferred_hdf} max_epochs={MATFAC_MAX_EPOCHS} lr={MATFAC_LR} lambda_layer={MATFAC_LAMBDA_LAYER} lambda_X={MATFAC_LAMBDA_X} capacity={MATFAC_CAPACITY} history_json={output.history_json} gpu_status_file={input.status_file}"
 
 #rule randomize_pathway_edges:
 #    input:
@@ -238,12 +239,13 @@ rule sim_run_matfac:
 rule corrupt_pathways:
     input:
         src="scripts/corrupt_pathways.py",
-        pwy_json=join(SIM_SCHEMA_DIR, "{sim_params}/srep={srep}/pathways.json"),
-        ranked_json=join(REACTOME_DIR, "reactome_ranked.json")
+        pwy_json=join(SIM_SCHEMA_DIR, "{schema_params}/srep={srep}/pathways.json"),
+        ranked_json=join(REACTOME_DIR, "reactome_ranked.json"),
+        features_json=join(SIM_SCHEMA_DIR, "{schema_params}/srep={srep}/features.json")
     output:
-        corr_json=join(SIM_PWY_DIR, "{sim_params,[_.=a-z0-9]+}_snr={snr,[.0-9]+}/srep={srep,[0-9]+}/kadd={kadd,[.0-9]+}_krem={krem,[.0-9]+}_nadd={nadd,[.0-9]+}_nrem={nrem,[.0-9]+}/crep={crep,[0-9]+}.json")
+        corr_json=join(SIM_PWY_DIR, "{schema_params,[_.=a-z0-9]+}_snr={snr}/srep={srep,[0-9]+}/kadd={kadd,[.0-9]+}_krem={krem,[.0-9]+}_nadd={nadd,[.0-9]+}_nrem={nrem,[.0-9]+}/crep={crep,[0-9]+}.json")
     shell:
-        "python {input.src} {input.pwy_json} {input.ranked_json} {wildcards.kadd} {wildcards.krem} {wildcards.nadd} {wildcards.nrem} {output.corr_json}"
+        "python {input.src} {input.pwy_json} {input.ranked_json} {input.features_json} {wildcards.kadd} {wildcards.krem} {wildcards.nadd} {wildcards.nrem} {output.corr_json}"
 
 
 rule simulate_data:
@@ -258,7 +260,7 @@ rule simulate_data:
     resources:
         mem_mb=10000
     shell:
-        "julia --project=. {input.src} {input.pwy_json} {input.sample_json} {input.feature_json} {output.data_hdf} {output.param_hdf} snr={wildcards.snr}"
+        "julia --project=. -t 1 {input.src} {input.pwy_json} {input.sample_json} {input.feature_json} {output.data_hdf} {output.param_hdf} snr={wildcards.snr}"
    
 
 rule prep_sim_inputs:
@@ -387,6 +389,6 @@ rule initialize_gpu_status:
     output:
         status_file="gpu_status.txt"
     shell:
-        "julia --project=. {input.src} > {output.status_file}"
+        "julia --project=. -t 1 {input.src} > {output.status_file}"
 
 

@@ -5,30 +5,29 @@ tcga_dir: "data/tcga/"
 reactome_url: "https://www.pathwaycommons.org/archives/PC2/v12/PathwayCommons12.reactome.hgnc.txt.gz" 
 reactome_dir: "data/reactome/"
 
-#sim_replicates: 5
-sim_replicates: 1
+sim_replicates: 5
 pathway_corruption_replicates: 1
 
 sim_data_params:
-    M: [10] #, 100, 1000, 10000]
-    K: [5] #, 50, 300]
-    N: [75] #, 750, 7500, 75000]
-    snr: [99.0] #, 9.0] 
+    M: [100] #, 1000, 10000]
+    K: [30] #, 300]
+    N: [750] #, 7500, 75000]
+    snr: [99.0, 9.0] 
 
 tcga_data_params:
     heldout_ctypes: ["OV", "GBM", "LAML"]
 
 pathway_params:
     topk: 300
-    addk: [0.05] #, 0.2]
-    removek: [0.05] #, 0.2]
-    addnode: [0.05] #, 0.25]
-    removenode: [0.05] #, 0.25]
+    addk: [0.05, 0.2]
+    removek: [0.05, 0.2]
+    addnode: [0.05, 0.25]
+    removenode: [0.05, 0.25]
 
 method_params:
     matfac:
-        max_epochs: 5000
-        lr: 0.01
+        max_epochs: 10000
+        lr: 0.07
         lambda_X: 0.01
         n_lambda: 8
         gpu_capacity: 25000000

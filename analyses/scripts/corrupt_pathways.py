@@ -9,6 +9,7 @@
 
 
 from collections import defaultdict
+import rank_pathways as rp
 import numpy as np
 import json
 import sys
@@ -96,7 +97,8 @@ def update_graphs(used_pwys, node_add, node_remove):
 
 
 
-def update_k(true_pwy_dict, all_pwys_dict, k_add, k_remove, considered=500):
+def update_k(true_pwy_dict, all_pwys_dict, features_dict, 
+             k_add, k_remove, considered=1000):
    
     # We may wish to only consider the top K pathways
     # (e.g., the top 500). 
@@ -106,23 +108,31 @@ def update_k(true_pwy_dict, all_pwys_dict, k_add, k_remove, considered=500):
                      "pathways": all_pwys_dict["pathways"][:considered]}
 
     true_k = len(true_pwy_dict["pathways"])
-    k_add = round(k_add * true_k)
-    k_remove = round(k_remove * true_k)
+    k_add = int(np.ceil(k_add * true_k))
+    k_remove = int(np.ceil(k_remove * true_k))
 
     # Build a map from pathway names to their indices in the full list
     name_to_idx = {name: idx for idx, name in enumerate(all_pwys_dict["names"])}
-    
     true_idx = [name_to_idx[name] for name in true_pwy_dict["names"]]
 
-    # Select indices to remove and to add
+    # Select indices to remove 
     to_remove = set(np.random.choice(true_idx, k_remove, replace=False)) 
 
-    complement_idx = set(range(len(all_pwys_dict["names"]))).difference(true_idx) 
-    to_add = list(np.random.choice(list(complement_idx), k_add))
+    # Select pathways to add. For this, we rank the pathways
+    # by their coverage of genes in the dataset. Then we 
+    # sample the ranked pathways at random, weighted by the
+    # number of genes they cover 
+    complement_pwys = set(all_pwys_dict["names"]).difference(true_pwy_dict["names"])
+    all_genes = set(features_dict["feature_genes"])
+    complement_genesets = {name: rp.pwy_to_geneset(all_pwys_dict["pathways"][name_to_idx[name]], all_genes) for name in complement_pwys}
+    complement_genesets, scores = rp.rank_genesets(complement_genesets)
+    probs = np.array([s[1] for s in scores]).astype(float)
+    probs = probs / np.sum(probs)
+    to_add_idx = np.random.choice(len(complement_genesets), k_add, replace=False, p=probs)
 
     # Build the list of selected indices
     used_idx = [idx for idx in true_idx if idx not in to_remove]
-    used_idx += to_add
+    used_idx += list(to_add_idx)
 
     # Use the selected indices to construct the pathway set
     used_pwys = {"names": [all_pwys_dict["names"][i] for i in used_idx],
@@ -137,17 +147,18 @@ def main():
     args = sys.argv
     true_pwy_json = args[1]
     all_pwys_json = args[2]
-    k_add = float(args[3])
-    k_remove = float(args[4])
-    node_add = float(args[5])
-    node_remove = float(args[6])
-    out_json = args[7]
+    features_json = args[3]
+    k_add = float(args[4])
+    k_remove = float(args[5])
+    node_add = float(args[6])
+    node_remove = float(args[7])
+    out_json = args[8]
 
     true_pwy_dict = json.load(open(true_pwy_json, "r"))
     all_pwys_dict = json.load(open(all_pwys_json, "r"))
+    features_dict = json.load(open(features_json, "r"))
 
-    used_pwys = update_k(true_pwy_dict, all_pwys_dict, k_add, k_remove)
-
+    used_pwys = update_k(true_pwy_dict, all_pwys_dict, features_dict, k_add, k_remove)
     used_pwys = update_graphs(used_pwys, node_add, node_remove)
 
     json.dump(used_pwys, open(out_json, "w"))

@@ -641,7 +641,8 @@ function fit_tests()
 
     logistic_cols = Int[i for (i, a) in enumerate(feature_assays) if a in ("mutation","methylation")]
     n_logistic = length(logistic_cols)
-    omic_data[:,logistic_cols] .= rand([0.0,1.0], M, n_logistic)
+    #omic_data[:,logistic_cols] .= rand([0.0,1.0], M, n_logistic)
+    omic_data[:,logistic_cols] .= zeros(M, n_logistic)
 
     ordinal_cols = Int[i for (i, a) in enumerate(feature_assays) if a in ("cna",)]
     n_ordinal = length(ordinal_cols)
@@ -823,13 +824,13 @@ end
 
 function main()
 
-    util_tests()
-    batch_array_tests()
-    layers_tests()
-    preprocess_tests()
-    reg_tests()
-    assemble_model_tests()
-    score_tests()
+    #util_tests()
+    #batch_array_tests()
+    #layers_tests()
+    #preprocess_tests()
+    #reg_tests()
+    #assemble_model_tests()
+    #score_tests()
     fit_tests()
     model_io_tests()
     simulation_tests()

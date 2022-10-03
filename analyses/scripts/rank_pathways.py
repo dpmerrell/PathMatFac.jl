@@ -40,7 +40,7 @@ def rank_genesets(genesets, top_k=None):
     while i < top_k:
 
         # Score by newly-covered genes;
-        # but break ties with pathway size
+        # but break ties with total number of covered genes
         max_score = (-1,-1)
         max_k = ""
         for k, gs in genesets.items():
