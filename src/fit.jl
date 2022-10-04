@@ -197,8 +197,8 @@ function fit_reg_path!(model::MultiomicModel, D::AbstractMatrix; verbosity=1,
                                 length=n_lambda))
     lambdas = exp.(log_lambdas)
 
-    # Keep track of the best model we've seen thus far
-    best_model = deepcopy(cpu(model))
+    # Keep track of the best model we've seen thus far.
+    best_model = nothing
 
     # Loop through values of lambda_Y
     for iter=1:n_lambda
@@ -219,16 +219,13 @@ function fit_reg_path!(model::MultiomicModel, D::AbstractMatrix; verbosity=1,
                                     scale_column_losses=reweight_columns, 
                                     verbosity=verbosity, 
                                     capacity=capacity, kwargs...)
-        if reweight_columns
-            best_model.matfac.noise_model = deepcopy(cpu(model.matfac.noise_model))
-        end
-
+        
         # Call the outer callback for this iteration
         outer_callback(model, inner_callback) 
 
         # Check whether to update the returned model
-        if update_criterion(model, gpu(best_model), D, iter; capacity=capacity)
-            best_model = deepcopy(cpu(model))
+        if (iter == 1) || update_criterion(model, best_model, D, iter; capacity=capacity)
+            best_model = deepcopy(model)
         end
 
     end
