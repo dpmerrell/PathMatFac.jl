@@ -43,15 +43,18 @@ def get_node_degrees(pwy):
     return degrees
 
 
-def update_graph(pwy, all_pwy_nodes, node_add, node_remove):
+def update_graph(pwy, data_genes, node_add, node_remove):
 
-    # Get the pathway nodes and unique edges
+    # Get the pathway nodes 
     pwy_nodes = get_pwy_nodes(pwy)
     pwy_node_ls = sorted(list(pwy_nodes))
-    complement_ls = sorted(list(all_pwy_nodes.difference(pwy_nodes)))
+    complement_ls = sorted(list(data_genes.difference(pwy_nodes)))
+    
+    # Compute the degrees of the pathway's nodes
+    degree_dict = get_node_degrees(pwy)
 
     # Compute the set of nodes to remove
-    n_remove = int(np.ceil(node_remove * len(pwy_nodes)))
+    n_remove = min(int(np.ceil(node_remove * len(pwy_nodes))), len(pwy_nodes))
     to_remove = set(np.random.choice(pwy_node_ls, n_remove, replace=False))    
 
     # Construct updated versions of the pathway and
@@ -60,25 +63,23 @@ def update_graph(pwy, all_pwy_nodes, node_add, node_remove):
     updated_node_ls = [node for node in pwy_node_ls if node not in to_remove]
     n_remaining = len(updated_node_ls)
 
-    # Compute the degree of each remaining node
-    degree_dict = get_node_degrees(updated_pwy)
+    # Get the original degree of each remaining node 
     degree_ls = [degree_dict[n] for n in updated_node_ls]
     degree_vec = np.array(degree_ls).astype(float) + 1e-10
     p_vec = degree_vec / np.sum(degree_vec)
     # Compute the set of nodes to add
-    n_add = int(np.ceil(node_add * len(pwy_nodes)))
+    n_add = min(int(np.ceil(node_add * len(pwy_nodes))), len(complement_ls))
     to_add = set(np.random.choice(complement_ls, n_add, replace=False))
 
     # For each new node, add edges to it
     for new_node in to_add:
         # Choose the new node's degree at random
-        n_neighbors = np.random.choice(degree_ls)
+        n_neighbors = min(max(np.random.choice(degree_ls), 1), n_remaining)
         # Select the new node's neighbors at random from the updated node list, 
-        # weighted by their original degree 
+        # weighted by their original degree
         neighbor_idx = np.random.choice(n_remaining, n_neighbors, replace=False, p=p_vec)
         for idx in neighbor_idx:
             updated_pwy.append([updated_node_ls[idx], "a>", new_node])
-        updated_node_ls.append(new_node)
 
     return updated_pwy
 
@@ -92,7 +93,7 @@ def update_graphs(used_pwys, data_genes, node_add, node_remove):
 
 
 def update_k(true_pwy_dict, all_pwys_dict, features_dict, 
-             k_add, k_remove, considered=1000):
+             k_add, k_remove, considered=500):
    
     # We may wish to only consider the top K pathways
     # (e.g., the top 500). 
@@ -154,9 +155,9 @@ def main():
     data_genes = set(features_dict["feature_genes"])
 
     used_pwys = update_k(true_pwy_dict, all_pwys_dict, features_dict, k_add, k_remove)
-    used_pwys = update_graphs(used_pwys, data_genes, node_add, node_remove)
+    updated_pwys = update_graphs(used_pwys, data_genes, node_add, node_remove)
 
-    json.dump(used_pwys, open(out_json, "w"))
+    json.dump(updated_pwys, open(out_json, "w"))
 
 
 

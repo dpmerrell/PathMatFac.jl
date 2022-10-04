@@ -49,7 +49,7 @@ def rank_genesets(genesets, top_k=None):
                 max_score = score
                 max_k = k
 
-        print(max_score, "\t", max_k)
+        #print(max_score, "\t", max_k)
         ranked.append(max_k)
         scores.append(max_score)
         covered |= genesets[max_k]
