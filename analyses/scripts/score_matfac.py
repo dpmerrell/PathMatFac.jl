@@ -1,5 +1,6 @@
 
 from sklearn.metrics import average_precision_score, silhouette_score
+from scipy.stats import spearmanr
 import script_util as su
 import numpy as np
 import argparse
@@ -42,10 +43,31 @@ def score_X(true_X, fitted_X, sample_groups):
     
     print("TRUE X SHAPE:", true_X.shape)
     print("FITTED X SHAPE:", fitted_X.shape)
-    ## Scores for accuracy
-    # Average spearman
-    # Whole-matrix spearman
 
+    ## Scores for accuracy
+    # Average pathway spearman correlations
+    M, K = true_X.shape
+    spearman_corrs = np.zeros(K)
+    spearman_p_values = np.zeros(K)
+    for k in range(K):
+        # We're evaluating the method's ability to identify
+        # extremes in pathway activation. So we: 
+        # (1) subtract means and take absolute values to capture samples' extremality;
+        # (2) and compute spearman correlation to score the ordering.
+        # correlation. 
+        fitted_mean = np.mean(fitted_X[:,k])
+        fitted_pwy_act = np.abs(fitted_X[:,k] - fitted_mean)
+
+        true_mean = np.mean(true_X[:,k])
+        true_pwy_act = np.abs(true_X[:,k] - true_mean)
+
+        spc, pv = spearmanr(fitted_pwy_act, true_pwy_act)
+        spearman_corrs[k] = spc
+        spearman_p_values[k] = pv 
+        
+    scores["X_pwy_spearman_corr"] = np.mean(spearman_corrs)
+    scores["X_pwy_spearman_p"] = np.mean(spearman_p_values)
+        
     ## Scores for agreement with regularization
     # Silhouette score
     sil = silhouette_score(fitted_X, sample_groups, metric="euclidean")
@@ -59,16 +81,31 @@ def compute_scores(true_hdf, fitted_hdf):
    
     scores = {}
 
-    # Score the fit of X
+    # Find all pathways that appear in both 
+    # the "true" and "fitted" sets
+    true_pwys = su.load_pathway_names(true_hdf)
+    fitted_pwys = su.load_pathway_names(fitted_hdf)
+    true_idx, fitted_idx = su.keymatch(true_pwys, fitted_pwys)
+    pwy_ls = true_pwys[true_idx]
+
+    # Load X
     true_X = su.load_embedding(true_hdf)
+    true_X = true_X[:, true_idx]
     fitted_X = su.load_embedding(fitted_hdf)
+    fitted_X = fitted_X[:, fitted_idx]
+
+    # Score the fit of X
     sample_groups = su.load_sample_groups(fitted_hdf)
     X_scores = score_X(true_X, fitted_X, sample_groups)
     scores.update(X_scores)
 
-    # Score the fit of Y
+    # Load Y
     true_Y = su.load_feature_factors(true_hdf)
+    true_Y = true_Y[:,true_idx]
     fitted_Y = su.load_feature_factors(fitted_hdf)
+    fitted_Y = fitted_Y[:,fitted_idx]
+
+    # Score the fit of Y
     Y_scores = score_Y(true_Y, fitted_Y)
     scores.update(Y_scores)
 

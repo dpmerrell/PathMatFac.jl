@@ -1,3 +1,5 @@
+
+from os import path
 import numpy as np
 import h5py
 
@@ -145,6 +147,24 @@ def feature_to_loss(feature_id):
 def omic_feature_losses(feature_ids):
     return [feature_to_loss(feat) for feat in feature_ids]
 
+def parse_value(v):
+    try:
+        return int(v)
+    except ValueError:
+        try:
+            return float(v)
+        except ValueError:
+            return v
+    
 
+def parse_path_kvs(pth):
+
+    result = {}
+    for dir_str in pth.split(path.sep):
+        for kv_str in dir_str.split("_"):
+            k_v = kv_str.split("=")
+            if len(k_v) == 2:
+                result[k_v[0]] = parse_value(k_v[1])
+    return result
 
 

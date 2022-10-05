@@ -6,13 +6,13 @@ reactome_url: "https://www.pathwaycommons.org/archives/PC2/v12/PathwayCommons12.
 reactome_dir: "data/reactome/"
 
 sim_replicates: 5
-pathway_corruption_replicates: 1
+pathway_corruption_replicates: 3
 
 sim_data_params:
     M: [100] #, 1000, 10000]
     K: [30] #, 300]
     N: [750] #, 7500, 75000]
-    snr: [99.0, 9.0] 
+    snr: [99.0, 9.0, 3.0, 1.0] 
 
 tcga_data_params:
     heldout_ctypes: ["OV", "GBM", "LAML"]
