@@ -94,10 +94,12 @@ MATFAC_CAPACITY = MATFAC_PARAMS["gpu_capacity"]
 
 rule all:
     input:
-       sim_inferred=expand(join(SIM_INFER_DIR,"method={method}/{mkn}_snr={snr}/srep={srep}/{corruption}/crep={crep}.hdf"),
-                           method=METHODS, mkn=SIM_MKN, snr=SIM_SNR, srep=SIM_REPS,
-                           corruption=CORRUPTION_PARAMS, crep=PATHWAY_CORR_REPS),
-       sim_score_table=join(SIM_SCORE_DIR, "sim_scores.tsv")
+       #sim_inferred=expand(join(SIM_INFER_DIR,"method={method}/{mkn}_snr={snr}/srep={srep}/{corruption}/crep={crep}.hdf"),
+       #                    method=METHODS, mkn=SIM_MKN, snr=SIM_SNR, srep=SIM_REPS,
+       #                    corruption=CORRUPTION_PARAMS, crep=PATHWAY_CORR_REPS),
+       sim_score_table=join(SIM_SCORE_DIR, "sim_scores.tsv"),
+       sim_lineplot=join(SIM_VIS_DIR, "snr-lineplot.png"),
+       sim_heatmap=join(SIM_VIS_DIR, "snr-heatmap.png")
        #sim_scores=expand(join(SIM_SCORE_DIR, "method={method}/{mkn}_snr={snr}/srep={srep}/{corruption}/crep={crep}.json"),
        #                  method=METHODS, mkn=SIM_MKN, snr=SIM_SNR, srep=SIM_REPS,
        #                  corruption=CORRUPTION_PARAMS, crep=PATHWAY_CORR_REPS),
@@ -166,6 +168,17 @@ rule exp_run_matfac:
 ###########################
 # Simulation study
 ###########################
+
+rule vis_snr:
+    input:
+        src="scripts/vis_snr.py",
+        scores_tsv=join(SIM_SCORE_DIR, "sim_scores.tsv")
+    output:
+        lineplot=join(SIM_VIS_DIR, "snr-lineplot.png"),
+        heatmap=join(SIM_VIS_DIR, "snr-heatmap.png")
+    shell:
+        "python {input.src} {input.scores_tsv} {output.lineplot} {output.heatmap} X_pwy_spearman_corr"
+
 
 rule factor_plot:
     input:

@@ -12,15 +12,15 @@ sim_data_params:
     M: [100] #, 1000, 10000]
     K: [30] #, 300]
     N: [750] #, 7500, 75000]
-    snr: [99.0, 9.0, 3.0, 1.0] 
+    snr: [10.0, 1.0, 0.1, 0.01, 0.001] 
 
 tcga_data_params:
     heldout_ctypes: ["OV", "GBM", "LAML"]
 
 pathway_params:
     topk: 300
-    addk: [0.05, 0.2]
-    removek: [0.05, 0.2]
+    addk: [0.05, 0.2, 0.5]
+    removek: [0.05, 0.2, 0.5]
     addnode: [0.05, 0.25]
     removenode: [0.05, 0.25]
 

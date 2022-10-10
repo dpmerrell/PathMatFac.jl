@@ -51,21 +51,14 @@ def score_X(true_X, fitted_X, sample_groups):
     spearman_p_values = np.zeros(K)
     for k in range(K):
         # We're evaluating the method's ability to identify
-        # extremes in pathway activation. So we: 
-        # (1) subtract means and take absolute values to capture samples' extremality;
-        # (2) and compute spearman correlation to score the ordering.
-        # correlation. 
-        fitted_mean = np.mean(fitted_X[:,k])
-        fitted_pwy_act = np.abs(fitted_X[:,k] - fitted_mean)
-
-        true_mean = np.mean(true_X[:,k])
-        true_pwy_act = np.abs(true_X[:,k] - true_mean)
-
-        spc, pv = spearmanr(fitted_pwy_act, true_pwy_act)
-        spearman_corrs[k] = spc
+        # extremes in pathway activation. So we compute the
+        # Spearman correlation, but take its absolute value 
+        spc, pv = spearmanr(fitted_X[:,k], true_X[:,k])
+        spearman_corrs[k] = np.abs(spc)
         spearman_p_values[k] = pv 
         
     scores["X_pwy_spearman_corr"] = np.mean(spearman_corrs)
+    # TODO: aggregate p-values in a more rigorous way
     scores["X_pwy_spearman_p"] = np.mean(spearman_p_values)
         
     ## Scores for agreement with regularization
