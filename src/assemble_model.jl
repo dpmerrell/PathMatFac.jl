@@ -52,6 +52,7 @@ function assemble_model(pathway_sif_data,
                         sample_batch_dict,
                         data_features,
                         lambda_X, lambda_Y;
+                        l1_fraction=0.5,
                         lambda_layer=0.1,
                         model_features=nothing,
                         dogma_features=nothing)
@@ -94,10 +95,11 @@ function assemble_model(pathway_sif_data,
     nonpwy_features = compute_nonpwy_features(model_features, pwy_edgelists)
 
     println("\tConstructing regularizers...")
-
     Y_reg = NetworkL1Regularizer(model_features, ext_edgelists; 
                                  l1_features=nonpwy_features,
-                                 epsilon=1.0)
+                                 epsilon=1.0, 
+                                 net_weight=(1 - l1_fraction),
+                                 l1_weight=l1_fraction)
 
     # Construct the column layers
     col_layers = PMLayers(model_assays, sample_batch_ids) 

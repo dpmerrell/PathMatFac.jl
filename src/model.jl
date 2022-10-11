@@ -36,6 +36,7 @@ function MultiomicModel(pathway_sif_data,
                         lambda_X::Real=1.0,
                         lambda_Y::Real=1.0,
                         lambda_layer::Real=0.1,
+                        l1_fraction=0.5,
                         model_features=nothing) where T where U
        
     data_features = collect(zip(data_genes, data_assays))
@@ -47,6 +48,7 @@ function MultiomicModel(pathway_sif_data,
                           data_features,
                           lambda_X, lambda_Y;
                           lambda_layer=lambda_layer,
+                          l1_fraction=l1_fraction,
                           model_features=model_features)
 
 end

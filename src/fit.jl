@@ -28,22 +28,26 @@ function select_lambda_max(model::MultiomicModel, D::AbstractMatrix;
     M, N = size(D) 
     K, N = size(model.matfac.Y)
 
-    # Set all entries of X to 1
-    X_temp = copy(model.matfac.X)                    
-    model.matfac.X .= 1 
-    
     # Curry the data loss to be a function of Y and the data 
     Y_loss_fn = (m, Y, D) -> MF.data_loss(m.X, Y, 
                                           m.row_transform, m.col_transform,
                                           m.noise_model, D)
                                                  
-    # Compute the full gradient of the data-loss w.r.t. Y, at Y=0 and random X.
+    # Set all entries of X to 1
+    X_temp = copy(model.matfac.X)                    
+    
+    # Compute the full gradient of the data-loss w.r.t. Y, at Y=0 and extreme values of X.
     Y_zero = zero(model.matfac.Y)
-    Y_zero_grad = MF.batched_reduce((g, m, D) -> g .+ gradient(Y -> Y_loss_fn(m, Y, D), Y_zero)[1], 
-                                    model.matfac, D; capacity=capacity, start=zero(model.matfac.Y))
+    model.matfac.X .= 1 
+    Y_zero_grad_p = MF.batched_reduce((g, m, D) -> g .+ gradient(Y -> Y_loss_fn(m, Y, D), Y_zero)[1], 
+                                      model.matfac, D; capacity=capacity, start=zero(model.matfac.Y))
+    model.matfac.X .= -1
+    Y_zero_grad_n = MF.batched_reduce((g, m, D) -> g .+ gradient(Y -> Y_loss_fn(m, Y, D), Y_zero)[1], 
+                                      model.matfac, D; capacity=capacity, start=zero(model.matfac.Y))
+    grad_max = maximum(map((g1,g2) -> max(g1,g2), abs.(Y_zero_grad_n), abs.(Y_zero_grad_p))) 
 
     # The size of lambda_max is governed by the largest entry of the gradient:
-    lambda_max = 4.0 * maximum(abs.(Y_zero_grad)) * (K/M)
+    lambda_max = 4.0 * grad_max * (K/M)
     verbose_print("λ_Y max = ", lambda_max, "\n"; verbosity=verbosity, level=1)
 
     # Restore the entries of X

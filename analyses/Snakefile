@@ -78,6 +78,7 @@ EXP_DROPCTYPES_STR = ":".join(EXP_HELDOUT_CTYPES)
 # Method parameters
 ##################################
 METHOD_PARAMS = config["method_params"]
+
 METHODS = list(METHOD_PARAMS.keys())
 
 # Matrix factorization params
@@ -108,12 +109,12 @@ rule all:
        #sim_factorplots=expand(join(SIM_FACTORPLOT_DIR,"method={method}/{mkn}_snr={snr}/srep={srep}/{corruption}/crep={crep}.html"),
        #                       method=METHODS, mkn=SIM_MKN, snr=SIM_SNR, srep=SIM_REPS,
        #                       corruption=CORRUPTION_PARAMS, crep=PATHWAY_CORR_REPS),
-       #exp_inferred=expand(join(EXP_INFER_DIR,"usedk={usedk}.hdf"),
-       #                    usedk=EXP_USED_K),
-       #exp_scatters=expand(join(EXP_SCATTER_DIR,"usedk={usedk}.html"),
-       #                    usedk=EXP_USED_K),
-       #exp_factorplots=expand(join(EXP_FACTORPLOT_DIR,"usedk={usedk}.html"),
-       #                       usedk=EXP_USED_K)
+       exp_inferred=expand(join(EXP_INFER_DIR,"usedk={usedk}.hdf"),
+                           usedk=EXP_USED_K),
+       exp_scatters=expand(join(EXP_SCATTER_DIR,"usedk={usedk}.html"),
+                           usedk=EXP_USED_K),
+       exp_factorplots=expand(join(EXP_FACTORPLOT_DIR,"usedk={usedk}.html"),
+                              usedk=EXP_USED_K)
 
 
 ###########################
@@ -152,17 +153,16 @@ rule exp_run_matfac:
         src="scripts/run_matfac.jl",
         status_file="gpu_status.txt",
         data=join(TCGA_DIR, "tcga_omic_prep_dropctypes="+EXP_DROPCTYPES_STR+".hdf"),
-        pwy_json=join(SIM_PWY_DIR, "usedk={usedk}.json")
+        pwy_json=join(REACTOME_DIR, "topk="+str(PATHWAY_TOPK)+".json"),
     output:
-        inferred_bson=join(EXP_INFER_DIR, "usedk={usedk}.bson"),
-        inferred_hdf=join(EXP_INFER_DIR, "usedk={usedk}.hdf"),
-        history_json=join(EXP_HISTORY_DIR, "usedk={usedk}.json")
+        inferred_bson=join(EXP_INFER_DIR, "method=matfac", "{sim_params,[_.=a-z0-9]+}", "srep={srep,[0-9]+}", "{corruption_params, [_.=a-z0-9]+}/crep={crep, [0-9]+}.bson"),
+        inferred_hdf=join(EXP_INFER_DIR, "method=matfac", "{sim_params,[_.=a-z0-9]+}", "srep={srep, [0-9]+}", "{corruption_params, [_.=a-z0-9]+}/crep={crep, [0-9]+}.hdf"),
+        history_json=join(EXP_HISTORY_DIR, "method=matfac", "{sim_params,[_.=a-z0-9]+}", "srep={srep, [0-9]+}", "{corruption_params, [_.=a-z0-9]+}/crep={crep, [0-9]+}.json")
     resources:
         mem_mb=10000,
         gpu=1
     shell:
-        "julia --project=. -t 1 {input.src} {input.data} {input.pwy_json} {output.inferred_bson} {output.inferred_hdf} max_epochs={MAX_EPOCHS} lr={LR} lambda_layer={LAMBDA_LAYER} lambda_X={LAMBDA_X} capacity={CAPACITY} history_json={output.history_json} gpu_status_file={input.status_file}"
-    #"julia --project=. -t 1 {input.src} {input.data} {input.pwy_json} {output.inferred_bson} {output.inferred_hdf} max_epochs={MAX_EPOCHS} lr={LR} lambda_layer={LAMBDA_LAYER} lambda_X={LAMBDA_X} init_lambda_Y={LAMBDA_Y} capacity={CAPACITY} history_json={output.history_json} gpu_status_file={input.status_file}"
+        "julia --project=. -t 1 {input.src} {input.data} {input.pwy_json} {output.inferred_bson} {output.inferred_hdf} max_epochs={MATFAC_MAX_EPOCHS} lr={MATFAC_LR} lambda_X={MATFAC_LAMBDA_X} capacity={MATFAC_CAPACITY} history_json={output.history_json} gpu_status_file={input.status_file}"
 
 
 ###########################
