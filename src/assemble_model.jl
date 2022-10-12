@@ -98,8 +98,8 @@ function assemble_model(pathway_sif_data,
     Y_reg = NetworkL1Regularizer(model_features, ext_edgelists; 
                                  l1_features=nonpwy_features,
                                  epsilon=1.0, 
-                                 net_weight=(1 - l1_fraction),
-                                 l1_weight=l1_fraction)
+                                 net_weight=2.0*(1 - l1_fraction),
+                                 l1_weight=2.0*l1_fraction)
 
     # Construct the column layers
     col_layers = PMLayers(model_assays, sample_batch_ids) 

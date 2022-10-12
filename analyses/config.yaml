@@ -5,32 +5,54 @@ tcga_dir: "data/tcga/"
 reactome_url: "https://www.pathwaycommons.org/archives/PC2/v12/PathwayCommons12.reactome.hgnc.txt.gz" 
 reactome_dir: "data/reactome/"
 
-sim_replicates: 5
-pathway_corruption_replicates: 3
+################################
+# Simulation study config
+################################
 
+sim_replicates: 5 #5
 sim_data_params:
     M: [100] #, 1000, 10000]
     K: [30] #, 300]
-    N: [750] #, 7500, 75000]
-    snr: [10.0, 1.0, 0.1, 0.01, 0.001] 
+    N: [800] #, 80000, 80000]
+    snr: [1.0] #, 0.1, 0.01, 0.001] 
 
 tcga_data_params:
     heldout_ctypes: ["OV", "GBM", "LAML"]
 
-pathway_params:
-    topk: [300], 
+sim_pathway_params:
+    sim_topk: [300]
+
+pathway_corruption_replicates: 3
+pathway_corruption_params:
     addk: [0.05, 0.2, 0.5]
     removek: [0.05, 0.2, 0.5]
     addnode: [0.05, 0.25]
     removenode: [0.05, 0.25]
 
-method_params:
+sim_method_params:
     matfac:
-        max_epochs: [10000]
-        lr: [0.07]
-        lambda_X: [0.01]
-        n_lambda: [8]
         capacity: [25000000]
-        l1_fraction: [0.0, 0.5, 1.0]
-    #prior: NULL
+        l1_fraction: [0.5]
+        lambda_X: [0.01]
+        lr: [0.07]
+        max_epochs: [10000]
+        n_lambda: [8]
+
+
+################################
+# TCGA evaluations config
+################################
+
+tcga_pathway_params:
+    tcga_topk: [300, 500]
+
+tcga_method_params:
+    matfac:
+        capacity: [25000000]
+        l1_fraction: [0.5]
+        lambda_X: [0.01]
+        lr: [0.07]
+        max_epochs: [10000]
+        n_lambda: [8]
+
 

@@ -1,8 +1,18 @@
 
 from os.path import join
+from itertools import product
 
 configfile: "config.yaml"
 
+
+def param_dict_to_list(param_dict):
+    ks = sorted(list(param_dict.keys()))
+    vs = [param_dict[k] for k in ks]
+    all_kvs = [zip(ks, combo) for combo in product(*vs)]
+    return [":".join(["{}={}".format(pair[0],pair[1]) for pair in kv]) for kv in all_kvs]
+
+
+# Matrix factorization params
 ####################################
 # Define some useful directories
 ####################################
@@ -39,16 +49,26 @@ EXP_FACTORPLOT_DIR = join(EXP_VIS_DIR, "factor_plots")
 ####################################
 REACTOME_URL = config["reactome_url"]
 
+
+#####################################
+# Unpack pathway set parameters
+#####################################
+SIM_PATHWAY_PARAM_DICT = config["sim_pathway_params"]
+SIM_PATHWAY_PARAMS = param_dict_to_list(SIM_PATHWAY_PARAM_DICT) 
+
+EXP_PATHWAY_PARAM_DICT = config["tcga_pathway_params"]
+EXP_PATHWAY_PARAMS = param_dict_to_list(EXP_PATHWAY_PARAM_DICT) 
+
+
 #######################################
 # Unpack pathway corruption parameters
 #######################################
 PATHWAY_CORR_REPS = list(range(config["pathway_corruption_replicates"]))
-PATHWAY_PARAMS = config["pathway_params"]
-PATHWAY_TOPK = PATHWAY_PARAMS["topk"]
-PATHWAY_ADDK = PATHWAY_PARAMS["addk"]
-PATHWAY_REMOVEK = PATHWAY_PARAMS["removek"]
-PATHWAY_ADDNODE = PATHWAY_PARAMS["addnode"]
-PATHWAY_REMOVENODE = PATHWAY_PARAMS["removenode"]
+PATHWAY_CORRUPTION_PARAMS = config["pathway_corruption_params"]
+PATHWAY_ADDK = PATHWAY_CORRUPTION_PARAMS["addk"]
+PATHWAY_REMOVEK = PATHWAY_CORRUPTION_PARAMS["removek"]
+PATHWAY_ADDNODE = PATHWAY_CORRUPTION_PARAMS["addnode"]
+PATHWAY_REMOVENODE = PATHWAY_CORRUPTION_PARAMS["removenode"]
 
 CORRUPTION_PARAMS = [f"kadd={ka}_krem={kr}_nadd={na}_nrem={nr}" for ka in PATHWAY_ADDK\
                                                                 for kr in PATHWAY_REMOVEK\
@@ -67,6 +87,15 @@ SIM_K = SIM_DATA_PARAMS["K"]
 SIM_N = SIM_DATA_PARAMS["N"]
 SIM_MKN = [f"m={m}_k={k}_n={n}" for m,k,n in zip(SIM_M, SIM_K, SIM_N)]
 
+##################################
+# Simulation Study Method parameters
+##################################
+SIM_METHOD_PARAMS = config["sim_method_params"]
+SIM_METHODS = list(SIM_METHOD_PARAMS.keys())
+
+SIM_MATFAC_PARAM_DICTS = SIM_METHOD_PARAMS["matfac"]
+SIM_MATFAC_PARAMS = param_dict_to_list(SIM_MATFAC_PARAM_DICTS)
+
 ###################################
 # TCGA data preprocessing parameters
 ###################################
@@ -74,47 +103,31 @@ EXP_TCGA_PARAMS = config["tcga_data_params"]
 EXP_HELDOUT_CTYPES = EXP_TCGA_PARAMS["heldout_ctypes"]
 EXP_DROPCTYPES_STR = ":".join(EXP_HELDOUT_CTYPES)
 
-##################################
-# Method parameters
-##################################
-METHOD_PARAMS = config["method_params"]
 
-METHODS = list(METHOD_PARAMS.keys())
-
-# Matrix factorization params
-MATFAC_PARAMS = METHOD_PARAMS["matfac"]
-MATFAC_MAX_EPOCHS = MATFAC_PARAMS["max_epochs"]
-MATFAC_LR = MATFAC_PARAMS["lr"]
-MATFAC_LAMBDA_X = MATFAC_PARAMS["lambda_X"]
-MATFAC_CAPACITY = MATFAC_PARAMS["gpu_capacity"]
 
 ###################################################################################################
 # RULES
 ###################################################################################################
 
-
 rule all:
     input:
-       #sim_inferred=expand(join(SIM_INFER_DIR,"method={method}/{mkn}_snr={snr}/srep={srep}/{corruption}/crep={crep}.hdf"),
+       #sim_inferred=expand(join(SIM_INFER_DIR,"method={method}/{mkn}/snr={snr}/srep={srep}/{corruption}/crep={crep}.hdf"),
        #                    method=METHODS, mkn=SIM_MKN, snr=SIM_SNR, srep=SIM_REPS,
        #                    corruption=CORRUPTION_PARAMS, crep=PATHWAY_CORR_REPS),
        sim_score_table=join(SIM_SCORE_DIR, "sim_scores.tsv"),
-       sim_lineplot=join(SIM_VIS_DIR, "snr-lineplot.png"),
-       sim_heatmap=join(SIM_VIS_DIR, "snr-heatmap.png")
-       #sim_scores=expand(join(SIM_SCORE_DIR, "method={method}/{mkn}_snr={snr}/srep={srep}/{corruption}/crep={crep}.json"),
-       #                  method=METHODS, mkn=SIM_MKN, snr=SIM_SNR, srep=SIM_REPS,
-       #                  corruption=CORRUPTION_PARAMS, crep=PATHWAY_CORR_REPS),
+       sim_snr_lineplot=join(SIM_VIS_DIR, "snr-lineplot.png"),
+       sim_snr_heatmap=join(SIM_VIS_DIR, "snr-heatmap.png")
        #sim_scatters=expand(join(SIM_SCATTER_DIR,"usedk={usedk}_truek={truek}_snr={snr}_rep={rep}.html"),
        #                    usedk=SIM_USED_K, truek=SIM_TRUE_K, snr=SIM_SNR, rep=SIM_REPS),
        #sim_factorplots=expand(join(SIM_FACTORPLOT_DIR,"method={method}/{mkn}_snr={snr}/srep={srep}/{corruption}/crep={crep}.html"),
        #                       method=METHODS, mkn=SIM_MKN, snr=SIM_SNR, srep=SIM_REPS,
        #                       corruption=CORRUPTION_PARAMS, crep=PATHWAY_CORR_REPS),
-       exp_inferred=expand(join(EXP_INFER_DIR,"usedk={usedk}.hdf"),
-                           usedk=EXP_USED_K),
-       exp_scatters=expand(join(EXP_SCATTER_DIR,"usedk={usedk}.html"),
-                           usedk=EXP_USED_K),
-       exp_factorplots=expand(join(EXP_FACTORPLOT_DIR,"usedk={usedk}.html"),
-                              usedk=EXP_USED_K)
+       #exp_inferred=expand(join(EXP_INFER_DIR,"usedk={usedk}.hdf"),
+       #                    usedk=EXP_USED_K),
+       #exp_scatters=expand(join(EXP_SCATTER_DIR,"usedk={usedk}.html"),
+       #                    usedk=EXP_USED_K),
+       #exp_factorplots=expand(join(EXP_FACTORPLOT_DIR,"usedk={usedk}.html"),
+       #                       usedk=EXP_USED_K)
 
 
 ###########################
@@ -153,16 +166,18 @@ rule exp_run_matfac:
         src="scripts/run_matfac.jl",
         status_file="gpu_status.txt",
         data=join(TCGA_DIR, "tcga_omic_prep_dropctypes="+EXP_DROPCTYPES_STR+".hdf"),
-        pwy_json=join(REACTOME_DIR, "topk="+str(PATHWAY_TOPK)+".json"),
+        pwy_json=join(REACTOME_DIR, "{pwy_params}.json"),
     output:
-        inferred_bson=join(EXP_INFER_DIR, "method=matfac", "{sim_params,[_.=a-z0-9]+}", "srep={srep,[0-9]+}", "{corruption_params, [_.=a-z0-9]+}/crep={crep, [0-9]+}.bson"),
-        inferred_hdf=join(EXP_INFER_DIR, "method=matfac", "{sim_params,[_.=a-z0-9]+}", "srep={srep, [0-9]+}", "{corruption_params, [_.=a-z0-9]+}/crep={crep, [0-9]+}.hdf"),
-        history_json=join(EXP_HISTORY_DIR, "method=matfac", "{sim_params,[_.=a-z0-9]+}", "srep={srep, [0-9]+}", "{corruption_params, [_.=a-z0-9]+}/crep={crep, [0-9]+}.json")
+        inferred_bson=join(EXP_INFER_DIR, "method=matfac", "{method_params,[_.=:a-zA-Z0-9]+}", "{pwy_params,[_=a-z0-9]+}.bson"),
+        inferred_hdf=join(EXP_INFER_DIR, "method=matfac", "{method_params,[_.=:a-zA-Z0-9]+}", "{pwy_params,[_=a-z0-9]+}.hdf"),
+        history_json=join(EXP_HISTORY_DIR, "method=matfac", "{method_params,[_.=:a-zA-Z0-9]+}", "{pwy_params,[_=a-z0-9]+}.json")
     resources:
         mem_mb=10000,
         gpu=1
+    params:
+        matfac_kwargs=lambda wc: " ".join(wc["method_params"].split(":"))
     shell:
-        "julia --project=. -t 1 {input.src} {input.data} {input.pwy_json} {output.inferred_bson} {output.inferred_hdf} max_epochs={MATFAC_MAX_EPOCHS} lr={MATFAC_LR} lambda_X={MATFAC_LAMBDA_X} capacity={MATFAC_CAPACITY} history_json={output.history_json} gpu_status_file={input.status_file}"
+        "julia --project=. -t 1 {input.src} {input.data} {input.pwy_json} {output.inferred_bson} {output.inferred_hdf} {params.matfac_kwargs} history_json={output.history_json} gpu_status_file={input.status_file}"
 
 
 ###########################
@@ -183,11 +198,11 @@ rule vis_snr:
 rule factor_plot:
     input:
         src="scripts/vis_pathway_factor_plot.py",
-        params_hdf=join(SIM_INFER_DIR, "method=matfac/{schema_params}_snr={snr}/srep={srep}/{corruption}/crep={crep}.hdf"),
-        true_pwy_json=join(SIM_SCHEMA_DIR, "{schema_params}/srep={srep}/pathways.json"),
-        used_pwy_json=join(SIM_PWY_DIR, "{schema_params}_snr={snr}/srep={srep}/{corruption}/crep={crep}.json")
+        params_hdf=join(SIM_INFER_DIR, "method=matfac/{method_params}/{pwy_params}/{schema_params}/snr={snr}/srep={srep}/{corruption}/crep={crep}.hdf"),
+        true_pwy_json=join(SIM_SCHEMA_DIR, "{pwy_params}/{schema_params}/srep={srep}/pathways.json"),
+        used_pwy_json=join(SIM_PWY_DIR, "{pwy_params}/{schema_params}/snr={snr}/srep={srep}/{corruption}/crep={crep}.json")
     output:
-        factorplot=join(SIM_FACTORPLOT_DIR, "method=matfac/{schema_params,[_.=a-z0-9]+}_snr={snr,[.0-9]+}/srep={srep,[0-9]+}/{corruption,[_.=a-z0-9]+}/crep={crep,[0-9]+}.html")
+        factorplot=join(SIM_FACTORPLOT_DIR, "method=matfac/{method_params,[_.=:a-zA-Z0-9]+}/{pwy_params,[_=a-z0-9]+}/{schema_params,[_.=a-z0-9]+}/snr={snr,[.0-9]+}/srep={srep,[0-9]+}/{corruption,[_.=a-z0-9]+}/crep={crep,[0-9]+}.html")
     #params:
         #plottedk=lambda wc: int(wc["k"])
 	#plottedk=lambda wc: 5
@@ -213,8 +228,9 @@ rule factor_plot:
 rule tabulate_scores:
     input:
         src="scripts/tabulate_scores.py",
-        sim_scores=expand(join(SIM_SCORE_DIR, "method={method}/{mkn}_snr={snr}/srep={srep}/{corruption}/crep={crep}.json"),
-                         method=METHODS, mkn=SIM_MKN, snr=SIM_SNR, srep=SIM_REPS,
+        sim_scores=expand(join(SIM_SCORE_DIR, "method={method}/{method_params}/{pwy_params}/{mkn}/snr={snr}/srep={srep}/{corruption}/crep={crep}.json"),
+                         method=SIM_METHODS, method_params=SIM_MATFAC_PARAMS, pwy_params=SIM_PATHWAY_PARAMS, 
+                         mkn=SIM_MKN, snr=SIM_SNR, srep=SIM_REPS,
                          corruption=CORRUPTION_PARAMS, crep=PATHWAY_CORR_REPS),
     output:
         score_tsv=join(SIM_SCORE_DIR, "sim_scores.tsv")
@@ -225,39 +241,42 @@ rule tabulate_scores:
 rule score_matfac:
     input:
         src="scripts/score_matfac.py",
-        true_params=join(SIM_PARAM_DIR, "{sim_params}", "srep={srep}.hdf"),
-        pred_params=join(SIM_INFER_DIR, "method=matfac", "{sim_params}", "srep={srep}", "{corruption_params}", "crep={crep}.hdf")
+        true_params=join(SIM_PARAM_DIR, "{pwy_params}", "{schema_params}", "snr={snr}", "srep={srep}.hdf"),
+        pred_params=join(SIM_INFER_DIR, "method=matfac", "{method_params}", "{pwy_params}", "{schema_params}", "snr={snr}", "srep={srep}", "{corruption_params}", "crep={crep}.hdf")
     output:
-        score_json=join(SIM_SCORE_DIR, "method=matfac", "{sim_params,[_.=a-z0-9]+}", "srep={srep,[0-9]+}", "{corruption_params,[_.=a-z0-9]+}", "crep={crep,[0-9]+}.json")
+        score_json=join(SIM_SCORE_DIR, "method=matfac", "{method_params,[_.=:a-zA-Z0-9]+}", "{pwy_params,[_=a-z0-9]+}", "{schema_params,[_.=a-z0-9]+}", "snr={snr,[.0-9]+}", "srep={srep,[0-9]+}", "{corruption_params,[_.=a-z0-9]+}", "crep={crep,[0-9]+}.json")
     resources:
         mem_mb=1000
     shell:
         "python {input.src} {input.true_params} {input.pred_params} {output.score_json}" 
 
+
 rule sim_run_matfac:
     input:
         src="scripts/run_matfac.jl",
         status_file="gpu_status.txt",
-        data=join(SIM_DATA_DIR, "{sim_params}/srep={srep}.hdf"),
-        pwy_json=join(SIM_PWY_DIR, "{sim_params}/srep={srep}/{corruption_params}/crep={crep}.json")
+        data=join(SIM_DATA_DIR, "{pwy_params}/{schema_params}/snr={snr}/srep={srep}.hdf"),
+        pwy_json=join(SIM_PWY_DIR, "{pwy_params}/{schema_params}/srep={srep}/{corruption_params}/crep={crep}.json")
     output:
-        inferred_bson=join(SIM_INFER_DIR, "method=matfac", "{sim_params,[_.=a-z0-9]+}", "srep={srep,[0-9]+}", "{corruption_params, [_.=a-z0-9]+}/crep={crep, [0-9]+}.bson"),
-        inferred_hdf=join(SIM_INFER_DIR, "method=matfac", "{sim_params,[_.=a-z0-9]+}", "srep={srep, [0-9]+}", "{corruption_params, [_.=a-z0-9]+}/crep={crep, [0-9]+}.hdf"),
-        history_json=join(SIM_HISTORY_DIR, "method=matfac", "{sim_params,[_.=a-z0-9]+}", "srep={srep, [0-9]+}", "{corruption_params, [_.=a-z0-9]+}/crep={crep, [0-9]+}.json")
+        inferred_bson=join(SIM_INFER_DIR, "method=matfac", "{method_params,[_.=:a-zA-Z0-9]+}", "{pwy_params,[_=a-z0-9]+}", "{schema_params,[_.=a-z0-9]+}", "snr={snr,[.0-9]+}", "srep={srep,[0-9]+}", "{corruption_params, [_.=a-z0-9]+}/crep={crep, [0-9]+}.bson"),
+        inferred_hdf=join(SIM_INFER_DIR, "method=matfac", "{method_params,[_.=:a-zA-Z0-9]+}", "{pwy_params,[_=a-z0-9]+}", "{schema_params,[_.=a-z0-9]+}", "snr={snr,[.0-9]+}","srep={srep, [0-9]+}", "{corruption_params, [_.=a-z0-9]+}/crep={crep, [0-9]+}.hdf"),
+        history_json=join(SIM_HISTORY_DIR, "method=matfac", "{method_params,[_.=:a-zA-Z0-9]+}", "{pwy_params,[_=a-z0-9]+}", "{schema_params,[_.=a-z0-9]+}", "snr={snr,[.0-9]+}", "srep={srep, [0-9]+}", "{corruption_params, [_.=a-z0-9]+}/crep={crep, [0-9]+}.json")
     resources:
         mem_mb=1000
         #mem_mb=10000,
         #gpu=1
+    params:
+        matfac_kwargs=lambda wc: " ".join(wc["method_params"].split(":"))
     shell:
-        "julia --project=. -t 1 {input.src} {input.data} {input.pwy_json} {output.inferred_bson} {output.inferred_hdf} max_epochs={MATFAC_MAX_EPOCHS} lr={MATFAC_LR} lambda_X={MATFAC_LAMBDA_X} capacity={MATFAC_CAPACITY} history_json={output.history_json} gpu_status_file={input.status_file}"
+        "julia --project=. -t 1 {input.src} {input.data} {input.pwy_json} {output.inferred_bson} {output.inferred_hdf} {params.matfac_kwargs} history_json={output.history_json} gpu_status_file={input.status_file}"
 
 
 rule randomize_pathway_edges:
     input:
         src=join("scripts","randomize_pathway_edges.py"),
-        pwy_json=join(SIM_SCHEMA_DIR, "{schema_params}/srep={srep}/pathways.json"),
+        pwy_json=join(SIM_SCHEMA_DIR, "{pwy_params}/{schema_params}/srep={srep}/pathways.json"),
     output:
-        randomized_json=join(SIM_PWY_DIR, "{schema_params,[_.=a-z0-9]+}_snr={snr,[.0-9]+}/srep={srep,[0-9]+}/randomized=1/crep={crep,[0-9]+}.json")
+        randomized_json=join(SIM_PWY_DIR, "{pwy_params,[._:=a-z0-9]+}/{schema_params,[_.=a-z0-9]+}/srep={srep,[0-9]+}/randomized=1/crep={crep,[0-9]+}.json")
     resources:
         mem_mb=500
     shell:
@@ -267,20 +286,20 @@ rule randomize_pathway_edges:
 rule corrupt_pathways:
     input:
         src="scripts/corrupt_pathways.py",
-        pwy_json=join(SIM_SCHEMA_DIR, "{schema_params}/srep={srep}/pathways.json"),
+        pwy_json=join(SIM_SCHEMA_DIR, "{pwy_params}/{schema_params}/srep={srep}/pathways.json"),
         ranked_json=join(REACTOME_DIR, "reactome_ranked.json"),
-        features_json=join(SIM_SCHEMA_DIR, "{schema_params}/srep={srep}/features.json")
+        features_json=join(SIM_SCHEMA_DIR, "{pwy_params}/{schema_params}/srep={srep}/features.json")
     output:
-        corr_json=join(SIM_PWY_DIR, "{schema_params,[_.=a-z0-9]+}_snr={snr}/srep={srep,[0-9]+}/kadd={kadd,[.0-9]+}_krem={krem,[.0-9]+}_nadd={nadd,[.0-9]+}_nrem={nrem,[.0-9]+}/crep={crep,[0-9]+}.json")
+        corr_json=join(SIM_PWY_DIR, "{pwy_params,[_=a-z0-9]+}/{schema_params,[_.=a-z0-9]+}/srep={srep,[0-9]+}/kadd={kadd,[.0-9]+}_krem={krem,[.0-9]+}_nadd={nadd,[.0-9]+}_nrem={nrem,[.0-9]+}/crep={crep,[0-9]+}.json")
     shell:
         "python {input.src} {input.pwy_json} {input.ranked_json} {input.features_json} {wildcards.kadd} {wildcards.krem} {wildcards.nadd} {wildcards.nrem} {output.corr_json}"
 
 
 rule copy_pathways:
     input:
-        pwy_json=join(SIM_SCHEMA_DIR, "{schema_params}/srep={srep}/pathways.json"),
+        pwy_json=join(SIM_SCHEMA_DIR, "{pwy_params}/{schema_params}/srep={srep}/pathways.json"),
     output:
-        cp_json=join(SIM_PWY_DIR, "{schema_params,[_.=a-z0-9]+}_snr={snr,[.0-9]+}/srep={srep,[0-9]+}/original=1/crep={crep,[0-9]+}.json")
+        cp_json=join(SIM_PWY_DIR, "{pwy_params,[_=a-z0-9]+}/{schema_params,[_.=a-z0-9]+}/srep={srep,[0-9]+}/original=1/crep={crep,[0-9]+}.json")
     shell:
         "cp {input.pwy_json} {output.cp_json}"        
 
@@ -288,12 +307,12 @@ rule copy_pathways:
 rule simulate_data:
     input:
         src="scripts/simulate_data.jl",
-        pwy_json=join(SIM_SCHEMA_DIR, "{sim_params}/srep={srep}/pathways.json"), 
-        sample_json=join(SIM_SCHEMA_DIR, "{sim_params}/srep={srep}/samples.json"),
-        feature_json=join(SIM_SCHEMA_DIR, "{sim_params}/srep={srep}/features.json")
+        pwy_json=join(SIM_SCHEMA_DIR, "{pwy_params}/{sim_params}/srep={srep}/pathways.json"), 
+        sample_json=join(SIM_SCHEMA_DIR, "{pwy_params}/{sim_params}/srep={srep}/samples.json"),
+        feature_json=join(SIM_SCHEMA_DIR, "{pwy_params}/{sim_params}/srep={srep}/features.json")
     output:
-        data_hdf=join(SIM_DATA_DIR, "{sim_params,[._=a-z0-9]+}_snr={snr,[.0-9]+}", "srep={srep,[0-9]+}.hdf"),
-        param_hdf=join(SIM_PARAM_DIR,"{sim_params,[._=a-z0-9]+}_snr={snr,[.0-9]+}", "srep={srep,[0-9]+}.hdf")
+        data_hdf=join(SIM_DATA_DIR, "{pwy_params,[_=a-z0-9]+}/{sim_params,[._=a-z0-9]+}/snr={snr,[.0-9]+}", "srep={srep,[0-9]+}.hdf"),
+        param_hdf=join(SIM_PARAM_DIR,"{pwy_params,[_=a-z0-9]+}/{sim_params,[._=a-z0-9]+}/snr={snr,[.0-9]+}", "srep={srep,[0-9]+}.hdf")
     resources:
         #mem_mb=10000
         mem_mb=1000
@@ -304,13 +323,13 @@ rule simulate_data:
 rule prep_sim_inputs:
     input:
         src="scripts/prep_simulation_inputs.py",
-        full_pwy_json=join(REACTOME_DIR, "topk="+str(PATHWAY_TOPK)+".json"),
+        full_pwy_json=join(REACTOME_DIR, "topk={topk}.json"),
         full_samples_json=join(TCGA_DIR, "tcga_samples_dropctypes=.json"),
         full_features_json=join(TCGA_DIR, "tcga_features_dropctypes=.json")
     output:
-        pwy_json=join(SIM_SCHEMA_DIR, "m={m,[0-9]+}_k={k,[0-9]+}_n={n,[0-9]+}/srep={srep,[0-9]+}/pathways.json"), 
-        samples_json=join(SIM_SCHEMA_DIR, "m={m,[0-9]+}_k={k,[0-9]+}_n={n,[0-9]+}/srep={srep,[0-9]+}/samples.json"),
-        features_json=join(SIM_SCHEMA_DIR, "m={m,[0-9]+}_k={k,[0-9]+}_n={n,[0-9]+}/srep={srep,[0-9]+}/features.json")
+        pwy_json=join(SIM_SCHEMA_DIR, "sim_topk={topk}/m={m,[0-9]+}_k={k,[0-9]+}_n={n,[0-9]+}/srep={srep,[0-9]+}/pathways.json"), 
+        samples_json=join(SIM_SCHEMA_DIR, "sim_topk={topk}/m={m,[0-9]+}_k={k,[0-9]+}_n={n,[0-9]+}/srep={srep,[0-9]+}/samples.json"),
+        features_json=join(SIM_SCHEMA_DIR, "sim_topk={topk}/m={m,[0-9]+}_k={k,[0-9]+}_n={n,[0-9]+}/srep={srep,[0-9]+}/features.json")
     shell:
         "python {input.src} {input.full_pwy_json} {input.full_samples_json} {input.full_features_json} {wildcards.m} {wildcards.k} {wildcards.n} {output.pwy_json} {output.samples_json} {output.features_json}"
 
@@ -397,9 +416,9 @@ rule preprocess_tcga:
 
 rule unzip_hdf:
     input:
-        zipped="{path}/{head}.tar.gz"
+        zipped="data/{path}/{head}.tar.gz"
     output:
-        unzipped="{path}/{head}.hdf"
+        unzipped="data/{path}/{head}.hdf"
     shell:
         "tar -xvzf {input.zipped} -C {wildcards.path}"
 

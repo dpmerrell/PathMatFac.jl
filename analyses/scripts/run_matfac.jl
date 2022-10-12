@@ -20,8 +20,9 @@ function main(args)
                             :lambda_X => 0.1, 
                             :fit_hyperparam => true,
                             :lambda_Y_max => nothing,
+                            :l1_fraction => 0.5,
                             :n_lambda => 8,
-                            :lambda_layer =>0.5,
+                            :lambda_layer => 0.5,
                             :lr => 0.07,
                             :capacity => 25000000,
                             :verbosity => 1,
@@ -37,6 +38,7 @@ function main(args)
     lambda_X = pop!(opts, :lambda_X)
     lambda_layer = pop!(opts, :lambda_layer)
     history_json = pop!(opts, :history_json)
+    l1_fraction = pop!(opts, :l1_fraction) 
 
     println("Loading data...")
     feature_genes = get_omic_feature_genes(omic_hdf_filename)
@@ -63,6 +65,7 @@ function main(args)
                            batch_dict;
                            lambda_X=lambda_X, 
                            lambda_Y=1.0,
+                           l1_fraction=l1_fraction,
                            lambda_layer=lambda_layer)
 
     # If a gpu_status file is provided, use it to 
