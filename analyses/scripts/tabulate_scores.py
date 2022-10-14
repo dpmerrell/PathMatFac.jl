@@ -8,14 +8,11 @@ import sys
 def tabulate_jsons(json_paths):
 
     path_kvs = [su.parse_path_kvs(pth) for pth in json_paths]
-    print(path_kvs)
 
     json_data = [json.load(open(pth, "r")) for pth in json_paths]
-    print(json_data)
 
     for kvd, jsd in zip(path_kvs, json_data):
         jsd.update(kvd)
-    print(json_data)
 
     df = pd.DataFrame(json_data)
     return df

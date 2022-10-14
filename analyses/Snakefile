@@ -115,8 +115,8 @@ rule all:
        #                    method=METHODS, mkn=SIM_MKN, snr=SIM_SNR, srep=SIM_REPS,
        #                    corruption=CORRUPTION_PARAMS, crep=PATHWAY_CORR_REPS),
        sim_score_table=join(SIM_SCORE_DIR, "sim_scores.tsv"),
-       sim_snr_lineplot=join(SIM_VIS_DIR, "snr-lineplot.png"),
-       sim_snr_heatmap=join(SIM_VIS_DIR, "snr-heatmap.png")
+       #sim_snr_lineplot=join(SIM_VIS_DIR, "snr-lineplot.png"),
+       #sim_snr_heatmap=join(SIM_VIS_DIR, "snr-heatmap.png")
        #sim_scatters=expand(join(SIM_SCATTER_DIR,"usedk={usedk}_truek={truek}_snr={snr}_rep={rep}.html"),
        #                    usedk=SIM_USED_K, truek=SIM_TRUE_K, snr=SIM_SNR, rep=SIM_REPS),
        #sim_factorplots=expand(join(SIM_FACTORPLOT_DIR,"method={method}/{mkn}_snr={snr}/srep={srep}/{corruption}/crep={crep}.html"),
@@ -234,6 +234,8 @@ rule tabulate_scores:
                          corruption=CORRUPTION_PARAMS, crep=PATHWAY_CORR_REPS),
     output:
         score_tsv=join(SIM_SCORE_DIR, "sim_scores.tsv")
+    resources:
+        mem_mb=1000
     shell:
         "python {input.src} {output.score_tsv} {input.sim_scores}"
 
@@ -246,7 +248,8 @@ rule score_matfac:
     output:
         score_json=join(SIM_SCORE_DIR, "method=matfac", "{method_params,[_.=:a-zA-Z0-9]+}", "{pwy_params,[_=a-z0-9]+}", "{schema_params,[_.=a-z0-9]+}", "snr={snr,[.0-9]+}", "srep={srep,[0-9]+}", "{corruption_params,[_.=a-z0-9]+}", "crep={crep,[0-9]+}.json")
     resources:
-        mem_mb=1000
+        #mem_mb=1000
+        mem_mb=100
     shell:
         "python {input.src} {input.true_params} {input.pred_params} {output.score_json}" 
 

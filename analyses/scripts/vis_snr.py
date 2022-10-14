@@ -10,14 +10,16 @@ NICE_NAMES = {"nadd": "$N_a$",
               "kadd": "$K_a$",
               "krem": "$K_r$"}
 
-def to_snr_corruption_df(df, qoi, mode="mean"):
+def to_snr_corruption_df(df, qoi, mode="mean", l1_fraction=0.5):
 
     # Keep only the scores for runs with
     # corrupted pathways
     df = df.loc[(df["original"] != 1) & (df["randomized"] != 1), :]
+    df = df.loc[df["l1_fraction"] == l1_fraction, :]
 
-    # Group by snr and srep
-    gp = df.groupby(["snr","kadd","krem","nadd","nrem"])
+    # Group by every column other than srep and crep
+    gp_columns = [c for c in df.columns if c not in ("srep","crep")]
+    gp = df.groupby(gp_columns)
 
     # Determine whether we're computing means or variances
     if mode == "mean":
@@ -38,6 +40,7 @@ def to_snr_corruption_df(df, qoi, mode="mean"):
         new_df.loc[r["snr"], r["corruption"]] = r[qoi]
 
     return new_df
+
 
 def plot_snr(df, out_png):
 
@@ -68,10 +71,7 @@ def make_heatmap(ax, relevant, x_col, y_col, qty_col, **kwargs):
     ax.set_xticklabels(x_vals)
     ax.set_yticks(list(range(len(y_vals))))
     ax.set_yticklabels(y_vals)
-    #ax.set_xlim([-0.5, len(x_vals)-0.5])
-    #ax.set_ylim([-0.5, len(y_vals)-0.5])
 
-    #ax.label_outer()
     return img
 
 
@@ -118,8 +118,6 @@ def subplot_heatmaps(qty_df, macro_x_col, macro_y_col,
             img = make_heatmap(ax, relevant, micro_x_col, micro_y_col, qty_col, norm=nrm, cmap=cmap)
             imgs.append(img)
            
-            #ax.set_xlim([0,3])
-            #ax.set_ylim([0,3])
             if i == len(macro_y_vals)-1:
                 ax.set_xlabel("{}\n\n$K_r$ = {}".format(NICE_NAMES[micro_x_col], psize))
             if j == 0:

@@ -1,6 +1,7 @@
 
 from os import path
 import numpy as np
+import pandas as pd
 import h5py
 
 
@@ -161,10 +162,14 @@ def parse_path_kvs(pth):
 
     result = {}
     for dir_str in pth.split(path.sep):
-        for kv_str in dir_str.split("_"):
+        sep = "_"
+        if ":" in dir_str:
+            sep = ":"
+        for kv_str in dir_str.split(sep):
             k_v = kv_str.split("=")
             if len(k_v) == 2:
                 result[k_v[0]] = parse_value(k_v[1])
+
     return result
 
 
