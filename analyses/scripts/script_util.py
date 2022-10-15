@@ -47,6 +47,15 @@ def load_hdf_dict(dataset_hdf, key, keytype=str, dtype=float):
     return my_dict
 
 
+def write_hdf(hdf_obj, key, data, is_string=False):
+    if is_string:
+        hdf_obj.create_dataset(key, shape=data.shape, dtype=h5py.string_dtype())
+        hdf_obj[key][...] = data
+    else:
+        hdf_obj.create_dataset(key, data=data)
+        
+
+
 def ids_to_idx_dict(id_vec):
 
     _, unq_idx = np.unique(id_vec, return_index=True)
