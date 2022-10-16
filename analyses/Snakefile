@@ -29,6 +29,7 @@ SIM_DATA_DIR = join(SIM_DIR, "data_hdfs")
 SIM_PWY_DIR = join(SIM_DIR, "pathway_jsons")
 SIM_PARAM_DIR = join(SIM_DIR, "true_parameters")
 SIM_INFER_DIR = join(SIM_DIR, "inferred_parameters")
+SIM_IMPUTE_DIR = join(SIM_DIR, "imputed_data")
 SIM_HISTORY_DIR = join(SIM_DIR, "training_histories")
 SIM_SCORE_DIR = join(SIM_DIR, "scores")
 SIM_VIS_DIR = join(SIM_DIR, "visualizations")
@@ -82,6 +83,7 @@ CORRUPTION_PARAMS += ["original=1", "randomized=1"]
 SIM_REPS = list(range(config["sim_replicates"]))
 SIM_DATA_PARAMS = config["sim_data_params"]
 SIM_SNR = SIM_DATA_PARAMS["snr"]
+SIM_MISSING = SIM_DATA_PARAMS["missing"]
 SIM_M = SIM_DATA_PARAMS["M"]
 SIM_K = SIM_DATA_PARAMS["K"]
 SIM_N = SIM_DATA_PARAMS["N"]
@@ -102,7 +104,6 @@ SIM_MATFAC_PARAMS = param_dict_to_list(SIM_MATFAC_PARAM_DICTS)
 EXP_TCGA_PARAMS = config["tcga_data_params"]
 EXP_HELDOUT_CTYPES = EXP_TCGA_PARAMS["heldout_ctypes"]
 EXP_DROPCTYPES_STR = ":".join(EXP_HELDOUT_CTYPES)
-
 
 
 ###################################################################################################
@@ -228,25 +229,51 @@ rule factor_plot:
 rule tabulate_scores:
     input:
         src="scripts/tabulate_scores.py",
-        sim_scores=expand(join(SIM_SCORE_DIR, "method={method}/{method_params}/{pwy_params}/{mkn}/snr={snr}/srep={srep}/{corruption}/crep={crep}.json"),
+        infer_scores=expand(join(SIM_SCORE_DIR, "method={method}/{method_params}/{pwy_params}/{mkn}/snr={snr}/missing={missing}/srep={srep}/{corruption}/crep={crep}_infer.json"),
                          method=SIM_METHODS, method_params=SIM_MATFAC_PARAMS, pwy_params=SIM_PATHWAY_PARAMS, 
-                         mkn=SIM_MKN, snr=SIM_SNR, srep=SIM_REPS,
+                         mkn=SIM_MKN, snr=SIM_SNR, missing=SIM_MISSING, srep=SIM_REPS,
                          corruption=CORRUPTION_PARAMS, crep=PATHWAY_CORR_REPS),
+        impute_scores=expand(join(SIM_SCORE_DIR, "method={method}/{method_params}/{pwy_params}/{mkn}/snr={snr}/missing={missing}/srep={srep}/{corruption}/crep={crep}_impute.json"),
+                         method=SIM_METHODS, method_params=SIM_MATFAC_PARAMS, pwy_params=SIM_PATHWAY_PARAMS, 
+                         mkn=SIM_MKN, snr=SIM_SNR, missing=SIM_MISSING, srep=SIM_REPS,
+                         corruption=CORRUPTION_PARAMS, crep=PATHWAY_CORR_REPS)
     output:
         score_tsv=join(SIM_SCORE_DIR, "sim_scores.tsv")
     resources:
         mem_mb=1000
     shell:
-        "python {input.src} {output.score_tsv} {input.sim_scores}"
+        "python {input.src} {output.score_tsv} {input.infer_scores} {input.impute_scores}"
+
+
+rule score_matfac_impute:
+    input:
+        src="scripts/score_matfac_impute.py",
+        imputed_hdf=join(SIM_IMPUTE_DIR, "method=matfac", "{method_params}", "{pwy_params}", "{schema_params}", "snr={snr}", "missing={missing}", "srep={srep}", "{corruption_params}/crep={crep}.hdf"),
+        masked_hdf=join(SIM_DATA_DIR, "{pwy_params}/{sim_params}/snr={snr}", "missing={missing}", "srep={srep}.hdf")
+        true_hdf=join(SIM_DATA_DIR, "{pwy_params}/{sim_params}/snr={snr}", "srep={srep}.hdf"),
+    output:
+        score_json=join(SIM_SCORE_DIR, "method=matfac", "{method_params,[_.=:a-zA-Z0-9]+}", "{pwy_params,[_=a-z0-9]+}", "{schema_params,[_.=a-z0-9]+}", "snr={snr,[.0-9]+}", "missing={missing,[.0-9]+}", "srep={srep,[0-9]+}", "{corruption_params,[_.=a-z0-9]+}", "crep={crep,[0-9]+}_task=impute.json")
+    shell:
+        "python {input.src} {input.imputed_hdf} {input.true_hdf} {output.score_json}"
+
+
+rule sim_matfac_impute:
+    input:
+        src="scripts/impute_matfac.jl",
+        model_bson=join(SIM_INFER_DIR, "method=matfac", "{method_params}", "{pwy_params}", "{schema_params}", "snr={snr}", "missing={missing}", "srep={srep}", "{corruption_params}/crep={crep}.bson"),
+    output:
+        imputed_hdf=join(SIM_IMPUTE_DIR, "method=matfac", "{method_params,[_.=:a-zA-Z0-9]+}", "{pwy_params,[_=a-z0-9]+}", "{schema_params,[_.=a-z0-9]+}", "snr={snr,[.0-9]+}", "missing={missing,[.0-9]+}", "srep={srep,[0-9]+}", "{corruption_params, [_.=a-z0-9]+}/crep={crep, [0-9]+}.hdf"),
+    shell:
+        "julia --project=. -t 1 {input.src} {input.model_bson} {output.imputed_hdf}"
 
 
 rule score_matfac:
     input:
         src="scripts/score_matfac.py",
         true_params=join(SIM_PARAM_DIR, "{pwy_params}", "{schema_params}", "snr={snr}", "srep={srep}.hdf"),
-        pred_params=join(SIM_INFER_DIR, "method=matfac", "{method_params}", "{pwy_params}", "{schema_params}", "snr={snr}", "srep={srep}", "{corruption_params}", "crep={crep}.hdf")
+        pred_params=join(SIM_INFER_DIR, "method=matfac", "{method_params}", "{pwy_params}", "{schema_params}", "snr={snr}", "missing={missing}", "srep={srep}", "{corruption_params}", "crep={crep}.hdf")
     output:
-        score_json=join(SIM_SCORE_DIR, "method=matfac", "{method_params,[_.=:a-zA-Z0-9]+}", "{pwy_params,[_=a-z0-9]+}", "{schema_params,[_.=a-z0-9]+}", "snr={snr,[.0-9]+}", "srep={srep,[0-9]+}", "{corruption_params,[_.=a-z0-9]+}", "crep={crep,[0-9]+}.json")
+        score_json=join(SIM_SCORE_DIR, "method=matfac", "{method_params,[_.=:a-zA-Z0-9]+}", "{pwy_params,[_=a-z0-9]+}", "{schema_params,[_.=a-z0-9]+}", "snr={snr,[.0-9]+}", "missing={missing,[.0-9]+}", "srep={srep,[0-9]+}", "{corruption_params,[_.=a-z0-9]+}", "crep={crep,[0-9]+}_task=infer.json")
     resources:
         #mem_mb=1000
         mem_mb=100
@@ -258,12 +285,12 @@ rule sim_run_matfac:
     input:
         src="scripts/run_matfac.jl",
         status_file="gpu_status.txt",
-        data=join(SIM_DATA_DIR, "{pwy_params}/{schema_params}/snr={snr}/srep={srep}.hdf"),
+        data=join(SIM_DATA_DIR, "{pwy_params}/{schema_params}/snr={snr}/missing={missing}/srep={srep}.hdf"),
         pwy_json=join(SIM_PWY_DIR, "{pwy_params}/{schema_params}/srep={srep}/{corruption_params}/crep={crep}.json")
     output:
-        inferred_bson=join(SIM_INFER_DIR, "method=matfac", "{method_params,[_.=:a-zA-Z0-9]+}", "{pwy_params,[_=a-z0-9]+}", "{schema_params,[_.=a-z0-9]+}", "snr={snr,[.0-9]+}", "srep={srep,[0-9]+}", "{corruption_params, [_.=a-z0-9]+}/crep={crep, [0-9]+}.bson"),
-        inferred_hdf=join(SIM_INFER_DIR, "method=matfac", "{method_params,[_.=:a-zA-Z0-9]+}", "{pwy_params,[_=a-z0-9]+}", "{schema_params,[_.=a-z0-9]+}", "snr={snr,[.0-9]+}","srep={srep, [0-9]+}", "{corruption_params, [_.=a-z0-9]+}/crep={crep, [0-9]+}.hdf"),
-        history_json=join(SIM_HISTORY_DIR, "method=matfac", "{method_params,[_.=:a-zA-Z0-9]+}", "{pwy_params,[_=a-z0-9]+}", "{schema_params,[_.=a-z0-9]+}", "snr={snr,[.0-9]+}", "srep={srep, [0-9]+}", "{corruption_params, [_.=a-z0-9]+}/crep={crep, [0-9]+}.json")
+        inferred_bson=join(SIM_INFER_DIR, "method=matfac", "{method_params,[_.=:a-zA-Z0-9]+}", "{pwy_params,[_=a-z0-9]+}", "{schema_params,[_.=a-z0-9]+}", "snr={snr,[.0-9]+}", "missing={missing,[.0-9]+}", "srep={srep,[0-9]+}", "{corruption_params, [_.=a-z0-9]+}/crep={crep, [0-9]+}.bson"),
+        inferred_hdf=join(SIM_INFER_DIR, "method=matfac", "{method_params,[_.=:a-zA-Z0-9]+}", "{pwy_params,[_=a-z0-9]+}", "{schema_params,[_.=a-z0-9]+}", "snr={snr,[.0-9]+}", "missing={missing,[.0-9]+}","srep={srep, [0-9]+}", "{corruption_params, [_.=a-z0-9]+}/crep={crep, [0-9]+}.hdf"),
+        history_json=join(SIM_HISTORY_DIR, "method=matfac", "{method_params,[_.=:a-zA-Z0-9]+}", "{pwy_params,[_=a-z0-9]+}", "{schema_params,[_.=a-z0-9]+}", "snr={snr,[.0-9]+}", "missing={missing,[.0-9]+}", "srep={srep, [0-9]+}", "{corruption_params, [_.=a-z0-9]+}/crep={crep, [0-9]+}.json")
     resources:
         mem_mb=1000
         #mem_mb=10000,
@@ -284,6 +311,16 @@ rule randomize_pathway_edges:
         mem_mb=500
     shell:
         "python {input.src} {input.pwy_json} {output.randomized_json}"
+
+
+rule mask_data:
+    input:
+        src=join("scripts", "mask_data.py"),
+        data_hdf=join(SIM_DATA_DIR, "{pwy_params}/{sim_params}/snr={snr}", "srep={srep}.hdf")
+    output:
+        masked_hdf=join(SIM_DATA_DIR, "{pwy_params,[_=a-z0-9]+}/{sim_params,[._=a-z0-9]+}/snr={snr,[.0-9]+}", "missing={missing,[.0-9]+}", "srep={srep,[0-9]+}.hdf")
+    shell:
+        "python {input.src} {input.data_hdf} {output.masked_hdf} each={wildcards.missing}"
 
 
 rule corrupt_pathways:

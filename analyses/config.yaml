@@ -15,6 +15,7 @@ sim_data_params:
     K: [30] #, 300]
     N: [800] #, 80000, 80000]
     snr: [1.0] #, 0.1, 0.01, 0.001] 
+    missing: [0.25]
 
 tcga_data_params:
     heldout_ctypes: ["OV", "GBM", "LAML"]

@@ -80,17 +80,18 @@ function barcodes_to_batches(barcode_dict::Dict{String,Vector{String}})
 end
 
 
-function save_omic_data(output_hdf, feature_names, instance_names, 
-                        instance_groups, omic_matrix)
+function save_omic_data(output_hdf, feature_assays, feature_genes,
+                        instance_names, instance_groups, omic_matrix)
 
     @assert size(omic_matrix,2) == length(feature_names)
     @assert size(omic_matrix,1) == length(instance_names)
     @assert length(instance_names) == length(instance_groups)
 
     h5open(output_hdf, "w") do file
-        write(file, "features", feature_names)
+        write(file, "feature_assays", feature_assays)
+        write(file, "feature_genes", feature_genes)
         write(file, "instances", instance_names)
-        write(file, "groups", instance_groups)
+        write(file, "instance_groups", instance_groups)
         write(file, "data", omic_matrix)
     end
 

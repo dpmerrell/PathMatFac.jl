@@ -170,7 +170,9 @@ def parse_value(v):
 def parse_path_kvs(pth):
 
     result = {}
-    for dir_str in pth.split(path.sep):
+    dir_strs = pth.split(path.sep)
+    dir_strs[-1] = dir_strs[-1].split(".")[-1]
+    for dir_str in dir_strs:
         sep = "_"
         if ":" in dir_str:
             sep = ":"

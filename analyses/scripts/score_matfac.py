@@ -69,7 +69,6 @@ def score_X(true_X, fitted_X, sample_groups):
     return scores
 
 
-
 def compute_scores(true_hdf, fitted_hdf):
    
     scores = {}
