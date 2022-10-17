@@ -249,12 +249,12 @@ rule score_matfac_impute:
     input:
         src="scripts/score_matfac_impute.py",
         imputed_hdf=join(SIM_IMPUTE_DIR, "method=matfac", "{method_params}", "{pwy_params}", "{schema_params}", "snr={snr}", "missing={missing}", "srep={srep}", "{corruption_params}/crep={crep}.hdf"),
-        masked_hdf=join(SIM_DATA_DIR, "{pwy_params}/{sim_params}/snr={snr}", "missing={missing}", "srep={srep}.hdf")
-        true_hdf=join(SIM_DATA_DIR, "{pwy_params}/{sim_params}/snr={snr}", "srep={srep}.hdf"),
+        masked_hdf=join(SIM_DATA_DIR, "{pwy_params}/{schema_params}/snr={snr}", "missing={missing}", "srep={srep}.hdf"),
+        true_hdf=join(SIM_DATA_DIR, "{pwy_params}/{schema_params}/snr={snr}", "srep={srep}.hdf"),
     output:
-        score_json=join(SIM_SCORE_DIR, "method=matfac", "{method_params,[_.=:a-zA-Z0-9]+}", "{pwy_params,[_=a-z0-9]+}", "{schema_params,[_.=a-z0-9]+}", "snr={snr,[.0-9]+}", "missing={missing,[.0-9]+}", "srep={srep,[0-9]+}", "{corruption_params,[_.=a-z0-9]+}", "crep={crep,[0-9]+}_task=impute.json")
+        score_json=join(SIM_SCORE_DIR, "method=matfac", "{method_params,[_.=:a-zA-Z0-9]+}", "{pwy_params,[_=a-z0-9]+}", "{schema_params,[_.=a-z0-9]+}", "snr={snr,[.0-9]+}", "missing={missing,[.0-9]+}", "srep={srep,[0-9]+}", "{corruption_params,[_.=a-z0-9]+}", "crep={crep,[0-9]+}_impute.json")
     shell:
-        "python {input.src} {input.imputed_hdf} {input.true_hdf} {output.score_json}"
+        "python {input.src} {input.imputed_hdf} {input.masked_hdf} {input.true_hdf} {output.score_json}"
 
 
 rule sim_matfac_impute:
@@ -273,7 +273,7 @@ rule score_matfac:
         true_params=join(SIM_PARAM_DIR, "{pwy_params}", "{schema_params}", "snr={snr}", "srep={srep}.hdf"),
         pred_params=join(SIM_INFER_DIR, "method=matfac", "{method_params}", "{pwy_params}", "{schema_params}", "snr={snr}", "missing={missing}", "srep={srep}", "{corruption_params}", "crep={crep}.hdf")
     output:
-        score_json=join(SIM_SCORE_DIR, "method=matfac", "{method_params,[_.=:a-zA-Z0-9]+}", "{pwy_params,[_=a-z0-9]+}", "{schema_params,[_.=a-z0-9]+}", "snr={snr,[.0-9]+}", "missing={missing,[.0-9]+}", "srep={srep,[0-9]+}", "{corruption_params,[_.=a-z0-9]+}", "crep={crep,[0-9]+}_task=infer.json")
+        score_json=join(SIM_SCORE_DIR, "method=matfac", "{method_params,[_.=:a-zA-Z0-9]+}", "{pwy_params,[_=a-z0-9]+}", "{schema_params,[_.=a-z0-9]+}", "snr={snr,[.0-9]+}", "missing={missing,[.0-9]+}", "srep={srep,[0-9]+}", "{corruption_params,[_.=a-z0-9]+}", "crep={crep,[0-9]+}_infer.json")
     resources:
         #mem_mb=1000
         mem_mb=100

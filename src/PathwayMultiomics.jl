@@ -21,5 +21,6 @@ include("callbacks.jl")
 include("fit.jl")
 include("transform.jl")
 include("simulate.jl")
+include("impute.jl")
 
 end

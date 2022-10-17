@@ -83,16 +83,16 @@ end
 function save_omic_data(output_hdf, feature_assays, feature_genes,
                         instance_names, instance_groups, omic_matrix)
 
-    @assert size(omic_matrix,2) == length(feature_names)
+    @assert size(omic_matrix,2) == length(feature_assays)
     @assert size(omic_matrix,1) == length(instance_names)
     @assert length(instance_names) == length(instance_groups)
 
     h5open(output_hdf, "w") do file
-        write(file, "feature_assays", feature_assays)
-        write(file, "feature_genes", feature_genes)
-        write(file, "instances", instance_names)
-        write(file, "instance_groups", instance_groups)
-        write(file, "data", omic_matrix)
+        write(file, "omic_data/feature_assays", feature_assays)
+        write(file, "omic_data/feature_genes", feature_genes)
+        write(file, "omic_data/instances", instance_names)
+        write(file, "omic_data/instance_groups", instance_groups)
+        write(file, "omic_data/data", omic_matrix)
     end
 
 end

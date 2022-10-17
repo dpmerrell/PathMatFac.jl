@@ -9,7 +9,7 @@ reactome_dir: "data/reactome/"
 # Simulation study config
 ################################
 
-sim_replicates: 5 #5
+sim_replicates: 1 #5
 sim_data_params:
     M: [100] #, 1000, 10000]
     K: [30] #, 300]
@@ -23,17 +23,18 @@ tcga_data_params:
 sim_pathway_params:
     sim_topk: [300]
 
-pathway_corruption_replicates: 3
+pathway_corruption_replicates: 1
 pathway_corruption_params:
-    addk: [0.05, 0.2, 0.5]
-    removek: [0.05, 0.2, 0.5]
-    addnode: [0.05, 0.25]
-    removenode: [0.05, 0.25]
+    addk: [0.05] #, 0.2, 0.5]
+    removek: [0.05] #, 0.2, 0.5]
+    addnode: [0.05] #, 0.25]
+    removenode: [0.05] #, 0.25]
 
 sim_method_params:
     matfac:
         capacity: [25000000]
-        l1_fraction: [0.0, 0.5, 1.0]
+        #l1_fraction: [0.0, 0.5, 1.0]
+        l1_fraction: [1.0]
         lambda_X: [0.01]
         lr: [0.07]
         max_epochs: [10000]
