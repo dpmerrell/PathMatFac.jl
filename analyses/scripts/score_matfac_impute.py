@@ -1,5 +1,5 @@
 
-from sklearn.metrics import r2_score, roc_auc_score
+from sklearn.metrics import r2_score, roc_auc_score, average_precision_score
 import script_util as su
 import numpy as np
 import json
@@ -8,7 +8,7 @@ import sys
 
 assay_to_score = {"mrnaseq": r2_score,
                   "cna": r2_score,
-                  "mutation": roc_auc_score,
+                  "mutation": average_precision_score,
                   "methylation": r2_score,
                   "rppa": r2_score
                  }
@@ -38,11 +38,13 @@ def score_imputation(imputed_hdf, masked_hdf, true_hdf):
         relevant_pred = imputed_data[relevant_features,:]
         relevant_true = true_data[relevant_features,:]
         
-        masked_pred = relevant_pred[relevant_mask]
-        masked_true = relevant_true[relevant_mask]
+        score = 1.0 
+        if np.sum(relevant_mask) > 0: 
+            masked_pred = relevant_pred[relevant_mask]
+            masked_true = relevant_true[relevant_mask]
+            score = assay_to_score[assay](masked_true, masked_pred)
 
-        result["{}_impute_score".format(assay)] = assay_to_score[assay](masked_true, masked_pred)
-     
+        result["{}_impute_score".format(assay)] = score 
     return result
 
 
