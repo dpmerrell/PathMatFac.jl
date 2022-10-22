@@ -9,7 +9,15 @@ NICE_NAMES = {"gender": "Sex",
               "hpv_status": "HPV",
               "tobacco_smoking_history": "Smoking",
               "age_at_initial_pathologic_diagnosis": "Age",
-              "race": "Race"
+              "race": "Race",
+              "nadd": "$N_a$",
+              "nrem": "$N_r$",
+              "kadd": "$K_a$",
+              "krem": "$K_r$",
+              "snr": "SNR",
+              "missing": "Missing Data",
+              "l1_fraction": "$L^1$ Fraction",
+              "X_pwy_spearman_corr": "Pathway Activation Spearman"
               }
 
 
@@ -171,16 +179,40 @@ def parse_path_kvs(pth):
 
     result = {}
     dir_strs = pth.split(path.sep)
-    dir_strs[-1] = dir_strs[-1].split(".")[-1]
+    dir_strs[-1] = dir_strs[-1].split(".")[0]
     for dir_str in dir_strs:
-        sep = "_"
-        if ":" in dir_str:
-            sep = ":"
+        sep = "__"
         for kv_str in dir_str.split(sep):
             k_v = kv_str.split("=")
             if len(k_v) == 2:
                 result[k_v[0]] = parse_value(k_v[1])
 
+    return result
+
+
+def groupby_except(df, except_cols):
+    except_set = set(except_cols)
+    gp_cols = [col for col in df.columns if col not in except_set]
+    return df.groupby(gp_cols)
+
+
+def aggregate_replicates(df, replicate_cols, op="mean"):
+    gp = groupby_except(df, replicate_cols)
+    result = None
+    if op == "mean":
+        result = gp.mean()
+    elif op == "var":
+        result = gp.var()
+    elif op == "median":
+        result = gp.median()
+    elif op == "count":
+        result = gp.count()
+    elif op == "std":
+        result = gp.std()
+    else:
+        raise ValueError
+    result = pd.DataFrame(result) 
+    result.reset_index(inplace=True)
     return result
 
 

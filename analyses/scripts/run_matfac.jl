@@ -27,9 +27,10 @@ function main(args)
                             :capacity => 25000000,
                             :verbosity => 1,
                             :calibrate_losses => true,
-                            :history_json => "history.json"
+                            :history_json => "history.json",
+                            :use_gpu => 1 
                            )
-    if length(args) > 3
+    if length(args) > 4
         parse_opts!(opts, args[5:end])
     end
 
@@ -39,6 +40,7 @@ function main(args)
     lambda_layer = pop!(opts, :lambda_layer)
     history_json = pop!(opts, :history_json)
     l1_fraction = pop!(opts, :l1_fraction) 
+    use_gpu = pop!(opts, :use_gpu)
 
     println("Loading data...")
     feature_genes = get_omic_feature_genes(omic_hdf_filename)
@@ -88,10 +90,15 @@ function main(args)
         callback = PathwayMultiomics.OuterCallback(history_json=history_json)
 
         # Move to GPU
-        omic_data_d = gpu(omic_data)
-        omic_data = nothing
-        model_d = gpu(model)
-        model = nothing
+        if use_gpu == 1
+            omic_data_d = gpu(omic_data)
+            model_d = gpu(model)
+            omic_data = nothing
+            model = nothing
+        else
+            omic_data_d = omic_data
+            model_d = model
+        end
 
         start_time = time()
         PM.fit!(model_d, omic_data_d; outer_callback=callback, opts...)

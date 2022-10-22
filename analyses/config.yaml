@@ -9,41 +9,114 @@ reactome_dir: "data/reactome/"
 # Simulation study config
 ################################
 
-sim_replicates: 1 #5
-sim_data_params:
-    M: [100] #, 1000, 10000]
-    K: [30] #, 300]
-    N: [800] #, 80000, 80000]
-    snr: [1.0] #, 0.1, 0.01, 0.001] 
-    missing: [0.25]
-
-tcga_data_params:
-    heldout_ctypes: ["OV", "GBM", "LAML"]
-
-sim_pathway_params:
-    sim_topk: [300]
-
-pathway_corruption_replicates: 1
-pathway_corruption_params:
-    addk: [0.05] #, 0.2, 0.5]
-    removek: [0.05] #, 0.2, 0.5]
-    addnode: [0.05] #, 0.25]
-    removenode: [0.05] #, 0.25]
-
-sim_method_params:
-    matfac:
-        capacity: [25000000]
-        #l1_fraction: [0.0, 0.5, 1.0]
-        l1_fraction: [1.0]
-        lambda_X: [0.01]
-        lr: [0.07]
-        max_epochs: [10000]
-        n_lambda: [8]
+sim_params:
+    corruption:
+        small:
+            schema:
+                m: [100]
+                k: [30]
+                n: [800]
+            sim:
+                snr: [10.0] #, 1.0, 0.1, 0.01, 0.001]
+                missing: [0.25]
+            top_pwys: [300]
+            corruption:
+                kadd: [0.05] #, 0.25, 0.5]
+                krem: [0.05] #, 0.25, 0.5]
+                nadd: [0.05] #, 0.25, 0.5]
+                nrem: [0.05] #, 0.25, 0.5]
+            srep: 1
+            methods:
+                matfac:
+                    l1_fraction: [0.5] #, 1.0]
+                    use_gpu: [0]
+                    lambda_X: [0.01]
+                    capacity: [25000000]
+                    lr: [0.07]
+                    max_epochs: [100]
+                    n_lambda: [8]
+    l1frac:
+        small:
+            schema:
+                m: [100]
+                k: [30]
+                n: [800]
+            sim:
+                snr: [1.0]
+                missing: [0.25]
+            top_pwys: [300]
+            corruption:
+                kadd: [0.05]
+                krem: [0.5]
+                nadd: [0.05]
+                nrem: [0.5]
+            srep: 1
+            methods:
+                matfac:
+                    #l1_fraction: [0.0, 0.25, 0.5, 0.75, 1.0]
+                    l1_fraction: [0.5,1.0]
+                    use_gpu: [0]
+                    lambda_X: [0.01]
+                    capacity: [25000000]
+                    lr: [0.07]
+                    max_epochs: [100]
+                    n_lambda: [8]
+    edge_shuffle:
+        small:
+            schema:
+                m: [100]
+                k: [30]
+                n: [800]
+            sim:
+                snr: [1.0]
+                missing: [0.25]
+            top_pwys: [300]
+            corruption: ["original=1", "shuffled=1"]
+            srep: 1
+            methods:
+                matfac:
+                    #l1_fraction: [0.0, 0.5, 1.0]
+                    l1_fraction: [0.5]
+                    use_gpu: [0]
+                    lambda_X: [0.01]
+                    capacity: [25000000]
+                    lr: [0.07]
+                    max_epochs: [100]
+                    n_lambda: [8]
+    missingness:
+        small:
+            schema:
+                m: [100]
+                k: [30]
+                n: [800]
+            sim:
+                snr: [1.0]
+                missing: [0.0, 0.25] #, 0.5, 0.75]
+            top_pwys: [300]
+            corruption:
+                    kadd: [0.05]
+                    krem: [0.5]
+                    nadd: [0.05]
+                    nrem: [0.5]
+            srep: 1
+            methods:
+                matfac:
+                    l1_fraction: [0.5] #, 1.0]
+                    use_gpu: [0]
+                    lambda_X: [0.01]
+                    capacity: [25000000]
+                    lr: [0.07]
+                    max_epochs: [100]
+                    n_lambda: [8]
+ 
 
 
 ################################
 # TCGA evaluations config
 ################################
+
+tcga_data_params:
+    heldout_ctypes: ["OV", "GBM", "LAML"]
 
 tcga_pathway_params:
     tcga_topk: [300, 500]
@@ -54,7 +127,7 @@ tcga_method_params:
         l1_fraction: [0.0, 0.5, 1.0]
         lambda_X: [0.01]
         lr: [0.07]
-        max_epochs: [10000]
+        max_epochs: [100]
         n_lambda: [8]
 
 
