@@ -115,19 +115,18 @@ sim_params:
 # TCGA evaluations config
 ################################
 
-tcga_data_params:
-    heldout_ctypes: ["OV", "GBM", "LAML"]
-
-tcga_pathway_params:
-    tcga_topk: [300, 500]
-
-tcga_method_params:
-    matfac:
-        capacity: [25000000]
-        l1_fraction: [0.0, 0.5, 1.0]
-        lambda_X: [0.01]
-        lr: [0.07]
-        max_epochs: [100]
-        n_lambda: [8]
+tcga_runs:
+    data:
+        heldout_ctypes: ["OV:GBM:LAML"]
+        top_pwys: [300, 500]
+    methods:
+        matfac:
+            l1_fraction: [0.0, 0.5, 1.0]
+            use_gpu: [1]
+            lambda_X: [0.01]
+            capacity: [25000000]
+            lr: [0.07]
+            max_epochs: [100]
+            n_lambda: [8]
 
 

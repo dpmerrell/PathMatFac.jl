@@ -129,55 +129,72 @@ rule all:
        #                       usedk=EXP_USED_K)
 
 
-############################
-## Runs on real (TCGA) data
-############################
-#
-#rule exp_factor_plot:
-#    input:
-#        src="scripts/vis_pathway_factor_plot.py",
-#        params_hdf=join(EXP_INFER_DIR, "usedk={usedk}.hdf"),
-#        pwy_json=join(SIM_PWY_DIR, "usedk={usedk}.json")
-#    output:
-#        factorplot=join(EXP_FACTORPLOT_DIR,"usedk={usedk}.html")
-#    params:
-#        plottedk=lambda wc: int(wc["usedk"])//5
-#    resources:
-#        mem_mb=5000
-#    shell:
-#        "python {input.src} {input.params_hdf} {input.pwy_json} {output.factorplot} {params.plottedk}"
-#
-#rule exp_embedding_scatter:
-#    input:
-#        src="scripts/vis_embedding_scatter.py",
-#        clinical_hdf=join(TCGA_DIR, "tcga_clinical.hdf"),
-#        params_hdf=join(EXP_INFER_DIR, "usedk={usedk}.hdf")
-#    output:
-#        scatter_html=join(EXP_SCATTER_DIR, "usedk={usedk}.html")
-#    resources:
-#        mem_mb=5000
-#    shell:
-#        "python {input.src} {input.params_hdf} {input.clinical_hdf} 1 {output.scatter_html}"
-#
-#
-#rule exp_run_matfac:
-#    input:
-#        src="scripts/run_matfac.jl",
-#        status_file="gpu_status.txt",
-#        data=join(TCGA_DIR, "tcga_omic_prep_dropctypes="+EXP_DROPCTYPES_STR+".hdf"),
-#        pwy_json=join(REACTOME_DIR, "{pwy_params}.json"),
-#    output:
-#        inferred_bson=join(EXP_INFER_DIR, "method=matfac", "{method_params,[_.=:a-zA-Z0-9]+}", "{pwy_params,[_=a-z0-9]+}.bson"),
-#        inferred_hdf=join(EXP_INFER_DIR, "method=matfac", "{method_params,[_.=:a-zA-Z0-9]+}", "{pwy_params,[_=a-z0-9]+}.hdf"),
-#        history_json=join(EXP_HISTORY_DIR, "method=matfac", "{method_params,[_.=:a-zA-Z0-9]+}", "{pwy_params,[_=a-z0-9]+}.json")
-#    resources:
-#        mem_mb=10000,
-#        gpu=1
-#    params:
-#        matfac_kwargs=lambda wc: " ".join(wc["method_params"].split(":"))
-#    shell:
-#        "julia --project=. -t 1 {input.src} {input.data} {input.pwy_json} {output.inferred_bson} {output.inferred_hdf} {params.matfac_kwargs} history_json={output.history_json} gpu_status_file={input.status_file}"
+###########################
+# Runs on real (TCGA) data
+###########################
 
+rule exp_factor_plot:
+    input:
+        src="scripts/vis_pathway_factor_plot.py",
+        params_hdf=join(EXP_INFER_DIR, "usedk={usedk}.hdf"),
+        pwy_json=join(SIM_PWY_DIR, "usedk={usedk}.json")
+    output:
+        factorplot=join(EXP_FACTORPLOT_DIR,"usedk={usedk}.html")
+    params:
+        plottedk=lambda wc: int(wc["usedk"])//5
+    resources:
+        mem_mb=5000
+    shell:
+        "python {input.src} {input.params_hdf} {input.pwy_json} {output.factorplot} {params.plottedk}"
+
+rule exp_embedding_scatter:
+    input:
+        src="scripts/vis_embedding_scatter.py",
+        clinical_hdf=join(TCGA_DIR, "tcga_clinical.hdf"),
+        params_hdf=join(EXP_INFER_DIR, "usedk={usedk}.hdf")
+    output:
+        scatter_html=join(EXP_SCATTER_DIR, "usedk={usedk}.html")
+    resources:
+        mem_mb=5000
+    shell:
+        "python {input.src} {input.params_hdf} {input.clinical_hdf} 1 {output.scatter_html}"
+
+
+rule exp_run_matfac:
+    input:
+        src="scripts/run_matfac.jl",
+        status_file="gpu_status.txt",
+        data=join(TCGA_DIR, "tcga_omic_prep_dropctypes="+EXP_DROPCTYPES_STR+".hdf"),
+        pwy_json=join(REACTOME_DIR, "{pwy_params}.json"),
+    output:
+        inferred_bson=join(EXP_INFER_DIR, "method=matfac", "{method_params,[_.=a-zA-Z0-9]+}", "{pwy_params,[_=a-z0-9]+}.bson"),
+        inferred_hdf=join(EXP_INFER_DIR, "method=matfac", "{method_params,[_.=a-zA-Z0-9]+}", "{pwy_params,[_=a-z0-9]+}.hdf"),
+        history_json=join(EXP_HISTORY_DIR, "method=matfac", "{method_params,[_.=a-zA-Z0-9]+}", "{pwy_params,[_=a-z0-9]+}.json")
+    resources:
+        mem_mb=10000,
+        gpu=1
+    params:
+        matfac_kwargs=lambda wc: " ".join(wc["method_params"].split("__"))
+    shell:
+        "julia --project=. -t 1 {input.src} {input.data} {input.pwy_json} {output.inferred_bson} {output.inferred_hdf} {params.matfac_kwargs} history_json={output.history_json} gpu_status_file={input.status_file}"
+
+rule sim_run_matfac:
+    input:
+        src="scripts/run_matfac.jl",
+        status_file="gpu_status.txt",
+        data=join(SIM_DATA_DIR, "{pwys}/{schema}/{sim}/{replicate}/masked.hdf"),
+        pwy_json=join(SIM_PWY_DIR, "{pwys}/{schema}/{corruption}/{replicate}.json")
+    output:
+        inferred_bson=join(SIM_INFER_DIR, "method=matfac__{matfac_params,[_.=a-zA-Z0-9]+}", "{pwys,[_=a-z0-9]+}", "{schema,[_=a-z0-9]+}", "{sim,[_.=0-9a-z]+}", "{corruption,[_.=a-z0-9]+}", "{replicate,[_.=a-z0-9]+}.bson"),
+        inferred_hdf=join(SIM_INFER_DIR, "method=matfac__{matfac_params,[_.=a-zA-Z0-9]+}", "{pwys,[_=a-z0-9]+}", "{schema,[_=a-z0-9]+}", "{sim,[_.=0-9a-z]+}", "{corruption,[_.=a-z0-9]+}", "{replicate,[_.=a-z0-9]+}.hdf"),
+        history_json=join(SIM_HISTORY_DIR, "method=matfac__{matfac_params,[_.=a-zA-Z0-9]+}", "{pwys,[_=a-z0-9]+}", "{schema,[_=a-z0-9]+}", "{sim,[_.=0-9a-z]+}", "{corruption,[_.=a-z0-9]+}", "{replicate,[_.=a-z0-9]+}.json")
+    resources:
+        mem_mb=get_m 
+        gpu=lambda wc: int(get_m(wc) > 1000)
+    params:
+        matfac_kwargs=lambda wc: " ".join(wc["matfac_params"].split("__"))
+    shell:
+        "julia --project=. -t 1 {input.src} {input.data} {input.pwy_json} {output.inferred_bson} {output.inferred_hdf} {params.matfac_kwargs} history_json={output.history_json} gpu_status_file={input.status_file}"
 
 ###########################
 # Simulation study
@@ -291,6 +308,8 @@ rule score_matfac:
     shell:
         "python {input.src} {input.true_params} {input.pred_params} {output.score_json}" 
 
+def get_m(wc):
+    return int(wc["schema"].split("__")[1].split("=")[-1]) # Extract "m" as an integer
 
 rule sim_run_matfac:
     input:
@@ -303,9 +322,8 @@ rule sim_run_matfac:
         inferred_hdf=join(SIM_INFER_DIR, "method=matfac__{matfac_params,[_.=a-zA-Z0-9]+}", "{pwys,[_=a-z0-9]+}", "{schema,[_=a-z0-9]+}", "{sim,[_.=0-9a-z]+}", "{corruption,[_.=a-z0-9]+}", "{replicate,[_.=a-z0-9]+}.hdf"),
         history_json=join(SIM_HISTORY_DIR, "method=matfac__{matfac_params,[_.=a-zA-Z0-9]+}", "{pwys,[_=a-z0-9]+}", "{schema,[_=a-z0-9]+}", "{sim,[_.=0-9a-z]+}", "{corruption,[_.=a-z0-9]+}", "{replicate,[_.=a-z0-9]+}.json")
     resources:
-        mem_mb=1000
-        #mem_mb=10000,
-        #gpu=1
+        mem_mb=get_m 
+        gpu=lambda wc: int(get_m(wc) > 1000)
     params:
         matfac_kwargs=lambda wc: " ".join(wc["matfac_params"].split("__"))
     shell:
