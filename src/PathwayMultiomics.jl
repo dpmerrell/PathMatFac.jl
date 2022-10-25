@@ -21,6 +21,7 @@ include("callbacks.jl")
 include("fit.jl")
 include("transform.jl")
 include("simulate.jl")
+include("remove_batch_effect.jl")
 include("impute.jl")
 
 end

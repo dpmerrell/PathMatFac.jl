@@ -106,9 +106,6 @@ function Base.:(*)(A::AbstractMatrix, B::BatchArray)
     result = copy(A)
     for (j,cbr) in enumerate(B.col_ranges)
         view(result, :, cbr) .*= (view(B.row_batches[j], B.row_idx, :)*B.values[j])
-        #for i=1:length(B.values[j])
-        #    view(result, view(B.row_batches[j], B.row_idx, i), cbr) .*= B.values[j][i]
-        #end
     end
     return result
 end
@@ -125,16 +122,34 @@ function ChainRulesCore.rrule(::typeof(*), A::AbstractMatrix, B::BatchArray)
         for (j, cbr) in enumerate(B.col_ranges)
             view(A, :, cbr) .*= view(result_bar, :, cbr)
             values_bar[j] .= vec(sum(transpose(view(B.row_batches[j], B.row_idx, :)) * view(A, :, cbr); dims=2)) 
-            #for i=1:length(B.values[j])
-            #    rbatch = B.row_batches[j][B.row_idx,i]
-            #    values_bar[j][i] = sum(view(result_bar, rbatch, cbr) .* view(A, rbatch, cbr))
-            #end
         end
         B_bar = Tangent{BatchArray}(values=values_bar)
         return ChainRulesCore.NoTangent(), A_bar, B_bar 
     end
 
     return result, ba_mult_pullback
+end
+
+#########################################
+# Division
+function Base.:(/)(A::AbstractMatrix, B::BatchArray)
+
+    result = copy(A)
+    for (j,cbr) in enumerate(B.col_ranges)
+        view(result, :, cbr) ./= (view(B.row_batches[j], B.row_idx, :)*B.values[j])
+    end
+    return result
+end
+
+#########################################
+# Subtraction
+function Base.:(-)(A::AbstractMatrix, B::BatchArray)
+
+    result = copy(A)
+    for (j,cbr) in enumerate(B.col_ranges)
+        view(result, :, cbr) .-= (view(B.row_batches[j], B.row_idx, :)*B.values[j])
+    end
+    return result
 end
 
 
