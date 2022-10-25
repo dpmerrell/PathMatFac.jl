@@ -63,13 +63,6 @@ REACTOME_URL = config["reactome_url"]
 
 
 #####################################
-# Unpack pathway set parameters
-#####################################
-
-EXP_PATHWAY_PARAM_DICT = config["tcga_pathway_params"]
-EXP_PATHWAY_PARAMS = param_dict_to_list(EXP_PATHWAY_PARAM_DICT) 
-
-#####################################
 # Unpack simulation study parameters
 #####################################
 SIM_PARAMS = config["sim_params"]
@@ -97,11 +90,17 @@ for a, a_p in SIM_PARAMS.items():
 print(SIM_ANALYSES_SIZES)
 
 ###################################
-# TCGA data preprocessing parameters
+# Unpack TCGA run parameters
 ###################################
-EXP_TCGA_PARAMS = config["tcga_data_params"]
-EXP_HELDOUT_CTYPES = EXP_TCGA_PARAMS["heldout_ctypes"]
-EXP_DROPCTYPES_STR = ":".join(EXP_HELDOUT_CTYPES)
+TCGA_RUN_PARAMS = config["tcga_runs"]
+TCGA_RUN_PARAMS = {"methods": ["__".join(["method={}".format(m), l]) for m, m_param in TCGA_RUN_PARAMS["methods"].items() for l in param_dict_to_list(m_param) ],
+                   "data": param_dict_to_list(TCGA_RUN_PARAMS["data"]),
+                   "pathways": param_dict_to_list(TCGA_RUN_PARAMS["pathways"])}
+
+print("\nTCGA Runs:")
+for k, v in TCGA_RUN_PARAMS.items():
+    print("\t", k, ": ", v)
+
 
 
 ###################################################################################################
@@ -110,23 +109,18 @@ EXP_DROPCTYPES_STR = ":".join(EXP_HELDOUT_CTYPES)
 
 rule all:
     input:
-       #sim_inferred=expand(join(SIM_INFER_DIR,"method={method}/{mkn}/snr={snr}/srep={srep}/{corruption}/crep={crep}.hdf"),
-       #                    method=METHODS, mkn=SIM_MKN, snr=SIM_SNR, srep=SIM_REPS,
-       #                    corruption=CORRUPTION_PARAMS, crep=PATHWAY_CORR_REPS),
-       sim_score_tables=[join(SIM_SCORE_DIR, "sim_scores", analysis, size+".tsv") for analysis, size in SIM_ANALYSES_SIZES]
+       #sim_score_tables=[join(SIM_SCORE_DIR, "sim_scores", analysis, size+".tsv") for analysis, size in SIM_ANALYSES_SIZES],
        #sim_snr_lineplot=join(SIM_VIS_DIR, "snr-lineplot.png"),
        #sim_snr_heatmap=join(SIM_VIS_DIR, "snr-heatmap.png")
-       #sim_scatters=expand(join(SIM_SCATTER_DIR,"usedk={usedk}_truek={truek}_snr={snr}_rep={rep}.html"),
-       #                    usedk=SIM_USED_K, truek=SIM_TRUE_K, snr=SIM_SNR, rep=SIM_REPS),
-       #sim_factorplots=expand(join(SIM_FACTORPLOT_DIR,"method={method}/{mkn}_snr={snr}/srep={srep}/{corruption}/crep={crep}.html"),
-       #                       method=METHODS, mkn=SIM_MKN, snr=SIM_SNR, srep=SIM_REPS,
-       #                       corruption=CORRUPTION_PARAMS, crep=PATHWAY_CORR_REPS),
-       #exp_inferred=expand(join(EXP_INFER_DIR,"usedk={usedk}.hdf"),
-       #                    usedk=EXP_USED_K),
-       #exp_scatters=expand(join(EXP_SCATTER_DIR,"usedk={usedk}.html"),
-       #                    usedk=EXP_USED_K),
-       #exp_factorplots=expand(join(EXP_FACTORPLOT_DIR,"usedk={usedk}.html"),
-       #                       usedk=EXP_USED_K)
+       exp_inferred=expand(join(EXP_INFER_DIR,"{method}/{data}/{pathways}/inferred.hdf"),
+                           method=TCGA_RUN_PARAMS["methods"], data=TCGA_RUN_PARAMS["data"],
+                           pathways=TCGA_RUN_PARAMS["pathways"]),
+       #exp_scatters=expand(join(EXP_SCATTER_DIR,"{method}/{data}/{pathways}/scatter.html"),
+       #                    method=TCGA_RUN_PARAMS["methods"], data=TCGA_RUN_PARAMS["data"],
+       #                    pathways=TCGA_RUN_PARAMS["pathways"]),
+       #exp_factorplots=expand(join(EXP_FACTORPLOT_DIR,"{method}/{data}/{pathways}/factors.html"),
+       #                    method=TCGA_RUN_PARAMS["methods"], data=TCGA_RUN_PARAMS["data"],
+       #                    pathways=TCGA_RUN_PARAMS["pathways"]),
 
 
 ###########################
@@ -136,12 +130,12 @@ rule all:
 rule exp_factor_plot:
     input:
         src="scripts/vis_pathway_factor_plot.py",
-        params_hdf=join(EXP_INFER_DIR, "usedk={usedk}.hdf"),
-        pwy_json=join(SIM_PWY_DIR, "usedk={usedk}.json")
+        params_hdf=join(EXP_INFER_DIR, "{method}/{data}/{pathways}/inferred.hdf"),
+        pwy_json=join(REACTOME_DIR, "{pathways}.json")
     output:
-        factorplot=join(EXP_FACTORPLOT_DIR,"usedk={usedk}.html")
+        factorplot=join(EXP_FACTORPLOT_DIR,"{method,[_.=0-9a-zA-Z]+}/{data,[_.=:0-9a-zA-Z]+}/{pathways,[_.=0-9a-zA-Z]+}/factors.html")
     params:
-        plottedk=lambda wc: int(wc["usedk"])//5
+        plottedk=100
     resources:
         mem_mb=5000
     shell:
@@ -151,9 +145,9 @@ rule exp_embedding_scatter:
     input:
         src="scripts/vis_embedding_scatter.py",
         clinical_hdf=join(TCGA_DIR, "tcga_clinical.hdf"),
-        params_hdf=join(EXP_INFER_DIR, "usedk={usedk}.hdf")
+        params_hdf=join(EXP_INFER_DIR, "{method}/{data}/{pathways}/inferred.hdf"),
     output:
-        scatter_html=join(EXP_SCATTER_DIR, "usedk={usedk}.html")
+        scatter_html=join(EXP_SCATTER_DIR, "{method,[_.=0-9a-zA-Z]+}/{data,[_:.=0-9a-zA-Z]+}/{pathways,[_.=0-9a-zA-Z]+}/scatter.html")
     resources:
         mem_mb=5000
     shell:
@@ -164,37 +158,20 @@ rule exp_run_matfac:
     input:
         src="scripts/run_matfac.jl",
         status_file="gpu_status.txt",
-        data=join(TCGA_DIR, "tcga_omic_prep_dropctypes="+EXP_DROPCTYPES_STR+".hdf"),
-        pwy_json=join(REACTOME_DIR, "{pwy_params}.json"),
+        data=join(TCGA_DIR, "tcga_omic_prep_{data}.hdf"),
+        pwy_json=join(REACTOME_DIR, "{pathways}.json"),
     output:
-        inferred_bson=join(EXP_INFER_DIR, "method=matfac", "{method_params,[_.=a-zA-Z0-9]+}", "{pwy_params,[_=a-z0-9]+}.bson"),
-        inferred_hdf=join(EXP_INFER_DIR, "method=matfac", "{method_params,[_.=a-zA-Z0-9]+}", "{pwy_params,[_=a-z0-9]+}.hdf"),
-        history_json=join(EXP_HISTORY_DIR, "method=matfac", "{method_params,[_.=a-zA-Z0-9]+}", "{pwy_params,[_=a-z0-9]+}.json")
+        inferred_bson=join(EXP_INFER_DIR, "method=matfac__{method,[_.=0-9a-zA-Z]+}/{data,[_.:=0-9a-zA-Z]+}/{pathways,[_.=0-9a-zA-Z]+}/inferred.bson"),
+        inferred_hdf=join(EXP_INFER_DIR, "method=matfac__{method,[_.=0-9a-zA-Z]+}/{data,[_.=:0-9a-zA-Z]+}/{pathways,[_.=0-9a-zA-Z]+}/inferred.hdf"),
+        history_json=join(EXP_HISTORY_DIR, "method=matfac__{method,[_.=0-9a-zA-Z]+}/{data,[_.=:0-9a-zA-Z]+}/{pathways,[_.=0-9a-zA-Z]+}/history.json"),
     resources:
         mem_mb=10000,
         gpu=1
     params:
-        matfac_kwargs=lambda wc: " ".join(wc["method_params"].split("__"))
+        matfac_kwargs=lambda wc: " ".join(wc["method"].split("__"))
     shell:
         "julia --project=. -t 1 {input.src} {input.data} {input.pwy_json} {output.inferred_bson} {output.inferred_hdf} {params.matfac_kwargs} history_json={output.history_json} gpu_status_file={input.status_file}"
 
-rule sim_run_matfac:
-    input:
-        src="scripts/run_matfac.jl",
-        status_file="gpu_status.txt",
-        data=join(SIM_DATA_DIR, "{pwys}/{schema}/{sim}/{replicate}/masked.hdf"),
-        pwy_json=join(SIM_PWY_DIR, "{pwys}/{schema}/{corruption}/{replicate}.json")
-    output:
-        inferred_bson=join(SIM_INFER_DIR, "method=matfac__{matfac_params,[_.=a-zA-Z0-9]+}", "{pwys,[_=a-z0-9]+}", "{schema,[_=a-z0-9]+}", "{sim,[_.=0-9a-z]+}", "{corruption,[_.=a-z0-9]+}", "{replicate,[_.=a-z0-9]+}.bson"),
-        inferred_hdf=join(SIM_INFER_DIR, "method=matfac__{matfac_params,[_.=a-zA-Z0-9]+}", "{pwys,[_=a-z0-9]+}", "{schema,[_=a-z0-9]+}", "{sim,[_.=0-9a-z]+}", "{corruption,[_.=a-z0-9]+}", "{replicate,[_.=a-z0-9]+}.hdf"),
-        history_json=join(SIM_HISTORY_DIR, "method=matfac__{matfac_params,[_.=a-zA-Z0-9]+}", "{pwys,[_=a-z0-9]+}", "{schema,[_=a-z0-9]+}", "{sim,[_.=0-9a-z]+}", "{corruption,[_.=a-z0-9]+}", "{replicate,[_.=a-z0-9]+}.json")
-    resources:
-        mem_mb=get_m 
-        gpu=lambda wc: int(get_m(wc) > 1000)
-    params:
-        matfac_kwargs=lambda wc: " ".join(wc["matfac_params"].split("__"))
-    shell:
-        "julia --project=. -t 1 {input.src} {input.data} {input.pwy_json} {output.inferred_bson} {output.inferred_hdf} {params.matfac_kwargs} history_json={output.history_json} gpu_status_file={input.status_file}"
 
 ###########################
 # Simulation study
@@ -322,7 +299,7 @@ rule sim_run_matfac:
         inferred_hdf=join(SIM_INFER_DIR, "method=matfac__{matfac_params,[_.=a-zA-Z0-9]+}", "{pwys,[_=a-z0-9]+}", "{schema,[_=a-z0-9]+}", "{sim,[_.=0-9a-z]+}", "{corruption,[_.=a-z0-9]+}", "{replicate,[_.=a-z0-9]+}.hdf"),
         history_json=join(SIM_HISTORY_DIR, "method=matfac__{matfac_params,[_.=a-zA-Z0-9]+}", "{pwys,[_=a-z0-9]+}", "{schema,[_=a-z0-9]+}", "{sim,[_.=0-9a-z]+}", "{corruption,[_.=a-z0-9]+}", "{replicate,[_.=a-z0-9]+}.json")
     resources:
-        mem_mb=get_m 
+        mem_mb=get_m, 
         gpu=lambda wc: int(get_m(wc) > 1000)
     params:
         matfac_kwargs=lambda wc: " ".join(wc["matfac_params"].split("__"))
@@ -393,8 +370,8 @@ rule prep_sim_inputs:
     input:
         src="scripts/prep_simulation_inputs.py",
         full_pwy_json=join(REACTOME_DIR, "{pwys}.json"),
-        full_samples_json=join(TCGA_DIR, "tcga_samples_dropctypes=.json"),
-        full_features_json=join(TCGA_DIR, "tcga_features_dropctypes=.json")
+        full_samples_json=join(TCGA_DIR, "tcga_samples_heldout_ctypes=.json"),
+        full_features_json=join(TCGA_DIR, "tcga_features_heldout_ctypes=.json")
     output:
         pwy_json=join(SIM_SCHEMA_DIR, "{pwys,[_=0-9a-z]+}/k={k}__m={m}__n={n}/{replicate,[_.=0-9a-z]+}/pathways.json"), 
         samples_json=join(SIM_SCHEMA_DIR, "{pwys,[_=0-9a-z]+}/k={k}__m={m}__n={n}/{replicate,[_.=0-9a-z]+}/samples.json"),
@@ -421,7 +398,7 @@ rule select_topk_pwys:
 rule rank_pwys:
     input:
         src="scripts/rank_pathways.py",
-        feature_json=join(TCGA_DIR, "tcga_features_dropctypes=.json"),
+        feature_json=join(TCGA_DIR, "tcga_features_heldout_ctypes=.json"),
         all_pwy_json=join(REACTOME_DIR, "reactome.json")
     output:
         ranked_json=join(REACTOME_DIR, "reactome_ranked.json")
@@ -465,10 +442,10 @@ rule download_reactome:
 rule extract_samples_features:
     input:
         src="scripts/extract_samples_features.py",
-        tcga_hdf=join(TCGA_DIR, "tcga_omic_prep_dropctypes={dropctypes}.hdf")
+        tcga_hdf=join(TCGA_DIR, "tcga_omic_prep_heldout_ctypes={dropctypes}.hdf")
     output:
-        samples_json=join(TCGA_DIR, "tcga_samples_dropctypes={dropctypes,[:A-Z]*}.json"),
-        features_json=join(TCGA_DIR, "tcga_features_dropctypes={dropctypes,[:A-Z]*}.json")
+        samples_json=join(TCGA_DIR, "tcga_samples_heldout_ctypes={dropctypes,[:A-Z]*}.json"),
+        features_json=join(TCGA_DIR, "tcga_features_heldout_ctypes={dropctypes,[:A-Z]*}.json")
     shell:
         "python {input.src} {input.tcga_hdf} {output.samples_json} {output.features_json}"
 
@@ -477,7 +454,7 @@ rule preprocess_tcga:
         src="scripts/preprocess_tcga.py",
         tcga_hdf=join(TCGA_DIR, "tcga_omic.hdf")
     output:
-        prep_hdf=join(TCGA_DIR, "tcga_omic_prep_dropctypes={dropctypes,[:A-Z]*}.hdf")
+        prep_hdf=join(TCGA_DIR, "tcga_omic_prep_heldout_ctypes={dropctypes,[:A-Z]*}.hdf")
     resources:
         mem_mb=5000
     shell:
