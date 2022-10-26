@@ -57,6 +57,17 @@ function select_lambda_max(model::MultiomicModel, D::AbstractMatrix;
 end
 
 
+function scale_column_losses!(model, D; capacity=Int(25e6))
+    vprint("Re-weighting column losses\n")
+    col_errors = MF.batched_column_mean_loss(model.matfac.noise_model, D; 
+                                             capacity=capacity)
+    weights = abs.(1 ./ col_errors)
+    weights = map(x -> max(x, 1e-5), weights)
+    weights[ (!isfinite).(weights) ] .= 1
+    MF.set_weight!(model.matfac.noise_model, weights)
+end
+
+
 function initialize_params!(model::MultiomicModel, D::AbstractMatrix;
                             capacity=Int(25e6), verbosity=1,
                             loss_map=DEFAULT_ASSAY_LOSSES,
@@ -78,7 +89,7 @@ function initialize_params!(model::MultiomicModel, D::AbstractMatrix;
 
     # Remove NaNs from the variance and mean vectors
     nan_idx = isnan.(var_vec)
-    MF.tozero!(var_vec, nan_idx)
+    MF.toone!(var_vec, nan_idx)
     nan_idx = isnan.(mean_vec)
     MF.tozero!(mean_vec, nan_idx)
 
@@ -181,8 +192,11 @@ function fit_reg_path!(model::MultiomicModel, D::AbstractMatrix; verbosity=1,
                        inner_callback_type=MatFac.HistoryCallback,
                        outer_callback=nothing, capacity=Int(25e6),
                        kwargs...)
+    # Reweight the column losses.
+    # Need to do this _before_ we choose lambda_Y_max
+    scale_column_losses!(model, D; capacity=capacity)
 
-    # Default parameter values
+    # Set default parameter values
     if lambda_Y_max == nothing
         lambda_Y_max = select_lambda_max(model, D; capacity=capacity, verbosity=verbosity) 
     end
@@ -218,9 +232,8 @@ function fit_reg_path!(model::MultiomicModel, D::AbstractMatrix; verbosity=1,
         verbose_print("Outer iteration ", iter, "; λ_Y = ", 
                       round(lambdas[iter]; digits=5), "\n"; 
                       verbosity=verbosity, level=1)
-        reweight_columns = (iter == 1)
         fit_fixed_weight!(model, D; callback=inner_callback,
-                                    scale_column_losses=reweight_columns, 
+                                    scale_column_losses=false, 
                                     verbosity=verbosity, 
                                     capacity=capacity, kwargs...)
         
