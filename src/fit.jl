@@ -57,8 +57,8 @@ function select_lambda_max(model::MultiomicModel, D::AbstractMatrix;
 end
 
 
-function scale_column_losses!(model, D; capacity=Int(25e6))
-    vprint("Re-weighting column losses\n")
+function scale_column_losses!(model, D; capacity=Int(25e6), verbosity=1)
+    verbose_print("Re-weighting column losses\n"; verbosity=verbosity)
     col_errors = MF.batched_column_mean_loss(model.matfac.noise_model, D; 
                                              capacity=capacity)
     weights = abs.(1 ./ col_errors)
@@ -194,7 +194,7 @@ function fit_reg_path!(model::MultiomicModel, D::AbstractMatrix; verbosity=1,
                        kwargs...)
     # Reweight the column losses.
     # Need to do this _before_ we choose lambda_Y_max
-    scale_column_losses!(model, D; capacity=capacity)
+    scale_column_losses!(model, D; capacity=capacity, verbosity=verbosity)
 
     # Set default parameter values
     if lambda_Y_max == nothing
