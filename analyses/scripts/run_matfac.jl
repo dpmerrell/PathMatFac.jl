@@ -26,7 +26,6 @@ function main(args)
                             :lr => 0.07,
                             :capacity => 25000000,
                             :verbosity => 1,
-                            :calibrate_losses => true,
                             :history_json => "history.json",
                             :use_gpu => 1 
                            )

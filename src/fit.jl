@@ -31,10 +31,10 @@ function select_lambda_max(model::MultiomicModel, D::AbstractMatrix;
     # Curry the data loss to be a function of Y and the data 
     Y_loss_fn = (m, Y, D) -> MF.data_loss(m.X, Y, 
                                           m.row_transform, m.col_transform,
-                                          m.noise_model, D)
+                                          m.noise_model, D; calibrate=true)
                                                  
     # Set all entries of X to 1
-    X_temp = copy(model.matfac.X)                    
+    X_temp = copy(model.matfac.X)
     
     # Compute the full gradient of the data-loss w.r.t. Y, at Y=0 and extreme values of X.
     Y_zero = zero(model.matfac.Y)
@@ -44,10 +44,12 @@ function select_lambda_max(model::MultiomicModel, D::AbstractMatrix;
     model.matfac.X .= -1
     Y_zero_grad_n = MF.batched_reduce((g, m, D) -> g .+ gradient(Y -> Y_loss_fn(m, Y, D), Y_zero)[1], 
                                       model.matfac, D; capacity=capacity, start=zero(model.matfac.Y))
-    grad_max = maximum(map((g1,g2) -> max(g1,g2), abs.(Y_zero_grad_n), abs.(Y_zero_grad_p))) 
+    abs_grads = map((g1,g2) -> max(g1,g2), abs.(Y_zero_grad_n), abs.(Y_zero_grad_p))
+    big_grad = maximum(abs_grads)
 
     # The size of lambda_max is governed by the largest entry of the gradient:
-    lambda_max = 4.0 * grad_max * (K/M)
+ 
+    lambda_max = big_grad * (K/M)
     verbose_print("λ_Y max = ", lambda_max, "\n"; verbosity=verbosity, level=1)
 
     # Restore the entries of X
@@ -62,9 +64,10 @@ function scale_column_losses!(model, D; capacity=Int(25e6), verbosity=1)
     col_errors = MF.batched_column_mean_loss(model.matfac.noise_model, D; 
                                              capacity=capacity)
     weights = abs.(1 ./ col_errors)
-    weights = map(x -> max(x, 1e-5), weights)
     weights[ (!isfinite).(weights) ] .= 1
     MF.set_weight!(model.matfac.noise_model, weights)
+
+    col_losses = MF.batched_column_mean_loss(model.matfac.noise_model, D)
 end
 
 
@@ -88,9 +91,9 @@ function initialize_params!(model::MultiomicModel, D::AbstractMatrix;
     end
 
     # Remove NaNs from the variance and mean vectors
-    nan_idx = isnan.(var_vec)
+    nan_idx = (!isfinite).(var_vec)
     MF.toone!(var_vec, nan_idx)
-    nan_idx = isnan.(mean_vec)
+    nan_idx = (!isfinite).(mean_vec)
     MF.tozero!(mean_vec, nan_idx)
 
     # Initialize values of mu, logsigma

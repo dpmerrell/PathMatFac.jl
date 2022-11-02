@@ -32,8 +32,10 @@ function ChainRulesCore.rrule(cs::ColScale, Z::AbstractMatrix)
     result = transpose(sigma).*Z
 
     function colscale_pullback(result_bar)
-        logsigma_bar = vec(sum(result_bar; dims=1)) .* sigma
+        #logsigma_bar = vec(sum(result_bar; dims=1)) .* sigma
         Z_bar = transpose(sigma) .* result_bar
+        logsigma_bar = vec(sum(Z_bar; dims=1))
+
         return ChainRulesCore.Tangent{ColScale}(logsigma=logsigma_bar), Z_bar
     end
 
