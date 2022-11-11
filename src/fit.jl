@@ -23,7 +23,7 @@ end
 function select_lambda_max(model::MultiomicModel, D::AbstractMatrix;
                            capacity=Int(25e6), verbosity=1)
     
-    verbose_print("Setting λ_Y max...\n"; verbosity=verbosity, level=1)
+    verbose_print("Computing λ_Y max...\n"; verbosity=verbosity, level=1)
 
     M, N = size(D) 
     K, N = size(model.matfac.Y)
@@ -45,11 +45,10 @@ function select_lambda_max(model::MultiomicModel, D::AbstractMatrix;
     Y_zero_grad_n = MF.batched_reduce((g, m, D) -> g .+ gradient(Y -> Y_loss_fn(m, Y, D), Y_zero)[1], 
                                       model.matfac, D; capacity=capacity, start=zero(model.matfac.Y))
     abs_grads = map((g1,g2) -> max(g1,g2), abs.(Y_zero_grad_n), abs.(Y_zero_grad_p))
-    big_grad = maximum(abs_grads)
+    max_grad = maximum(abs_grads)
 
-    # The size of lambda_max is governed by the largest entry of the gradient:
- 
-    lambda_max = big_grad * (K/M)
+    # The size of lambda_max is governed by the largest entry of the gradient: 
+    lambda_max = max_grad * (K/M) * 10 # (include a "safety factor" of 10)
     verbose_print("λ_Y max = ", lambda_max, "\n"; verbosity=verbosity, level=1)
 
     # Restore the entries of X
@@ -113,14 +112,15 @@ end
 """
     fit!(model::MultiomicModel, D::AbstractMatrix;
                                 fit_hyperparam=true,
-                                lambda_Y_max=nothing,
+                                lambda_max=nothing,
                                 n_lambda=8,
-                                lambda_Y_min=0.01,
+                                lambda_min_ratio=1e-3,
                                 capacity=25e6,
                                 verbosity=1, kwargs...)
 
-    Fit a model to data. By default, tune the lambda_Y
-    hyperparameter. 
+    Fit a model to data. By default, tune the regularizer weights.
+    The regularizer weights are varied in a way that preserves
+    the relative sizes of those specified in `model`.
 """
 function fit!(model::MultiomicModel, D::AbstractMatrix; 
               fit_hyperparam=true, capacity=Int(25e6), 
@@ -144,7 +144,6 @@ function fit!(model::MultiomicModel, D::AbstractMatrix;
     if fit_hyperparam
         fit_reg_path!(model, D_r; capacity=capacity, kwargs...)
     else
-        # Set some model parameters to the right ball-park
         fit_fixed_weight!(model, D_r; capacity=capacity, kwargs...)
     end
     
@@ -190,19 +189,20 @@ end
 
 
 function fit_reg_path!(model::MultiomicModel, D::AbstractMatrix; verbosity=1,
-                       lambda_Y_max=nothing, lambda_Y_min=0.1,
+                       lambda_max=nothing, lambda_min_ratio=1e-3,
                        n_lambda=8, update_criterion=precision_selection, 
                        inner_callback_type=MatFac.HistoryCallback,
                        outer_callback=nothing, capacity=Int(25e6),
                        kwargs...)
     # Reweight the column losses.
-    # Need to do this _before_ we choose lambda_Y_max
+    # Need to do this _before_ we choose lambda_max
     scale_column_losses!(model, D; capacity=capacity, verbosity=verbosity)
 
     # Set default parameter values
-    if lambda_Y_max == nothing
-        lambda_Y_max = select_lambda_max(model, D; capacity=capacity, verbosity=verbosity) 
+    if lambda_max == nothing
+        lambda_max = select_lambda_max(model, D; capacity=capacity, verbosity=verbosity) 
     end
+    lambda_min = lambda_max * lambda_min_ratio
     if outer_callback == nothing
         outer_callback = OuterCallback()
     end
@@ -213,20 +213,31 @@ function fit_reg_path!(model::MultiomicModel, D::AbstractMatrix; verbosity=1,
     model.matfac.Y .*= 1e-5
         
     # Initialize some loop variables
-    log_lambdas = collect(range(log(lambda_Y_max), 
-                                log(lambda_Y_min); 
+    log_lambdas = collect(range(log(lambda_max), 
+                                log(lambda_min); 
                                 length=n_lambda))
     lambdas = exp.(log_lambdas)
+
+    # Store the specified regularizer weights
+    lambda_Y = model.matfac.lambda_Y 
+    lambda_X = model.matfac.lambda_X
+    lambda_layers = model.matfac.lambda_col
+    # ...we will preserve their relative sizes.
+    lambda_X /= lambda_Y
+    lambda_layers /= lambda_Y
+    lambda_Y = 1.0
 
     # Keep track of the best model we've seen thus far.
     best_model = nothing
 
-    # Loop through values of lambda_Y
+    # Loop through values of lambda
     for iter=1:n_lambda
+
+        this_lambda = lambdas[iter]
         # Set the regularizer weights
-        model.matfac.lambda_Y = lambdas[iter]
-        model.matfac.lambda_row = lambdas[iter]
-        model.matfac.lambda_col = lambdas[iter]
+        model.matfac.lambda_Y = this_lambda
+        model.matfac.lambda_X = this_lambda * lambda_X
+        model.matfac.lambda_col = this_lambda * lambda_layers
  
         # initialize an "inner" callback 
         inner_callback = inner_callback_type()

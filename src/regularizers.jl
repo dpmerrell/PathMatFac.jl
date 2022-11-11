@@ -571,8 +571,6 @@ function ChainRulesCore.rrule(reg::PMLayerReg, layers::PMLayers)
         bshift_reg_bar, theta_bar = bshift_pullback(loss_bar)
      
         return ChainRulesCore.NoTangent(),
-               #ChainRulesCore.Tangent{PMLayerReg}(cscale_reg=map(v->0.25.*v, cscale_reg_bar),
-               #                                   cshift_reg=map(v->0.25.*v,cshift_reg_bar)),
                ChainRulesCore.Tangent{PMLayers}(cshift=ChainRules.Tangent{ColShift}(mu=map(v->0.25.*v, mu_bar)),
                                                 cscale=ChainRules.Tangent{ColScale}(logsigma=map(v->0.25.*v, logsigma_bar)),
                                                 bshift=ChainRules.Tangent{BatchShift}(theta=map(v->0.25.*v, theta_bar)),
