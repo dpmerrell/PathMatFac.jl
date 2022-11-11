@@ -464,9 +464,9 @@ rule unzip_hdf:
     input:
         zipped="data/{path}/{head}.tar.gz"
     output:
-        unzipped="data/{path}/{head}.hdf"
+        unzipped="data/{path}/{head,[_a-zA-Z0-9]+}.hdf"
     shell:
-        "tar -xvzf {input.zipped} -C {wildcards.path}"
+        "tar -xvzf {input.zipped} -C data/{wildcards.path}/"
 
 rule download_tcga_omic:
     output:
