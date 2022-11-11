@@ -183,7 +183,7 @@ end
 function fit_fixed_weight!(model::MultiomicModel, D::AbstractMatrix; kwargs...)
 
     # train the matrix factorization model
-    fit!(model.matfac, D; kwargs...)
+    MF.fit!(model.matfac, D; kwargs...)
     return model
 end
 
