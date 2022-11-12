@@ -488,7 +488,8 @@ function reg_tests()
                      [[1, 3, -1.0],[2, 4, -1.0]]
                     ]
         data_features = [1,2,3,5]
-        nr = PM.NetworkL1Regularizer(data_features, edgelists; epsilon=0.0)
+        l1_features = [[5],[5]]
+        nr = PM.NetworkL1Regularizer(data_features, edgelists, l1_features; epsilon=0.0)
         @test length(nr.net_reg.AA) == 2
         @test size(nr.net_reg.AA[1]) == (4,4)
         @test dropzeros(nr.net_reg.AA[1]) == sparse([1. -1. 0.  0;
@@ -506,14 +507,14 @@ function reg_tests()
 
         @test isapprox(nr.l1_reg.l1_idx[1,:], [false,false,false,true])
 
-        nr = PM.NetworkL1Regularizer(data_features, edgelists; 
-                                     l1_features=[[2,5],[2,5]], epsilon=0.0)
+        nr = PM.NetworkL1Regularizer(data_features, edgelists, [[2,5],[2,5]]; 
+                                     epsilon=0.0)
         @test length(nr.net_reg.AA) == 2
         @test size(nr.net_reg.AA[1]) == (4,4)
         @test size(nr.net_reg.AB[1]) == (4,1)
         @test size(nr.net_reg.BB[1]) == (1,1)
         @test size(nr.net_reg.net_virtual[1]) == (1,)
-        @test nr.l1_reg.l1_idx[1,:] == [false,false,false,true] 
+        @test nr.l1_reg.l1_idx[1,:] == [false,true,false,true] 
 
         ##############################################
         # Test on "real pathway"
@@ -527,7 +528,7 @@ function reg_tests()
                 push!(pwy_nodes, edge[2])
             end
         end
-        netreg = PM.NetworkL1Regularizer(model_features, prepped_pwys; epsilon=0.0)
+        netreg = PM.NetworkL1Regularizer(model_features, prepped_pwys, [[("BRCA","mrnaseq"),("BRCA","methylation")]]; epsilon=0.0)
         
         n_unobs = length(setdiff(pwy_nodes, model_features))
         n_obs = length(model_features)
