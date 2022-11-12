@@ -136,10 +136,10 @@ function simulate_Y!(model::MultiomicModel; average_non_pwy=0.0)
     for k=1:K
         # Unpack the regularizer for this row of Y
         netreg = model.matfac.Y_reg
-        AA = netreg.AA[k]
-        AB = netreg.AB[k]
-        BB = netreg.BB[k]
-        non_pwy_idx = netreg.l1_feat_idx[k]
+        AA = netreg.net_reg.AA[k]
+        AB = netreg.net_reg.AB[k]
+        BB = netreg.net_reg.BB[k]
+        non_pwy_idx = netreg.l1_reg.l1_idx[k,:]
 
         N_virtual = size(BB,1)
         N_total = N + N_virtual

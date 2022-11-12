@@ -101,11 +101,9 @@ function initialize_params!(model::MultiomicModel, D::AbstractMatrix;
     logsigma = log.(sqrt.(var_vec))
     model.matfac.col_transform.cscale.logsigma .= logsigma 
 
-    # Initialize values of X and Y in such a way that they
-    # are consistent with pathway priors
-    for (k, idx_vec) in enumerate(model.matfac.Y_reg.l1_feat_idx)
-        model.matfac.Y[k,idx_vec] .= 0
-    end
+    ## Initialize values of X and Y in such a way that they
+    ## are consistent with pathway priors
+    model.matfac.Y[model.matfac.Y_reg.l1_reg.l1_idx] .= 0
 end
 
 
@@ -166,11 +164,11 @@ function postprocess!(fitted_model)
     # Remove sign ambiguity from factorization:
     # choose the sign that maximizes the number
     # of pathway members with positive Y-components.
-    non_pwy_idx = fitted_model.matfac.Y_reg.l1_feat_idx
+    non_pwy_idx = fitted_model.matfac.Y_reg.l1_reg.l1_idx
     K = size(fitted_model.matfac.X,1)
 
     for k=1:K
-        pwy_idx = (!).(non_pwy_idx[k])
+        pwy_idx = (!).(non_pwy_idx[k,:])
 
         if dot(pwy_idx, sign.(fitted_model.matfac.Y[k,:])) < 0
             fitted_model.matfac.Y[k,:] .*= -1
