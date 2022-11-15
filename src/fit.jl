@@ -48,7 +48,7 @@ function select_lambda_max(model::MultiomicModel, D::AbstractMatrix;
     max_grad = maximum(abs_grads)
 
     # The size of lambda_max is governed by the largest entry of the gradient: 
-    lambda_max = max_grad * (K/M) * 10 # (include a "safety factor" of 10)
+    lambda_max = max_grad * (K/M) * 4 # (include a "safety factor" of 4)
     verbose_print("λ_Y max = ", lambda_max, "\n"; verbosity=verbosity, level=1)
 
     # Restore the entries of X

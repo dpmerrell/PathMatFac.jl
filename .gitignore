@@ -8,3 +8,10 @@
 *.hdf
 *.tar.gz
 analyses/data/
+*.tsv
+*.csv
+*.txt
+
+# Output files
+*.html
+*.png

@@ -1,10 +1,13 @@
 [deps]
 BSON = "fbb218c0-5317-5bc6-957e-2ee96dd4b1f0"
 CUDA = "052768ef-5323-5732-b1bb-66c8b64840ba"
+DictVis = "a977be87-b175-42fb-bb38-99e090ce7831"
 Flux = "587475ba-b771-5e3f-ad9e-33799f191a9c"
 HDF5 = "f67ccb44-e63f-5c2f-98bd-6dc0ccc4ba2f"
 JSON = "682c06a0-de6a-54ab-a142-c8b1cf79cde6"
 LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
 MatFac = "23734cf9-4c0e-45d4-b5ff-f416ac13e898"
 PathwayMultiomics = "26ae61a0-bdaa-4ab9-b40a-f117d74136e1"
+PlotlyBase = "a03496cd-edff-5a9b-9e67-9cda94a718b5"
+PlotlyJS = "f0f68f2c-4968-5e81-91da-67840de0976a"
 StatsBase = "2913bbd2-ae8a-5f71-8c99-4fb6c76f3a91"
