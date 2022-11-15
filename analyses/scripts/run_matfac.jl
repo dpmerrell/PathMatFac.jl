@@ -37,6 +37,7 @@ function main(args)
     println("OPTS:")
     println(opts)
     lambda_X = pop!(opts, :lambda_X)
+    lambda_Y = pop!(opts, :lambda_Y)
     lambda_layer = pop!(opts, :lambda_layer)
     history_json = pop!(opts, :history_json)
     l1_fraction = pop!(opts, :l1_fraction) 
@@ -66,7 +67,7 @@ function main(args)
                            feature_genes, feature_assays,
                            batch_dict;
                            lambda_X=lambda_X, 
-                           lambda_Y=1.0,
+                           lambda_Y=lambda_Y,
                            l1_fraction=l1_fraction,
                            lambda_layer=lambda_layer)
 
