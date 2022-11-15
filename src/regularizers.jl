@@ -35,7 +35,7 @@ function NetworkRegularizer(data_features, edgelists; epsilon=0.0)
     AA = Vector{SparseMatrixCSC}(undef, K) 
     AB = Vector{SparseMatrixCSC}(undef, K)
     BB = Vector{SparseMatrixCSC}(undef, K)
-    virtual = Vector{Float64}[]
+    virtual = Vector{Vector{Float64}}(undef, K)
 
     # For each of the networks
     for k=1:K
@@ -67,7 +67,7 @@ function NetworkRegularizer(data_features, edgelists; epsilon=0.0)
 
         # Initialize a vector of virtual values
         N_virtual = length(net_virtual_nodes)
-        push!(virtual, zeros(N_virtual))
+        virtual[k] = zeros(N_virtual)
 
     end
 
@@ -221,7 +221,8 @@ function L1Regularizer(data_features::Vector, l1_features::Vector)
     l1_idx = zeros(Bool, K, N)
 
     for (k, l1_feat) in enumerate(l1_features)
-        l1_idx[k,:] .= map(x->in(x, l1_feat), data_features) 
+        l1_feat_set = Set(l1_feat)
+        l1_idx[k,:] .= map(x->in(x, l1_feat_set), data_features) 
     end
 
     return L1Regularizer(l1_idx)
