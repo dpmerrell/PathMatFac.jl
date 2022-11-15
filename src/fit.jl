@@ -48,7 +48,7 @@ function select_lambda_max(model::MultiomicModel, D::AbstractMatrix;
     max_grad = maximum(abs_grads)
 
     # The size of lambda_max is governed by the largest entry of the gradient: 
-    lambda_max = max_grad * (K/M) * 10 # (include a "safety factor" of 10)
+    lambda_max = max_grad * (K/M) * 4 # (include a "safety factor" of 4)
     verbose_print("λ_Y max = ", lambda_max, "\n"; verbosity=verbosity, level=1)
 
     # Restore the entries of X
@@ -101,11 +101,9 @@ function initialize_params!(model::MultiomicModel, D::AbstractMatrix;
     logsigma = log.(sqrt.(var_vec))
     model.matfac.col_transform.cscale.logsigma .= logsigma 
 
-    # Initialize values of X and Y in such a way that they
-    # are consistent with pathway priors
-    for (k, idx_vec) in enumerate(model.matfac.Y_reg.l1_feat_idx)
-        model.matfac.Y[k,idx_vec] .= 0
-    end
+    ## Initialize values of X and Y in such a way that they
+    ## are consistent with pathway priors
+    model.matfac.Y[model.matfac.Y_reg.l1_reg.l1_idx] .= 0
 end
 
 
@@ -166,11 +164,11 @@ function postprocess!(fitted_model)
     # Remove sign ambiguity from factorization:
     # choose the sign that maximizes the number
     # of pathway members with positive Y-components.
-    non_pwy_idx = fitted_model.matfac.Y_reg.l1_feat_idx
+    non_pwy_idx = fitted_model.matfac.Y_reg.l1_reg.l1_idx
     K = size(fitted_model.matfac.X,1)
 
     for k=1:K
-        pwy_idx = (!).(non_pwy_idx[k])
+        pwy_idx = (!).(non_pwy_idx[k,:])
 
         if dot(pwy_idx, sign.(fitted_model.matfac.Y[k,:])) < 0
             fitted_model.matfac.Y[k,:] .*= -1

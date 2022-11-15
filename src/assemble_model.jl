@@ -91,12 +91,12 @@ function assemble_model(pathway_sif_data,
                                     model_features;
                                     dogma_features=dogma_features)
 
-    # Construct a regularizer for Y
-    nonpwy_features = compute_nonpwy_features(model_features, pwy_edgelists)
+    # Construct a regularizer for Y.
+    # We apply L1 regularization to non-pathway entries.
+    l1_features = compute_nonpwy_features(model_features, pwy_edgelists)
 
     println("\tConstructing regularizers...")
-    Y_reg = NetworkL1Regularizer(model_features, ext_edgelists; 
-                                 l1_features=nonpwy_features,
+    Y_reg = NetworkL1Regularizer(model_features, ext_edgelists, l1_features;
                                  epsilon=1.0, 
                                  net_weight=2.0*(1 - l1_fraction),
                                  l1_weight=2.0*l1_fraction)

@@ -404,8 +404,8 @@ function reg_tests()
         edgelists = [[[1, 2, 1.0],[2, 3, 1.0],[3, 4, 1.0]],
                      [[1, 3, -1.0],[2, 4, -1.0]]
                     ]
-        observed = [1,2,3]
-        nr = PM.NetworkRegularizer(edgelists; observed=observed)
+        data_features = [1,2,3]
+        nr = PM.NetworkRegularizer(data_features, edgelists)
         @test length(nr.AA) == 2
         @test size(nr.AA[1]) == (3,3)
         @test nr.AA[1] == sparse([1. -1. 0.;# 0;
@@ -418,15 +418,17 @@ function reg_tests()
                                           -1.], (3,1)))
         @test size(nr.BB[1]) == (1,1)
         @test nr.BB[1] == sparse(ones(1,1)*1)
-        @test size(nr.B_matrix) == (2, 1)
+        @test length(nr.net_virtual) == 2
+        @test size(nr.net_virtual[1]) == (1,)
 
-
-        nr = PM.NetworkRegularizer(edgelists)
+        model_features = [1,2,3,4]
+        nr = PM.NetworkRegularizer(model_features, edgelists)
         @test length(nr.AA) == 2
         @test size(nr.AA[1]) == (4,4)
         @test size(nr.AB[1]) == (4,0)
         @test size(nr.BB[1]) == (0,0)
-        @test size(nr.B_matrix) == (2, 0)
+        @test length(nr.net_virtual) == 2
+        @test size(nr.net_virtual[1]) == (0,)
 
         ##############################################
         # Test on "real pathway"
@@ -440,7 +442,7 @@ function reg_tests()
                 push!(pwy_nodes, edge[2])
             end
         end
-        netreg = PM.NetworkRegularizer(prepped_pwys; observed=model_features)
+        netreg = PM.NetworkRegularizer(model_features, prepped_pwys)
       
         n_obs = length(model_features) 
         n_unobs = length(pwy_nodes) - n_obs
@@ -449,14 +451,15 @@ function reg_tests()
         @test size(netreg.AB[1]) == (n_obs,n_unobs)
         @test size(netreg.BB[1]) == (n_unobs, n_unobs)
 
-        @test size(netreg.B_matrix) == (1, n_unobs)
+        @test length(netreg.net_virtual) == 1 
+        @test length(netreg.net_virtual[1]) == n_unobs
 
         ################################################
         # Gradient test
         edgelists = [[[1, 2, 1.0],[1, 3, 1.0],[1, 4, 1.0]],
                     ]
-        observed = [2,3,4]
-        nr = PM.NetworkRegularizer(edgelists; observed=observed)
+        data_features = [2,3,4]
+        nr = PM.NetworkRegularizer(data_features, edgelists)
 
         @test length(nr.AA) == 1
         @test nr.AA[1] == sparse([1.0 0.0 0.0;
@@ -466,14 +469,14 @@ function reg_tests()
                                           -1.0;
                                           -1.0;], (3,1)))
         @test nr.BB[1] == sparse(reshape([3.0], (1,1) ))
-        @test nr.B_matrix == Matrix(reshape([0.0], (1,1) ))
+        @test nr.net_virtual[1] == [0.0]
 
         mu_regularizer = (x, reg) -> reg(x)
 
-        loss, grads = Zygote.withgradient(mu_regularizer, [1.0, 1.0, 1.0], nr)
+        loss, grads = Zygote.withgradient(mu_regularizer, transpose([1.0, 1.0, 1.0]), nr)
         @test loss == 0.5
-        @test isapprox(grads[1], [1.0, 1.0, 1.0] ./3.0 )
-        @test isapprox(grads[2].B_matrix, reshape([-1.0], (1,1)))
+        @test isapprox(grads[1], transpose([1.0, 1.0, 1.0]) ./3.0 )
+        @test isapprox(grads[2].net_virtual[1], [-1.0])
 
     end
     
@@ -485,32 +488,33 @@ function reg_tests()
                      [[1, 3, -1.0],[2, 4, -1.0]]
                     ]
         data_features = [1,2,3,5]
-        nr = PM.NetworkL1Regularizer(data_features, edgelists; epsilon=0.0)
-        @test length(nr.AA) == 2
-        @test size(nr.AA[1]) == (4,4)
-        @test dropzeros(nr.AA[1]) == sparse([1. -1. 0.  0;
+        l1_features = [[5],[5]]
+        nr = PM.NetworkL1Regularizer(data_features, edgelists, l1_features; epsilon=0.0)
+        @test length(nr.net_reg.AA) == 2
+        @test size(nr.net_reg.AA[1]) == (4,4)
+        @test dropzeros(nr.net_reg.AA[1]) == sparse([1. -1. 0.  0;
                                             -1.  2. -1. 0;
                                              0. -1. 2.  0;
                                              0   0  0   0])
-        @test size(nr.AB[1]) == (4,1)
-        @test nr.AB[1] == sparse(reshape([0.;
-                                          0.;
-                                         -1.;
-                                          0 ], (4,1)))
-        @test size(nr.BB[1]) == (1,1)
-        @test nr.BB[1] == sparse(ones(1,1))
-        @test size(nr.net_virtual[1]) == (1,)
+        @test size(nr.net_reg.AB[1]) == (4,1)
+        @test nr.net_reg.AB[1] == sparse(reshape([0.;
+                                                  0.;
+                                                 -1.;
+                                                  0 ], (4,1)))
+        @test size(nr.net_reg.BB[1]) == (1,1)
+        @test nr.net_reg.BB[1] == sparse(ones(1,1))
+        @test size(nr.net_reg.net_virtual[1]) == (1,)
 
-        @test nr.l1_feat_idx[1] == [false,false,false,true] 
+        @test isapprox(nr.l1_reg.l1_idx[1,:], [false,false,false,true])
 
-        nr = PM.NetworkL1Regularizer(data_features, edgelists; 
-                                     l1_features=[[2,5],[2,5]], epsilon=0.0)
-        @test length(nr.AA) == 2
-        @test size(nr.AA[1]) == (4,4)
-        @test size(nr.AB[1]) == (4,1)
-        @test size(nr.BB[1]) == (1,1)
-        @test size(nr.net_virtual[1]) == (1,)
-        @test nr.l1_feat_idx[1] == [false,true,false,true] 
+        nr = PM.NetworkL1Regularizer(data_features, edgelists, [[2,5],[2,5]]; 
+                                     epsilon=0.0)
+        @test length(nr.net_reg.AA) == 2
+        @test size(nr.net_reg.AA[1]) == (4,4)
+        @test size(nr.net_reg.AB[1]) == (4,1)
+        @test size(nr.net_reg.BB[1]) == (1,1)
+        @test size(nr.net_reg.net_virtual[1]) == (1,)
+        @test nr.l1_reg.l1_idx[1,:] == [false,true,false,true] 
 
         ##############################################
         # Test on "real pathway"
@@ -524,19 +528,19 @@ function reg_tests()
                 push!(pwy_nodes, edge[2])
             end
         end
-        netreg = PM.NetworkL1Regularizer(model_features, prepped_pwys; epsilon=0.0)
+        netreg = PM.NetworkL1Regularizer(model_features, prepped_pwys, [[("BRCA","mrnaseq"),("BRCA","methylation")]]; epsilon=0.0)
         
         n_unobs = length(setdiff(pwy_nodes, model_features))
         n_obs = length(model_features)
 
-        @test length(netreg.AA) == 1
-        @test size(netreg.AA[1]) == (n_obs,n_obs)
-        @test size(netreg.AB[1]) == (n_obs,n_unobs)
-        @test size(netreg.BB[1]) == (n_unobs, n_unobs)
+        @test length(netreg.net_reg.AA) == 1
+        @test size(netreg.net_reg.AA[1]) == (n_obs,n_obs)
+        @test size(netreg.net_reg.AB[1]) == (n_obs,n_unobs)
+        @test size(netreg.net_reg.BB[1]) == (n_unobs, n_unobs)
 
-        @test size(netreg.net_virtual[1]) == (n_unobs,)
-        @test length(netreg.l1_feat_idx[1]) == n_obs 
-        @test typeof(netreg.l1_feat_idx[1]) == Vector{Bool}
+        @test size(netreg.net_reg.net_virtual[1]) == (n_unobs,)
+        @test length(netreg.l1_reg.l1_idx[1,:]) == n_obs 
+        @test typeof(netreg.l1_reg.l1_idx[1,:]) <: AbstractVector{Bool}
 
     end
 
@@ -593,7 +597,7 @@ function assemble_model_tests()
         @test feature_genes == model.data_genes
         @test feature_assays == model.data_assays
         @test length(model.used_feature_idx) == length(feature_genes)
-        @test sum(model.matfac.Y_reg.l1_feat_idx[1]) == 2
+        @test sum(model.matfac.Y_reg.l1_reg.l1_idx[1,:]) == 2
     end
 end
 
