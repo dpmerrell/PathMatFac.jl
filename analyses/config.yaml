@@ -266,9 +266,9 @@ tcga_runs:
             lambda_X: [0.0, 0.01]
             lambda_Y: [1.0]
             lambda_layer: [0.05]
-            max_epochs: [2000]
+            max_epochs: [3000]
             capacity: [25000000]
-            lr: [0.03]
+            lr: [0.02]
             n_lambda: [8]
             print_iter: [1]
 
