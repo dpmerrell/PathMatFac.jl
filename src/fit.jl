@@ -178,10 +178,18 @@ function postprocess!(fitted_model)
 end
 
 
-function fit_fixed_weight!(model::MultiomicModel, D::AbstractMatrix; kwargs...)
+function fit_fixed_weight!(model::MultiomicModel, D::AbstractMatrix; lr=0.01, kwargs...)
+
+    # Initialize an optimizer. It applies
+    # truncated updates to the L1-regularized
+    # parameters.
+    inner_opt = Flux.Optimise.AdaGrad(lr)
+    opt = TruncatedOptimiser([(model.matfac.Y, 
+                               model.matfac.Y_reg.l1_reg.l1_idx)];
+                             inner_opt=inner_opt)
 
     # train the matrix factorization model
-    MF.fit!(model.matfac, D; kwargs...)
+    MF.fit!(model.matfac, D; opt=opt, kwargs...)
     return model
 end
 
