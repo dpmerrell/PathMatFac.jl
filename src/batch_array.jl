@@ -1,5 +1,5 @@
 
-import Base: view, zero, exp
+import Base: view, zero, exp, log, deepcopy
 import Flux: gpu, trainable
 
 mutable struct BatchArray
@@ -65,10 +65,6 @@ function Base.:(+)(A::AbstractMatrix, B::BatchArray)
     for (j,cr) in enumerate(B.col_ranges)
         col_buffer .= view(B.row_batches[j], B.row_idx, :) * B.values[j]
         view(result, :, cr) .+= col_buffer
-        #for i=1:length(B.values[j])
-        #    col_buffer .= view(B.row_batches[j], B.row_idx, i).*B.values[j][i]
-        #    view(result, :, cr) .+= col_buffer 
-        #end
     end
 
     col_buffer = nothing
@@ -87,9 +83,6 @@ function ChainRulesCore.rrule(::typeof(+), A::AbstractMatrix, B::BatchArray)
                                          # to each value of B
         for (j, cbr) in enumerate(B.col_ranges)
             values_bar[j] .= vec(sum(transpose(view(B.row_batches[j], B.row_idx, :)) * view(result_bar,:,cbr); dims=2)) 
-            #for i=1:length(B.values[j])
-            #    values_bar[j][i] = sum(view(result_bar, view(B.row_batches[j], B.row_idx, i), cbr))
-            #end
         end
         B_bar = Tangent{BatchArray}(values=values_bar)
         return ChainRulesCore.NoTangent(), A_bar, B_bar 
@@ -98,6 +91,25 @@ function ChainRulesCore.rrule(::typeof(+), A::AbstractMatrix, B::BatchArray)
     return result, ba_plus_pullback
 end
 
+####################################################
+# Subtraction
+function Base.:(-)(A::AbstractMatrix, B::BatchArray)
+
+    result = copy(A)
+    for (j,cbr) in enumerate(B.col_ranges)
+        view(result, :, cbr) .-= (view(B.row_batches[j], B.row_idx, :)*B.values[j])
+    end
+    return result
+end
+
+# (between two batch arrays with identical layouts)
+function Base.:(-)(A::BatchArray, B::BatchArray)
+    result = deepcopy(A)
+    for j=1:length(B.values)
+        result.values[j] .= A.values[j] .- B.values[j]
+    end
+    return result
+end
 
 #########################################
 # Multiplication
@@ -130,6 +142,7 @@ function ChainRulesCore.rrule(::typeof(*), A::AbstractMatrix, B::BatchArray)
     return result, ba_mult_pullback
 end
 
+
 #########################################
 # Division
 function Base.:(/)(A::AbstractMatrix, B::BatchArray)
@@ -137,17 +150,6 @@ function Base.:(/)(A::AbstractMatrix, B::BatchArray)
     result = copy(A)
     for (j,cbr) in enumerate(B.col_ranges)
         view(result, :, cbr) ./= (view(B.row_batches[j], B.row_idx, :)*B.values[j])
-    end
-    return result
-end
-
-#########################################
-# Subtraction
-function Base.:(-)(A::AbstractMatrix, B::BatchArray)
-
-    result = copy(A)
-    for (j,cbr) in enumerate(B.col_ranges)
-        view(result, :, cbr) .-= (view(B.row_batches[j], B.row_idx, :)*B.values[j])
     end
     return result
 end
@@ -164,7 +166,6 @@ end
 
 
 function ChainRulesCore.rrule(::typeof(exp), ba::BatchArray)
-    
     Z = exp(ba)
 
     function ba_exp_pullback(Z_bar)
@@ -176,6 +177,68 @@ function ChainRulesCore.rrule(::typeof(exp), ba::BatchArray)
     return Z, ba_exp_pullback
 end
 
+##########################################
+# Logarithm
+function log(ba::BatchArray)
+    return BatchArray(deepcopy(ba.col_ranges),
+                      deepcopy(ba.row_idx),
+                      deepcopy(ba.row_batches),
+                      map(v->log.(v), ba.values))
+end
 
+###########################################
+# Deepcopy
+function deepcopy(ba::BatchArray)
+    return BatchArray(deepcopy(ba.col_ranges),
+                      deepcopy(ba.row_idx),
+                      deepcopy(ba.row_batches),
+                      deepcopy(ba.values))
+end
+
+
+###########################################
+# Median
+
+mutable struct BatchMedian
+    values::Tuple
+    col_ranges::Tuple
+end
+
+function StatsBase.median(B::BatchArray)
+    return BatchMedian(Tuple([median(v) for v in B.values]),
+                       deepcopy(B.col_ranges)) 
+end
+
+function Base.:(*)(A::BatchArray, M::BatchMedian)
+    result = deepcopy(A)
+    for (i,v) in enumerate(A.values)
+        result.values[i] .= (v .* M.values[i])
+    end
+    return result
+end
+
+function Base.:(/)(A::BatchArray, M::BatchMedian)
+    result = deepcopy(A)
+    for (i,v) in enumerate(A.values)
+        result.values[i] .= (v ./ M.values[i])
+    end
+    return result
+end
+
+function Base.:(*)(M::BatchMedian, v::AbstractVector)
+    result = similar(v)
+    for (i, cr) in enumerate(M.col_ranges)
+        result[cr] .= M.values[i] .* v[cr]
+    end
+    return result
+end
+
+function Base.:(+)(M::BatchMedian, v::AbstractVector)
+    result = similar(v)
+    for (i, cr) in enumerate(M.col_ranges)
+        result[cr] .= M.values[i] .+ v[cr]
+    end
+    return result
+end
 
 

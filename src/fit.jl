@@ -175,6 +175,46 @@ function postprocess!(fitted_model)
             fitted_model.matfac.X[k,:] .*= -1
         end
     end
+
+    # "Center" the batch effect parameters such that their 
+    # L1 norm is minimized; the excess shift & scale are reallocated
+    # to mu and sigma
+    recenter_batch_effect!(fitted_model)
+
+end
+
+
+function recenter_batch_effect!(fitted_model)
+
+    # Original batch parameters
+    theta = fitted_model.matfac.col_transform.bshift.theta
+    logdelta = fitted_model.matfac.col_transform.bscale.logdelta
+    delta = exp(logdelta)
+
+    # Original column parameters
+    mu = fitted_model.matfac.col_transform.cshift.mu
+    logsigma = fitted_model.matfac.col_transform.cscale.logsigma
+    sigma = exp.(logsigma)
+
+    # Compute batch effect medians
+    M_theta = median(theta)
+    M_delta = median(delta)
+    
+    # Compute the recentered parameters
+    new_sigma = M_delta*sigma
+    new_logsigma = log.(new_sigma)
+    new_mu = M_delta + (M_delta*mu)
+
+    new_delta = delta/M_delta
+    new_logdelta = log(new_delta)
+    new_theta = theta - (new_delta*M_theta)
+
+    # Assign recentered params to model
+    fitted_model.matfac.col_transform.bshift.theta = new_theta
+    fitted_model.matfac.col_transform.bscale.logdelta = new_logdelta
+    
+    fitted_model.matfac.col_transform.cshift.mu = new_mu
+    fitted_model.matfac.col_transform.cscale.logsigma = new_logsigma
 end
 
 
