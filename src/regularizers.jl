@@ -251,7 +251,6 @@ end
 @functor NetworkL1Regularizer
 Flux.trainable(nr::NetworkL1Regularizer) = (net_reg=nr.net_reg,)
 
-
 function NetworkL1Regularizer(data_features::Vector, network_edgelists::Vector, l1_features::Vector;
                               net_weight=1.0, epsilon=1.0, l1_weight=1.0)
 

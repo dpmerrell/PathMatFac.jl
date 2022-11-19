@@ -2,30 +2,8 @@
 
 
 #############################################################
-# Patient groups
+# Identify L1-regularized features for each factor
 #############################################################
-
-function create_group_edgelist(id_vec, group_vec; rooted=false)
-    
-    m = length(id_vec)
-    @assert m == length(group_vec)
-
-    edgelist = Vector{Any}[]
-
-    # Tie samples to their groups
-    for i=1:m
-        push!(edgelist, [group_vec[i], id_vec[i], 1])
-    end
-
-    # If we're rooted, then tie the groups to a root node
-    if rooted
-        for gp in unique(group_vec)
-            push!(edgelist, ["ROOT", gp, 1])
-        end
-    end
-
-    return edgelist
-end
 
 function compute_nonpwy_features(model_features, pathway_edgelists)
 

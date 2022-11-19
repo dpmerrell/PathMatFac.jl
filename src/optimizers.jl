@@ -34,16 +34,18 @@ function Flux.Optimise.apply!(trunc_opt::TruncatedOptimiser, p, g)
 
     # `d` is the _negative_ update. I.e., a vector in the 
     # direction of the gradient.
-    d = Flux.Optimise.apply!(trunc_opt.opt, p, g)
+    delta = Flux.Optimise.apply!(trunc_opt.opt, p, g)
  
     if p in keys(trunc_opt.l1_params)
-        trunc_idx = trunc_opt.l1_params[p]
-        trunc_idx .*= (sign.(p) .== sign.(d))
-        trunc_idx .*= (abs.(p) .< abs.(d))
+        trunc_idx = similar(trunc_opt.l1_params[p])
+        trunc_idx .= true 
+        trunc_idx .*= trunc_opt.l1_params[p]
+        trunc_idx .*= (sign.(p) .== sign.(delta))
+        trunc_idx .*= (abs.(p) .< abs.(delta))
         
-        d[trunc_idx] .= p[trunc_idx] 
+        delta[trunc_idx] .= p[trunc_idx] 
     end
 
-    return d
+    return delta
 end
 

@@ -53,7 +53,7 @@ end
 function model_Y_average_precs(model::MultiomicModel)
 
     Y_pred = cpu(abs.(model.matfac.Y))
-    Y_true = cpu(map( v->(!).(v), model.matfac.Y_reg.l1_reg.l1_idx))
+    Y_true = cpu((!).(model.matfac.Y_reg.l1_reg.l1_idx))
     K = size(Y_pred, 1)
     pathway_av_precs = [average_precision(Y_pred[i,:], Y_true[i,:]) for i=1:K]
 

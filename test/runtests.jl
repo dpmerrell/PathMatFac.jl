@@ -581,11 +581,6 @@ function assemble_model_tests()
     
     @testset "Model Assembly" begin
 
-        # create_group_edgelist
-        edgelist = PM.create_group_edgelist(sample_ids, group_ids)
-        test_edgelist = [[gp, samp, 1] for (samp, gp) in zip(sample_ids, group_ids)]
-        @test edgelist == test_edgelist 
-
         # assemble_model
         sample_batch_dict = Dict([k => copy(group_ids) for k in unique(feature_assays)])
         model = MultiomicModel([test_sif_path, test_sif_path, test_sif_path],
