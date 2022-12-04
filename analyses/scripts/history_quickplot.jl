@@ -56,13 +56,35 @@ function aucpr_plot(full_ls)
 end
 
 
+function aucpr_boxplot(full_ls)
+    M = length(full_ls[1]["average_precisions"])
+    N = length(full_ls)
+    X = zeros(M, N)
+    for (k, stage) in enumerate(full_ls)
+        X[:,k] .= stage["average_precisions"]
+    end
+
+    df = DataFrame(X, :auto)
+    traces = GenericTrace[]
+    for (i, col) in enumerate(names(df))
+        push!(traces, box(y=df[:,col], name=string("iteration ",i),
+                          kind="box",
+                          boxpoints="all",
+                          showlegend=false,
+                          ),
+             )
+    end
+
+    return traces
+end
+
 function generate_plot(full_ls)
 
     history_traces = history_plots(full_ls)
     total_loss_trace = total_loss_plot(full_ls)
     push!(history_traces, total_loss_trace)
 
-    aucpr_traces = aucpr_plot(full_ls) 
+    aucpr_traces = aucpr_boxplot(full_ls) 
 
     fig = make_subplots(rows=2, cols=1,
                         row_heights=[0.5,0.5],
