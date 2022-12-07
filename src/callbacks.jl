@@ -45,7 +45,7 @@ function (ocb::OuterCallback)(model::MultiomicModel, inner_callback)
                    "average_precisions" => pathway_av_precs)
     push!(ocb.history, results)
 
-    hdf_name = string(split(ocb.history_json, ".")[1:end-1]..., "__lambda_Y=", round(model.matfac.lambda_Y, digits=2), ".hdf")
+    hdf_name = string(join(split(ocb.history_json, ".")[1:end-1], "."), "__lambda_Y=", round(model.matfac.lambda_Y, digits=2), ".hdf")
     save_model(model, hdf_name)
 
     open(ocb.history_json, "w") do f
