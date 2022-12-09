@@ -257,6 +257,7 @@ sim_params:
 tcga_runs:
     data:
         heldout_ctypes: ["OV:GBM:LAML"]
+        kept_ctypes: ["HNSC:CESC"]
     pathways:
         top_pwys: [500]
     methods:

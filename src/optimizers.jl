@@ -1,5 +1,18 @@
 
 
+
+# The `apply!` functions for Flux optimisers don't 
+# handle *views* of parameters unless we make them do so.
+function Flux.Optimise.apply!(o::Flux.Optimise.AdaGrad, p::SubArray, g)
+    η = o.eta
+    acc_full = get!(() -> fill!(similar(p.parent), o.epsilon), o.acc, p.parent)::typeof(p.parent)
+    acc_view = view(acc_full, p.indices...)
+    @. acc_view += g * conj(g)
+    @. g *= η / (√acc_view + o.epsilon)
+    return g
+end
+
+
 ####################################################
 # An optimizer that performs _truncated_ updates on 
 # a model's L1-regularized parameters.

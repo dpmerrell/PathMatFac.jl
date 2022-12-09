@@ -137,6 +137,7 @@ if __name__=="__main__":
     opt_dict = parse_opts(args[3:])
 
     heldout_ctypes = opt_dict["heldout_ctypes"]
+    kept_ctypes = opt_dict["kept_ctypes"]
     standardized_assays = opt_dict["std_assays"]
 
     print("STD_ASSAYS:", standardized_assays)
@@ -150,6 +151,11 @@ if __name__=="__main__":
     good_idx = np.ones(len(sample_groups),dtype=bool)
     for ct in heldout_ctypes:
         good_idx = (good_idx & np.logical_not(sample_groups == ct))
+
+    kept_idx = np.zeros(len(sample_groups),dtype=bool)
+    for ct in kept_ctypes:
+        kept_idx = (kept_idx | (sample_groups == ct))
+    good_idx = (good_idx & kept_idx)
 
     omic_matrix = omic_matrix[:,good_idx]
     sample_groups = sample_groups[good_idx]
