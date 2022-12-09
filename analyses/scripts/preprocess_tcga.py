@@ -115,7 +115,7 @@ def preprocess_features(omic_matrix, feature_assays, sample_groups, standardized
     return omic_matrix
 
 
-def parse_opts(opt_ls):
+def parse_opts(opt_ls, defaults):
     
     opt_kv = [opt.split("=") for opt in opt_ls]
     opt_k = [kv[0] for kv in opt_kv]
@@ -124,7 +124,10 @@ def parse_opts(opt_ls):
         if v == [""]:
             opt_v[i] = []
 
-    return dict(zip(opt_k, opt_v))
+    for k,v in zip(opt_k, opt_v):
+        defaults[k] = v
+
+    return defaults 
 
 
 if __name__=="__main__":
@@ -134,7 +137,12 @@ if __name__=="__main__":
     input_hdf = args[1]
     output_hdf = args[2]
 
-    opt_dict = parse_opts(args[3:])
+    defaults = {"heldout_ctypes": [],
+                "kept_ctypes": [],
+                "std_assays": []
+                }
+
+    opt_dict = parse_opts(args[3:], defaults)
 
     heldout_ctypes = opt_dict["heldout_ctypes"]
     kept_ctypes = opt_dict["kept_ctypes"]

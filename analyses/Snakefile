@@ -158,7 +158,7 @@ rule exp_run_matfac:
     input:
         src="scripts/run_matfac.jl",
         status_file="gpu_status.txt",
-        data=join(TCGA_DIR, "tcga_omic_prep_{data}.hdf"),
+        data=join(TCGA_DIR, "tcga_omic_prep__{data}.hdf"),
         pwy_json=join(REACTOME_DIR, "{pathways}.json"),
     output:
         inferred_bson=join(EXP_INFER_DIR, "method=matfac__{method,[_.=0-9a-zA-Z]+}/{data,[_.:=0-9a-zA-Z]+}/{pathways,[_.=0-9a-zA-Z]+}/inferred.bson"),
