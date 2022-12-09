@@ -454,11 +454,13 @@ rule preprocess_tcga:
         src="scripts/preprocess_tcga.py",
         tcga_hdf=join(TCGA_DIR, "tcga_omic.hdf")
     output:
-        prep_hdf=join(TCGA_DIR, "tcga_omic_prep_heldout_ctypes={dropctypes,[:A-Z]*}.hdf")
+        prep_hdf=join(TCGA_DIR, "tcga_omic_prep_heldout_{kwargs,[_:=a-zA-Z]*}.hdf") #ctypes={dropctypes,[:A-Z]*}.hdf")
+    params:
+        opts=lambda wc: " ".join(wc["kwargs"].split("__"))
     resources:
         mem_mb=5000
     shell:
-        "python {input.src} {input.tcga_hdf} {output.prep_hdf} heldout_ctypes={wildcards.dropctypes} std_assays= "
+        "python {input.src} {input.tcga_hdf} {output.prep_hdf} std_assays= {params.opts}"
 
 rule unzip_hdf:
     input:
