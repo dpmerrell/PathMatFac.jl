@@ -16,7 +16,7 @@ end
     above a certain threshold. 
 """
 function precision_selection(model, best_model, D, iter; 
-                             qntl=0.5, prec_threshold=0.5, capacity=Int(25e6))
+                             qntl=0.75, prec_threshold=0.25, capacity=Int(25e6))
     best_loss = MF.batched_data_loss(best_model.matfac, D; capacity=capacity)
     new_loss = MF.batched_data_loss(model.matfac, D; capacity=capacity)
     new_av_precs = model_Y_average_precs(model)
@@ -44,6 +44,9 @@ function (ocb::OuterCallback)(model::MultiomicModel, inner_callback)
                    "history" => inner_callback.history,
                    "average_precisions" => pathway_av_precs)
     push!(ocb.history, results)
+
+    hdf_name = string(join(split(ocb.history_json, ".")[1:end-1], "."), "__lambda_Y=", round(model.matfac.lambda_Y, digits=2), ".hdf")
+    save_model(model, hdf_name)
 
     open(ocb.history_json, "w") do f
         JSON.print(f, ocb.history)
