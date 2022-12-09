@@ -265,11 +265,11 @@ tcga_runs:
             use_gpu: [1]
             lambda_X: [0.0, 0.01]
             lambda_Y: [1.0]
-            lambda_layer: [0.05]
-            max_epochs: [3000]
+            lambda_layer: [0.1]
+            max_epochs: [2000]
             capacity: [25000000]
-            lr: [0.02]
-            n_lambda: [8]
+            lr: [0.05]
+            n_lambda: [2]
             print_iter: [1]
 
 
