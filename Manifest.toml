@@ -474,8 +474,8 @@ deps = ["Base64"]
 uuid = "d6f4376e-aef5-505a-96c1-9c027394607a"
 
 [[MatFac]]
-deps = ["BSON", "CUDA", "ChainRules", "ChainRulesCore", "Flux", "Functors", "SparseArrays", "StatsBase", "Zygote"]
-git-tree-sha1 = "f739e735c467c6abe952018c55817ef3d9eee225"
+deps = ["BSON", "CUDA", "ChainRules", "ChainRulesCore", "Flux", "Functors", "Random", "SparseArrays", "StatsBase", "Zygote"]
+git-tree-sha1 = "0bc0ac836fba081579521befce0abf5368f369ea"
 repo-rev = "main"
 repo-url = "https://github.com/dpmerrell/MatFac.jl"
 uuid = "23734cf9-4c0e-45d4-b5ff-f416ac13e898"
