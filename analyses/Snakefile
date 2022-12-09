@@ -370,8 +370,8 @@ rule prep_sim_inputs:
     input:
         src="scripts/prep_simulation_inputs.py",
         full_pwy_json=join(REACTOME_DIR, "{pwys}.json"),
-        full_samples_json=join(TCGA_DIR, "tcga_samples_heldout_ctypes=.json"),
-        full_features_json=join(TCGA_DIR, "tcga_features_heldout_ctypes=.json")
+        full_samples_json=join(TCGA_DIR, "tcga_samples__heldout_ctypes=.json"),
+        full_features_json=join(TCGA_DIR, "tcga_features__heldout_ctypes=.json")
     output:
         pwy_json=join(SIM_SCHEMA_DIR, "{pwys,[_=0-9a-z]+}/k={k}__m={m}__n={n}/{replicate,[_.=0-9a-z]+}/pathways.json"), 
         samples_json=join(SIM_SCHEMA_DIR, "{pwys,[_=0-9a-z]+}/k={k}__m={m}__n={n}/{replicate,[_.=0-9a-z]+}/samples.json"),
@@ -398,7 +398,7 @@ rule select_topk_pwys:
 rule rank_pwys:
     input:
         src="scripts/rank_pathways.py",
-        feature_json=join(TCGA_DIR, "tcga_features_heldout_ctypes=.json"),
+        feature_json=join(TCGA_DIR, "tcga_features__heldout_ctypes=.json"),
         all_pwy_json=join(REACTOME_DIR, "reactome.json")
     output:
         ranked_json=join(REACTOME_DIR, "reactome_ranked.json")
@@ -442,10 +442,10 @@ rule download_reactome:
 rule extract_samples_features:
     input:
         src="scripts/extract_samples_features.py",
-        tcga_hdf=join(TCGA_DIR, "tcga_omic_prep_heldout_ctypes={dropctypes}.hdf")
+        tcga_hdf=join(TCGA_DIR, "tcga_omic_prep__{kwargs}.hdf")
     output:
-        samples_json=join(TCGA_DIR, "tcga_samples_heldout_ctypes={dropctypes,[:A-Z]*}.json"),
-        features_json=join(TCGA_DIR, "tcga_features_heldout_ctypes={dropctypes,[:A-Z]*}.json")
+        samples_json=join(TCGA_DIR, "tcga_samples__{kwargs,[_:=a-zA-Z]*}.json"),
+        features_json=join(TCGA_DIR, "tcga_features__{kwargs,[_:=a-zA-Z]*}.json")
     shell:
         "python {input.src} {input.tcga_hdf} {output.samples_json} {output.features_json}"
 
@@ -454,7 +454,7 @@ rule preprocess_tcga:
         src="scripts/preprocess_tcga.py",
         tcga_hdf=join(TCGA_DIR, "tcga_omic.hdf")
     output:
-        prep_hdf=join(TCGA_DIR, "tcga_omic_prep_heldout_{kwargs,[_:=a-zA-Z]*}.hdf") #ctypes={dropctypes,[:A-Z]*}.hdf")
+        prep_hdf=join(TCGA_DIR, "tcga_omic_prep__{kwargs,[_:=a-zA-Z]*}.hdf") 
     params:
         opts=lambda wc: " ".join(wc["kwargs"].split("__"))
     resources:
