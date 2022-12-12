@@ -24,6 +24,7 @@ function main(args)
                             :lambda_max => nothing,
                             :l1_fraction => 0.5,
                             :n_lambda => 8,
+                            :lambda_min_ratio => 0.4,
                             :lr => 0.07,
                             :capacity => 25000000,
                             :verbosity => 1,
