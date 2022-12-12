@@ -46,7 +46,7 @@ function (ocb::OuterCallback)(model::MultiomicModel, inner_callback)
     push!(ocb.history, results)
 
     hdf_name = string(join(split(ocb.history_json, ".")[1:end-1], "."), "__lambda_Y=", round(model.matfac.lambda_Y, digits=2), ".hdf")
-    save_model(model, hdf_name)
+    save_model(cpu(model), hdf_name)
 
     open(ocb.history_json, "w") do f
         JSON.print(f, ocb.history)
