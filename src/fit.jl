@@ -101,9 +101,11 @@ function initialize_params!(model::MultiomicModel, D::AbstractMatrix;
     logsigma = log.(sqrt.(var_vec))
     model.matfac.col_transform.cscale.logsigma .= logsigma 
 
-    ## Initialize values of X and Y in such a way that they
-    ## are consistent with pathway priors
-    model.matfac.Y[model.matfac.Y_reg.l1_reg.l1_idx] .= 0
+    # Fit the values of layer parameters via gradient descent
+    model.matfac.X .= 0
+    model.matfac.Y .= 0
+    fit_fixed_weight!(model, D; update_factors=false, max_epochs=100, verbosity=-1)
+
 end
 
 
