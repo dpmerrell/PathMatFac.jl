@@ -85,20 +85,20 @@ function initialize_params!(model::MultiomicModel, D::AbstractMatrix;
     # Transform the means and variances appropriately for each assay
     for ul in unq_losses
         ul_idx = model_losses .== ul
-        #mean_vec[ul_idx] .= (mean_init_map[ul]).(mean_vec[ul_idx], var_vec[ul_idx])
-        mom = nanmean((mean_init_map[ul]).(mean_vec[ul_idx], var_vec[ul_idx]))
-        mean_vec[ul_idx] .= mom
+        mean_vec[ul_idx] .= (mean_init_map[ul]).(mean_vec[ul_idx], var_vec[ul_idx])
+        #mom = nanmean((mean_init_map[ul]).(mean_vec[ul_idx], var_vec[ul_idx]))
+        #mean_vec[ul_idx] .= mom
 
-        #var_vec[ul_idx] .= (var_init_map[ul]).(mean_vec[ul_idx], var_vec[ul_idx])
-        mov = nanmean((var_init_map[ul]).(mean_vec[ul_idx], var_vec[ul_idx]))
-        var_vec[ul_idx] .= mov
+        var_vec[ul_idx] .= (var_init_map[ul]).(mean_vec[ul_idx], var_vec[ul_idx])
+        #mov = nanmean((var_init_map[ul]).(mean_vec[ul_idx], var_vec[ul_idx]))
+        #var_vec[ul_idx] .= mov
     end
 
-    ## Remove NaNs from the variance and mean vectors
-    #nan_idx = (!isfinite).(var_vec)
-    #MF.toone!(var_vec, nan_idx)
-    #nan_idx = (!isfinite).(mean_vec)
-    #MF.tozero!(mean_vec, nan_idx)
+    # Remove NaNs from the variance and mean vectors
+    nan_idx = (!isfinite).(var_vec)
+    MF.toone!(var_vec, nan_idx)
+    nan_idx = (!isfinite).(mean_vec)
+    MF.tozero!(mean_vec, nan_idx)
 
     # Initialize values of mu, logsigma
     model.matfac.col_transform.cshift.mu .= mean_vec 
