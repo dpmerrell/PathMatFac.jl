@@ -309,7 +309,7 @@ rule sim_run_matfac:
 
 rule shuffle_pathway_edges:
     input:
-        src=join("scripts","python", "randomize_pathway_edges.py"),
+        src=join("scripts","python", "corrupt_pathway_edges.py"),
         pwy_json=join(SIM_SCHEMA_DIR, "{pwys}/{schema}/{replicate}/pathways.json"),
     output:
         randomized_json=join(SIM_PWY_DIR, "{pwys,[_.=a-z0-9]+}/{schema,[_.=a-z0-9]+}/shuffled=1/{replicate,[_=a-z0-9]+}.json")
@@ -321,7 +321,7 @@ rule shuffle_pathway_edges:
 
 rule mask_data:
     input:
-        src=join("scripts", "python", "mask_data.py"),
+        src=join("scripts", "python", "corrupt_mask_data.py"),
         data_hdf=join(SIM_DATA_DIR, "{pwys}/{schema}/snr={snr}", "{replicate}", "true.hdf")
     output:
         masked_hdf=join(SIM_DATA_DIR, "{pwys,[_=a-z0-9]+}/{schema,[._=a-z0-9]+}/missing={missing,[.0-9]+}__snr={snr,[.0-9]+}", "{replicate,[_=a-z0-9]+}", "masked.hdf")
@@ -386,7 +386,7 @@ rule prep_sim_inputs:
 
 rule select_topk_pwys:
     input:
-        src="scripts/python/select_pathways.py",
+        src="scripts/python/prep_select_pathways.py",
         ranked_json=join(REACTOME_DIR, "reactome_ranked.json"),
     output:
         pwy_json=join(REACTOME_DIR, "top_pwys={topk, [0-9]+}.json"),
@@ -441,7 +441,7 @@ rule download_reactome:
 
 rule extract_samples_features:
     input:
-        src="scripts/python/extract_samples_features.py",
+        src="scripts/python/prep_extract_samples_features.py",
         tcga_hdf=join(TCGA_DIR, "tcga_omic_prep__{kwargs}.hdf")
     output:
         samples_json=join(TCGA_DIR, "tcga_samples__{kwargs,[_:=a-zA-Z]*}.json"),
