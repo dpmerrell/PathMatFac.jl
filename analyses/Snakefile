@@ -154,9 +154,9 @@ rule exp_embedding_scatter:
         "python {input.src} {input.params_hdf} {input.clinical_hdf} 1 {output.scatter_html}"
 
 
-rule exp_run_matfac:
+rule exp_fit_matfac:
     input:
-        src="scripts/julia/run_matfac.jl",
+        src="scripts/julia/fit_matfac.jl",
         status_file="gpu_status.txt",
         data=join(TCGA_DIR, "tcga_omic_prep__{data}.hdf"),
         pwy_json=join(REACTOME_DIR, "{pathways}.json"),
@@ -288,9 +288,9 @@ rule score_matfac:
 def get_m(wc):
     return int(wc["schema"].split("__")[1].split("=")[-1]) # Extract "m" as an integer
 
-rule sim_run_matfac:
+rule sim_fit_matfac:
     input:
-        src="scripts/julia/run_matfac.jl",
+        src="scripts/julia/fit_matfac.jl",
         status_file="gpu_status.txt",
         data=join(SIM_DATA_DIR, "{pwys}/{schema}/{sim}/{replicate}/masked.hdf"),
         pwy_json=join(SIM_PWY_DIR, "{pwys}/{schema}/{corruption}/{replicate}.json")
