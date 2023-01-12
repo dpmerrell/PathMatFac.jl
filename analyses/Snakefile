@@ -129,7 +129,7 @@ rule all:
 
 rule exp_factor_plot:
     input:
-        src="scripts/vis_pathway_factor_plot.py",
+        src="scripts/python/vis_pathway_factor_plot.py",
         params_hdf=join(EXP_INFER_DIR, "{method}/{data}/{pathways}/inferred.hdf"),
         pwy_json=join(REACTOME_DIR, "{pathways}.json")
     output:
@@ -143,7 +143,7 @@ rule exp_factor_plot:
 
 rule exp_embedding_scatter:
     input:
-        src="scripts/vis_embedding_scatter.py",
+        src="scripts/python/vis_embedding_scatter.py",
         clinical_hdf=join(TCGA_DIR, "tcga_clinical.hdf"),
         params_hdf=join(EXP_INFER_DIR, "{method}/{data}/{pathways}/inferred.hdf"),
     output:
@@ -156,7 +156,7 @@ rule exp_embedding_scatter:
 
 rule exp_run_matfac:
     input:
-        src="scripts/run_matfac.jl",
+        src="scripts/julia/run_matfac.jl",
         status_file="gpu_status.txt",
         data=join(TCGA_DIR, "tcga_omic_prep__{data}.hdf"),
         pwy_json=join(REACTOME_DIR, "{pathways}.json"),
@@ -179,7 +179,7 @@ rule exp_run_matfac:
 
 #rule l1frac_lineplot:
 #    input:
-#        src="scripts/vis_corruption_lineplot.py",
+#        src="scripts/python/vis_corruption_lineplot.py",
 #        scores_tsv=join(SIM_SCORE_DIR, "sim_scores.tsv")
 #    output:
 #        lineplot=join(SIM_VIS_DIR, "l1_fraction-lineplot.png"),
@@ -188,7 +188,7 @@ rule exp_run_matfac:
 #
 #rule missingness_lineplot:
 #    input:
-#        src="scripts/vis_corruption_lineplot.py",
+#        src="scripts/python/vis_corruption_lineplot.py",
 #        scores_tsv=join(SIM_SCORE_DIR, "sim_scores.tsv")
 #    output:
 #        lineplot=join(SIM_VIS_DIR, "missing-lineplot.png"),
@@ -197,7 +197,7 @@ rule exp_run_matfac:
 #
 #rule snr_lineplot:
 #    input:
-#        src="scripts/vis_corruption_lineplot.py",
+#        src="scripts/python/vis_corruption_lineplot.py",
 #        scores_tsv=join(SIM_SCORE_DIR, "sim_scores.tsv")
 #    output:
 #        lineplot=join(SIM_VIS_DIR, "snr-lineplot.png"),
@@ -207,7 +207,7 @@ rule exp_run_matfac:
 #
 #rule factor_plot:
 #    input:
-#        src="scripts/vis_pathway_factor_plot.py",
+#        src="scripts/python/vis_pathway_factor_plot.py",
 #        params_hdf=join(SIM_INFER_DIR, "method=matfac/{method_params}/{pwy_params}/{schema_params}/snr={snr}/srep={srep}/{corruption}/crep={crep}.hdf"),
 #        true_pwy_json=join(SIM_SCHEMA_DIR, "{pwy_params}/{schema_params}/srep={srep}/pathways.json"),
 #        used_pwy_json=join(SIM_PWY_DIR, "{pwy_params}/{schema_params}/snr={snr}/srep={srep}/{corruption}/crep={crep}.json")
@@ -224,7 +224,7 @@ rule exp_run_matfac:
 #TODO
 #rule embedding_scatter:
 #    input:
-#        src="scripts/vis_embedding_scatter.py",
+#        src="scripts/python/vis_embedding_scatter.py",
 #        clinical_hdf=join(TCGA_DIR, "tcga_clinical.hdf"),
 #        params_hdf=join(SIM_INFER_DIR, "usedk={usedk}_truek={truek}_snr={snr}_rep={rep}.hdf")
 #    output:
@@ -239,7 +239,7 @@ def construct_paths(analysis, size, keys=["methods", "top_pwys", "schema", "sim"
 
 rule tabulate_scores:
     input:
-        src="scripts/tabulate_scores.py",
+        src="scripts/python/tabulate_scores.py",
         infer_scores=lambda wc: [join(SIM_SCORE_DIR, p, "infer.json") for p in construct_paths(wc["analysis"], wc["size"])],
         impute_scores=lambda wc: [join(SIM_SCORE_DIR, p, "impute.json") for p in construct_paths(wc["analysis"], wc["size"])],
     output:
@@ -252,7 +252,7 @@ rule tabulate_scores:
 
 rule score_matfac_impute:
     input:
-        src="scripts/score_matfac_impute.py",
+        src="scripts/python/score_matfac_impute.py",
         imputed_hdf=join(SIM_IMPUTE_DIR, "method=matfac__{matfac_params}", "{pwys}", "{schema}", "missing={missing}__snr={snr}", "{corruption}", "{replicate}.hdf"),
         masked_hdf=join(SIM_DATA_DIR, "{pwys}", "{schema}", "missing={missing}__snr={snr}", "{replicate}", "masked.hdf"),
         true_hdf=join(SIM_DATA_DIR, "{pwys}", "{schema}", "snr={snr}", "{replicate}", "true.hdf"),
@@ -264,7 +264,7 @@ rule score_matfac_impute:
 
 rule sim_matfac_impute:
     input:
-        src="scripts/impute_matfac.jl",
+        src="scripts/julia/impute_matfac.jl",
         model_bson=join(SIM_INFER_DIR, "method=matfac__{matfac_params}", "{pwys}", "{schema}", "{sim}", "{corruption}" ,"{replicate}.bson"),
     output:
         imputed_hdf=join(SIM_IMPUTE_DIR, "method=matfac__{matfac_params,[_.=a-zA-Z0-9]+}", "{pwys,[_=a-z0-9]+}", "{schema,[_.=a-z0-9]+}", "{sim,[_.=a-z0-9]+}", "{corruption,[_.=a-z0-9]+}", "{replicate,[.=a-z0-9]+}.hdf"),
@@ -274,7 +274,7 @@ rule sim_matfac_impute:
 
 rule score_matfac:
     input:
-        src="scripts/score_matfac.py",
+        src="scripts/python/score_matfac.py",
         true_params=join(SIM_PARAM_DIR, "{pwys}", "{schema}", "snr={snr}", "{replicate}", "true.hdf"),
         pred_params=join(SIM_INFER_DIR, "method=matfac__{matfac_params}", "{pwys}", "{schema}", "missing={missing}__snr={snr}", "{corruption}", "{replicate}.hdf")
     output:
@@ -290,7 +290,7 @@ def get_m(wc):
 
 rule sim_run_matfac:
     input:
-        src="scripts/run_matfac.jl",
+        src="scripts/julia/run_matfac.jl",
         status_file="gpu_status.txt",
         data=join(SIM_DATA_DIR, "{pwys}/{schema}/{sim}/{replicate}/masked.hdf"),
         pwy_json=join(SIM_PWY_DIR, "{pwys}/{schema}/{corruption}/{replicate}.json")
@@ -309,7 +309,7 @@ rule sim_run_matfac:
 
 rule shuffle_pathway_edges:
     input:
-        src=join("scripts","randomize_pathway_edges.py"),
+        src=join("scripts","python", "randomize_pathway_edges.py"),
         pwy_json=join(SIM_SCHEMA_DIR, "{pwys}/{schema}/{replicate}/pathways.json"),
     output:
         randomized_json=join(SIM_PWY_DIR, "{pwys,[_.=a-z0-9]+}/{schema,[_.=a-z0-9]+}/shuffled=1/{replicate,[_=a-z0-9]+}.json")
@@ -321,7 +321,7 @@ rule shuffle_pathway_edges:
 
 rule mask_data:
     input:
-        src=join("scripts", "mask_data.py"),
+        src=join("scripts", "python", "mask_data.py"),
         data_hdf=join(SIM_DATA_DIR, "{pwys}/{schema}/snr={snr}", "{replicate}", "true.hdf")
     output:
         masked_hdf=join(SIM_DATA_DIR, "{pwys,[_=a-z0-9]+}/{schema,[._=a-z0-9]+}/missing={missing,[.0-9]+}__snr={snr,[.0-9]+}", "{replicate,[_=a-z0-9]+}", "masked.hdf")
@@ -331,7 +331,7 @@ rule mask_data:
 
 rule corrupt_pathways:
     input:
-        src="scripts/corrupt_pathways.py",
+        src="scripts/python/corrupt_pathways.py",
         pwy_json=join(SIM_SCHEMA_DIR, "{pwys}/{schema}/{replicate}/pathways.json"),
         ranked_json=join(REACTOME_DIR, "reactome_ranked.json"),
         features_json=join(SIM_SCHEMA_DIR, "{pwys}/{schema}/{replicate}/features.json")
@@ -352,7 +352,7 @@ rule copy_pathways:
 
 rule simulate_data:
     input:
-        src="scripts/simulate_data.jl",
+        src="scripts/julia/simulate_data.jl",
         pwy_json=join(SIM_SCHEMA_DIR, "{pwys}/{schema}/{replicate}/pathways.json"), 
         sample_json=join(SIM_SCHEMA_DIR, "{pwys}/{schema}/{replicate}/samples.json"),
         feature_json=join(SIM_SCHEMA_DIR, "{pwys}/{schema}/{replicate}/features.json")
@@ -368,7 +368,7 @@ rule simulate_data:
 
 rule prep_sim_inputs:
     input:
-        src="scripts/prep_simulation_inputs.py",
+        src="scripts/python/prep_simulation_inputs.py",
         full_pwy_json=join(REACTOME_DIR, "{pwys}.json"),
         full_samples_json=join(TCGA_DIR, "tcga_samples__heldout_ctypes=.json"),
         full_features_json=join(TCGA_DIR, "tcga_features__heldout_ctypes=.json")
@@ -386,7 +386,7 @@ rule prep_sim_inputs:
 
 rule select_topk_pwys:
     input:
-        src="scripts/select_pathways.py",
+        src="scripts/python/select_pathways.py",
         ranked_json=join(REACTOME_DIR, "reactome_ranked.json"),
     output:
         pwy_json=join(REACTOME_DIR, "top_pwys={topk, [0-9]+}.json"),
@@ -397,7 +397,7 @@ rule select_topk_pwys:
 
 rule rank_pwys:
     input:
-        src="scripts/rank_pathways.py",
+        src="scripts/python/rank_pathways.py",
         feature_json=join(TCGA_DIR, "tcga_features__heldout_ctypes=.json"),
         all_pwy_json=join(REACTOME_DIR, "reactome.json")
     output:
@@ -410,7 +410,7 @@ rule rank_pwys:
 
 rule reactome_txt_to_json:
     input:
-        src="scripts/reactome_txt_to_json.py",
+        src="scripts/python/reactome_txt_to_json.py",
         txt=join(REACTOME_DIR, "reactome.hgnc.txt"),
     output:
         json=join(REACTOME_DIR, "reactome.json")
@@ -441,7 +441,7 @@ rule download_reactome:
 
 rule extract_samples_features:
     input:
-        src="scripts/extract_samples_features.py",
+        src="scripts/python/extract_samples_features.py",
         tcga_hdf=join(TCGA_DIR, "tcga_omic_prep__{kwargs}.hdf")
     output:
         samples_json=join(TCGA_DIR, "tcga_samples__{kwargs,[_:=a-zA-Z]*}.json"),
@@ -451,7 +451,7 @@ rule extract_samples_features:
 
 rule preprocess_tcga:
     input:
-        src="scripts/preprocess_tcga.py",
+        src="scripts/python/preprocess_tcga.py",
         tcga_hdf=join(TCGA_DIR, "tcga_omic.hdf")
     output:
         prep_hdf=join(TCGA_DIR, "tcga_omic_prep__{kwargs,[_:=a-zA-Z]*}.hdf") 
@@ -490,7 +490,7 @@ rule download_tcga_clinical:
 ######################################
 rule initialize_gpu_status:
     input:
-        src=join("scripts", "init_gpu_status.jl")
+        src=join("scripts", "julia", "init_gpu_status.jl")
     output:
         status_file="gpu_status.txt"
     shell:
