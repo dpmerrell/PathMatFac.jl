@@ -2,6 +2,7 @@
 import script_util as su
 import numpy as np
 import argparse
+import h5py
 
 
 def load_data(data_hdf):
@@ -16,7 +17,7 @@ def load_data(data_hdf):
 
 def load_model(pc_hdf):
 
-    Y = su.load_hdf(pc_hdf, "Y")
+    Y = su.load_hdf(pc_hdf, "Y").transpose()
     mu = su.load_hdf(pc_hdf, "mu")
     sigma = su.load_hdf(pc_hdf, "sigma")
 
@@ -36,35 +37,50 @@ def select_features(test_genes, test_assays,
     return test_idx, model_idx
  
 
-def pca_transform(Z, Y, lr=1e-4, rel_tol=1e-6, max_iter=1000):
+def pca_transform(Z, Y, lr=2.0, rel_tol=1e-8, max_iter=1000):
 
     K, N = Y.shape
     M = Z.shape[0]
 
-    X = np.zeros(K, M)
+    X = np.zeros((K, M))
+    grad_X = np.zeros((K,M))
+    grad_ssq = np.zeros((K,M)) + 1e-8
+
+    nan_idx = np.logical_not(np.isfinite(Z))
     lss = np.inf
     i = 0
 
-    # Until convergence...
+    # Apply Adagrad updates until convergence...
     while i < max_iter:
         new_lss = 0.0
             
         # Compute the gradient of squared loss w.r.t. X
-        delta = np.dot(X, Y) - Z
+        delta = np.dot(X.transpose(), Y) - Z
+        delta[nan_idx] = 0.0
         grad_X = np.dot(Y, delta.transpose())
-        X -= (lr*grad_X)
+  
+        # Update the sum of squared gradients
+        grad_ssq += grad_X*grad_X
+
+        # Apply the update
+        X -= lr*(grad_X / np.sqrt(grad_ssq))
       
         # Compute the loss 
         np.square(delta, out=delta) 
         new_lss += np.sum(delta)
 
         # Check termination criterion
-        if (lss - new_lss)/lss < rel_tol
+        if (lss - new_lss)/lss < rel_tol:
+            print("Loss decrease < rel tol ({}). Terminating".format(rel_tol))
+            break
 
         # Update loop variables
         lss = new_lss
         i += 1
         print("Iteration: {}; Loss: {:.2f}".format(i, lss))
+
+    if i >= max_iter:
+        print("Reached max iter ({}). Terminating".format(max_iter))
 
     return X
 

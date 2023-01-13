@@ -24,9 +24,9 @@ def param_dict_to_list(param_dict):
         return ["__".join(["{}={}".format(pair[0],pair[1]) for pair in kv]) for kv in all_kvs]
 
 # Matrix factorization params
-####################################
+#####################################################################
 # Define some useful directories
-####################################
+#####################################################################
 
 ## Data directories
 TCGA_DIR = config["tcga_dir"]
@@ -56,15 +56,15 @@ EXP_SCATTER_DIR = join(EXP_VIS_DIR, "embedding_scatter")
 EXP_FACTORPLOT_DIR = join(EXP_VIS_DIR, "factor_plots")
 
 
-####################################
+#####################################################################
 # Downloading data
-####################################
+#####################################################################
 REACTOME_URL = config["reactome_url"]
 
 
-#####################################
+#####################################################################
 # Unpack simulation study parameters
-#####################################
+#####################################################################
 SIM_PARAMS = config["sim_params"]
 SIM_PARAMS = {analysis: {size: OrderedDict([("methods", ["__".join(["method={}".format(m), l]) for m, m_param in s_params["methods"].items() for l in param_dict_to_list(m_param) ] ),\
                                             ("schema", param_dict_to_list(s_params["schema"]) ),\
@@ -89,9 +89,9 @@ for a, a_p in SIM_PARAMS.items():
 
 print(SIM_ANALYSES_SIZES)
 
-###################################
+#####################################################################
 # Unpack TCGA run parameters
-###################################
+#####################################################################
 TCGA_RUN_PARAMS = config["tcga_runs"]
 TCGA_RUN_PARAMS = {"methods": ["__".join(["method={}".format(m), l]) for m, m_param in TCGA_RUN_PARAMS["methods"].items() for l in param_dict_to_list(m_param) ],
                    "data": param_dict_to_list(TCGA_RUN_PARAMS["data"]),
@@ -123,9 +123,9 @@ rule all:
        #                    pathways=TCGA_RUN_PARAMS["pathways"]),
 
 
-###########################
+#####################################################################
 # Runs on real (TCGA) data
-###########################
+#####################################################################
 
 rule exp_factor_plot:
     input:
@@ -173,9 +173,27 @@ rule exp_fit_matfac:
         "julia --project=. -t 1 {input.src} {input.data} {input.pwy_json} {output.inferred_bson} {output.inferred_hdf} {params.matfac_kwargs} history_json={output.history_json} gpu_status_file={input.status_file}"
 
 
-###########################
+rule exp_transform_pca:
+    input:
+        src="scripts/python/transform_pca.py"
+    output:
+        ""
+    shell:
+        ""
+
+rule exp_fit_pca:
+    input:
+        src="scripts/python/transform_pca.py",
+        data_hdf="" 
+    output:
+        ""
+    shell:
+        "python {input.src} "
+ 
+
+#####################################################################
 # Simulation study
-###########################
+#####################################################################
 
 #rule l1frac_lineplot:
 #    input:
@@ -215,7 +233,7 @@ rule exp_fit_matfac:
 #        factorplot=join(SIM_FACTORPLOT_DIR, "method=matfac/{method_params,[_.=:a-zA-Z0-9]+}/{pwy_params,[_=a-z0-9]+}/{schema_params,[_.=a-z0-9]+}/snr={snr,[.0-9]+}/srep={srep,[0-9]+}/{corruption,[_.=a-z0-9]+}/crep={crep,[0-9]+}.html")
 #    #params:
 #        #plottedk=lambda wc: int(wc["k"])
-#	#plottedk=lambda wc: 5
+#        #plottedk=lambda wc: 5
 #    resources:
 #        mem_mb=5000
 #    shell:
@@ -380,9 +398,9 @@ rule prep_sim_inputs:
         "python {input.src} {input.full_pwy_json} {input.full_samples_json} {input.full_features_json} {wildcards.m} {wildcards.k} {wildcards.n} {output.pwy_json} {output.samples_json} {output.features_json}"
 
 
-######################################
+#####################################################################
 # Download and preprocess Reactome
-######################################
+#####################################################################
 
 rule select_topk_pwys:
     input:
@@ -434,9 +452,9 @@ rule download_reactome:
         "curl {REACTOME_URL} --output {output.tarball}"
 
 
-#####################################
+#####################################################################
 # Preprocess TCGA
-#####################################
+#####################################################################
 
 
 rule extract_samples_features:
@@ -485,9 +503,9 @@ rule download_tcga_clinical:
 
 
 
-######################################
+#####################################################################
 # GPU status
-######################################
+#####################################################################
 rule initialize_gpu_status:
     input:
         src=join("scripts", "julia", "init_gpu_status.jl")
