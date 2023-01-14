@@ -39,7 +39,7 @@ SIM_SCHEMA_DIR = join(SIM_DIR, "data_schema")
 SIM_DATA_DIR = join(SIM_DIR, "data_hdfs")
 SIM_PWY_DIR = join(SIM_DIR, "pathway_jsons")
 SIM_PARAM_DIR = join(SIM_DIR, "true_parameters")
-SIM_INFER_DIR = join(SIM_DIR, "inferred_parameters")
+SIM_INFER_DIR = join(SIM_DIR, "fitted_parameters")
 SIM_IMPUTE_DIR = join(SIM_DIR, "imputed_data")
 SIM_HISTORY_DIR = join(SIM_DIR, "training_histories")
 SIM_SCORE_DIR = join(SIM_DIR, "scores")
@@ -49,12 +49,16 @@ SIM_FACTORPLOT_DIR = join(SIM_VIS_DIR, "factor_plots")
 
 ## TCGA run directories
 EXP_DIR = join(RESULT_DIR, "real_data_runs")
-EXP_INFER_DIR = join(EXP_DIR, "inferred_parameters")
+EXP_DATA_DIR = join(EXP_DIR, "omic_data")
+EXP_FITTED_DIR = join(EXP_DIR, "fitted_transforms")
+EXP_REGRESSOR_DIR = join(EXP_DIR, "fitted_regressors")
+EXP_TRANS_TRAIN_DIR = join(EXP_DIR, "transformed_training_sets")
+EXP_TRANS_TEST_DIR = join(EXP_DIR, "transformed_test_sets")
+EXP_PRED_DIR = join(EXP_DIR, "predictions")
 EXP_HISTORY_DIR = join(EXP_DIR, "training_histories")
 EXP_VIS_DIR = join(EXP_DIR, "visualizations")
 EXP_SCATTER_DIR = join(EXP_VIS_DIR, "embedding_scatter")
 EXP_FACTORPLOT_DIR = join(EXP_VIS_DIR, "factor_plots")
-
 
 #####################################################################
 # Downloading data
@@ -97,6 +101,8 @@ TCGA_RUN_PARAMS = {"methods": ["__".join(["method={}".format(m), l]) for m, m_pa
                    "data": param_dict_to_list(TCGA_RUN_PARAMS["data"]),
                    "pathways": param_dict_to_list(TCGA_RUN_PARAMS["pathways"])}
 
+EXP_DATA_FOLDS = config["cross_val_folds"]
+
 print("\nTCGA Runs:")
 for k, v in TCGA_RUN_PARAMS.items():
     print("\t", k, ": ", v)
@@ -112,16 +118,19 @@ rule all:
        #sim_score_tables=[join(SIM_SCORE_DIR, "sim_scores", analysis, size+".tsv") for analysis, size in SIM_ANALYSES_SIZES],
        #sim_snr_lineplot=join(SIM_VIS_DIR, "snr-lineplot.png"),
        #sim_snr_heatmap=join(SIM_VIS_DIR, "snr-heatmap.png")
-       exp_inferred=expand(join(EXP_INFER_DIR,"{method}/{data}/{pathways}/inferred.hdf"),
-                           method=TCGA_RUN_PARAMS["methods"], data=TCGA_RUN_PARAMS["data"],
-                           pathways=TCGA_RUN_PARAMS["pathways"]),
+       #exp_fitted=expand(join(EXP_FITTED_DIR,"{method}/{data}/{pathways}/fitted.hdf"),
+       #                  method=TCGA_RUN_PARAMS["methods"], data=TCGA_RUN_PARAMS["data"],
+       #                  pathways=TCGA_RUN_PARAMS["pathways"]),
        #exp_scatters=expand(join(EXP_SCATTER_DIR,"{method}/{data}/{pathways}/scatter.html"),
        #                    method=TCGA_RUN_PARAMS["methods"], data=TCGA_RUN_PARAMS["data"],
        #                    pathways=TCGA_RUN_PARAMS["pathways"]),
        #exp_factorplots=expand(join(EXP_FACTORPLOT_DIR,"{method}/{data}/{pathways}/factors.html"),
        #                    method=TCGA_RUN_PARAMS["methods"], data=TCGA_RUN_PARAMS["data"],
        #                    pathways=TCGA_RUN_PARAMS["pathways"]),
-
+       exp_pca_regressors=expand(join(EXP_REGRESSOR_DIR, "{transform}/{data}__fold={fold}/{pathways}/regressor.pkl"),
+                                 transform=TCGA_RUN_PARAMS["methods"], data=TCGA_RUN_PARAMS["data"],
+                                 fold=list(range(EXP_DATA_FOLDS)), pathways=TCGA_RUN_PARAMS["pathways"])
+      
 
 #####################################################################
 # Runs on real (TCGA) data
@@ -130,7 +139,7 @@ rule all:
 rule exp_factor_plot:
     input:
         src="scripts/python/vis_pathway_factor_plot.py",
-        params_hdf=join(EXP_INFER_DIR, "{method}/{data}/{pathways}/inferred.hdf"),
+        params_hdf=join(EXP_FITTED_DIR, "{method}/{data}/{pathways}/fitted.hdf"),
         pwy_json=join(REACTOME_DIR, "{pathways}.json")
     output:
         factorplot=join(EXP_FACTORPLOT_DIR,"{method,[_.=0-9a-zA-Z]+}/{data,[_.=:0-9a-zA-Z]+}/{pathways,[_.=0-9a-zA-Z]+}/factors.html")
@@ -141,11 +150,12 @@ rule exp_factor_plot:
     shell:
         "python {input.src} {input.params_hdf} {input.pwy_json} {output.factorplot} {params.plottedk}"
 
+
 rule exp_embedding_scatter:
     input:
         src="scripts/python/vis_embedding_scatter.py",
         clinical_hdf=join(TCGA_DIR, "tcga_clinical.hdf"),
-        params_hdf=join(EXP_INFER_DIR, "{method}/{data}/{pathways}/inferred.hdf"),
+        params_hdf=join(EXP_FITTED_DIR, "{method}/{data}/{pathways}/fitted.hdf"),
     output:
         scatter_html=join(EXP_SCATTER_DIR, "{method,[_.=0-9a-zA-Z]+}/{data,[_:.=0-9a-zA-Z]+}/{pathways,[_.=0-9a-zA-Z]+}/scatter.html")
     resources:
@@ -158,11 +168,11 @@ rule exp_fit_matfac:
     input:
         src="scripts/julia/fit_matfac.jl",
         status_file="gpu_status.txt",
-        data=join(TCGA_DIR, "tcga_omic_prep__{data}.hdf"),
+        data=join(EXP_DATA_DIR, "{data}.hdf"),
         pwy_json=join(REACTOME_DIR, "{pathways}.json"),
     output:
-        inferred_bson=join(EXP_INFER_DIR, "method=matfac__{method,[_.=0-9a-zA-Z]+}/{data,[_.:=0-9a-zA-Z]+}/{pathways,[_.=0-9a-zA-Z]+}/inferred.bson"),
-        inferred_hdf=join(EXP_INFER_DIR, "method=matfac__{method,[_.=0-9a-zA-Z]+}/{data,[_.=:0-9a-zA-Z]+}/{pathways,[_.=0-9a-zA-Z]+}/inferred.hdf"),
+        inferred_bson=join(EXP_FITTED_DIR, "method=matfac__{method,[_.=0-9a-zA-Z]+}/{data,[_.:=0-9a-zA-Z]+}/{pathways,[_.=0-9a-zA-Z]+}/fitted.bson"),
+        inferred_hdf=join(EXP_FITTED_DIR, "method=matfac__{method,[_.=0-9a-zA-Z]+}/{data,[_.=:0-9a-zA-Z]+}/{pathways,[_.=0-9a-zA-Z]+}/fitted.hdf"),
         history_json=join(EXP_HISTORY_DIR, "method=matfac__{method,[_.=0-9a-zA-Z]+}/{data,[_.=:0-9a-zA-Z]+}/{pathways,[_.=0-9a-zA-Z]+}/history.json"),
     resources:
         mem_mb=10000,
@@ -173,29 +183,59 @@ rule exp_fit_matfac:
         "julia --project=. -t 1 {input.src} {input.data} {input.pwy_json} {output.inferred_bson} {output.inferred_hdf} {params.matfac_kwargs} history_json={output.history_json} gpu_status_file={input.status_file}"
 
 
+rule exp_fit_ctype_regressor:
+    input:
+        src="scripts/python/fit_ctype_regressor.py",
+        transformed_train=join(EXP_TRANS_TRAIN_DIR, "{transform}/{data}/{pathways}/transformed.hdf")
+    output:
+        trained_model=join(EXP_REGRESSOR_DIR, "{transform,[_.=:0-9a-zA-Z]+}/{data,[_.=:0-9a-zA-Z]+}/{pathways,[_.=:0-9a-zA-Z]+}/regressor.pkl"),
+        training_scores=join(EXP_REGRESSOR_DIR, "{transform,[_.=:0-9a-zA-Z]+}/{data,[_.=:0-9a-zA-Z]+}/{pathways,[_.=:0-9a-zA-Z]+}/scores.json")
+    shell:
+        "python {input.src} {input.transformed_train} {output.trained_model} {output.training_scores}"
+
+
 rule exp_transform_pca:
     input:
-        src="scripts/python/transform_pca.py"
+        src="scripts/python/transform_pca.py",
+        test_set=join(EXP_DATA_DIR, "{data}__test.hdf"),
+        fitted_pca=join(EXP_FITTED_DIR, "method=pca__{method_params}/{data}/{pathways}/fitted.hdf")
     output:
-        ""
+        transformed_test=join(EXP_TRANS_TEST_DIR, "method=pca__{method_params,[_.=:0-9a-zA-Z]+}/{data,[_.=:0-9a-zA-Z]+}/{pathways,[_.=:0-9a-zA-Z]+}/transformed.hdf")
     shell:
-        ""
+        "python {input.src} {input.test_set} {input.fitted_pca} {output.transformed_test}"
+
 
 rule exp_fit_pca:
     input:
-        src="scripts/python/transform_pca.py",
-        data_hdf="" 
+        src="scripts/python/fit_pca.py",
+        data_hdf=join(EXP_DATA_DIR, "{data}__train.hdf"),
     output:
-        ""
+        fitted_hdf=join(EXP_FITTED_DIR, "method=pca__k={k}__var_filter={vf}/{data,[_.=:0-9a-zA-Z]+}/{pathways,[_.=0-9a-zA-Z]+}/fitted.hdf"),
+        trans_train_hdf=join(EXP_TRANS_TRAIN_DIR, "method=pca__k={k,[0-9]+}__var_filter={vf,[.0-9]+}/{data,[_.=:0-9a-zA-Z]+}/{pathways,[_.=0-9a-zA-Z]+}/transformed.hdf")
+    resources:
+        cores=2
     shell:
-        "python {input.src} "
+        "python {input.src} {input.data_hdf} {output.fitted_hdf} {output.trans_train_hdf} --output_dim {wildcards.k} --variance_filter {wildcards.vf}"
  
+
+rule exp_make_splits:
+    input:
+        src="scripts/python/prep_data_splits.py",
+        data_hdf=join(EXP_DATA_DIR, "{data}.hdf")
+    output:
+        train_sets=[join(EXP_DATA_DIR, "{data,[_.=:0-9a-zA-Z]+}__"+"fold={}__train.hdf".format(i)) for i in range(EXP_DATA_FOLDS)],
+        test_sets=[join(EXP_DATA_DIR, "{data,[_.=:0-9a-zA-Z]+}__"+"fold={}__test.hdf".format(i)) for i in range(EXP_DATA_FOLDS)]
+    params:
+        prefix=lambda wc: join(EXP_DATA_DIR, wc["data"])
+    shell:
+        "python {input.src} {input.data_hdf} {params.prefix} --n_folds {EXP_DATA_FOLDS}"
+
 
 #####################################################################
 # Simulation study
 #####################################################################
 
-#rule l1frac_lineplot:
+#rule sim_l1frac_lineplot:
 #    input:
 #        src="scripts/python/vis_corruption_lineplot.py",
 #        scores_tsv=join(SIM_SCORE_DIR, "sim_scores.tsv")
@@ -204,7 +244,7 @@ rule exp_fit_pca:
 #    shell:
 #        "python {input.src} {input.scores_tsv} {output.lineplot} {output.heatmap} l1_fraction X_pwy_spearman_corr"
 #
-#rule missingness_lineplot:
+#rule sim_missingness_lineplot:
 #    input:
 #        src="scripts/python/vis_corruption_lineplot.py",
 #        scores_tsv=join(SIM_SCORE_DIR, "sim_scores.tsv")
@@ -255,7 +295,7 @@ rule exp_fit_pca:
 def construct_paths(analysis, size, keys=["methods", "top_pwys", "schema", "sim", "corruption", "replicates"]):
     return [join(*l) for l in product(*[SIM_PARAMS[analysis][size][k] for k in keys])]
 
-rule tabulate_scores:
+rule sim_tabulate_scores:
     input:
         src="scripts/python/tabulate_scores.py",
         infer_scores=lambda wc: [join(SIM_SCORE_DIR, p, "infer.json") for p in construct_paths(wc["analysis"], wc["size"])],
@@ -268,7 +308,7 @@ rule tabulate_scores:
         "python {input.src} {output.score_tsv} {input.infer_scores} {input.impute_scores}"
 
 
-rule score_matfac_impute:
+rule sim_score_matfac_impute:
     input:
         src="scripts/python/score_matfac_impute.py",
         imputed_hdf=join(SIM_IMPUTE_DIR, "method=matfac__{matfac_params}", "{pwys}", "{schema}", "missing={missing}__snr={snr}", "{corruption}", "{replicate}.hdf"),
@@ -388,8 +428,8 @@ rule prep_sim_inputs:
     input:
         src="scripts/python/prep_simulation_inputs.py",
         full_pwy_json=join(REACTOME_DIR, "{pwys}.json"),
-        full_samples_json=join(TCGA_DIR, "tcga_samples__heldout_ctypes=.json"),
-        full_features_json=join(TCGA_DIR, "tcga_features__heldout_ctypes=.json")
+        full_samples_json=join(EXP_DATA_DIR, "samples__heldout_ctypes=.json"),
+        full_features_json=join(EXP_DATA_DIR, "features__heldout_ctypes=.json")
     output:
         pwy_json=join(SIM_SCHEMA_DIR, "{pwys,[_=0-9a-z]+}/k={k}__m={m}__n={n}/{replicate,[_.=0-9a-z]+}/pathways.json"), 
         samples_json=join(SIM_SCHEMA_DIR, "{pwys,[_=0-9a-z]+}/k={k}__m={m}__n={n}/{replicate,[_.=0-9a-z]+}/samples.json"),
@@ -413,10 +453,11 @@ rule select_topk_pwys:
     shell:
         "python {input.src} {input.ranked_json} {wildcards.topk} {output.pwy_json}"
 
+
 rule rank_pwys:
     input:
         src="scripts/python/rank_pathways.py",
-        feature_json=join(TCGA_DIR, "tcga_features__heldout_ctypes=.json"),
+        feature_json=join(EXP_DATA_DIR, "features__heldout_ctypes=.json"),
         all_pwy_json=join(REACTOME_DIR, "reactome.json")
     output:
         ranked_json=join(REACTOME_DIR, "reactome_ranked.json")
@@ -460,10 +501,10 @@ rule download_reactome:
 rule extract_samples_features:
     input:
         src="scripts/python/prep_extract_samples_features.py",
-        tcga_hdf=join(TCGA_DIR, "tcga_omic_prep__{kwargs}.hdf")
+        tcga_hdf=join(EXP_DATA_DIR, "{kwargs}.hdf")
     output:
-        samples_json=join(TCGA_DIR, "tcga_samples__{kwargs,[_:=a-zA-Z]*}.json"),
-        features_json=join(TCGA_DIR, "tcga_features__{kwargs,[_:=a-zA-Z]*}.json")
+        samples_json=join(EXP_DATA_DIR, "samples__{kwargs,[_:=a-zA-Z]*}.json"),
+        features_json=join(EXP_DATA_DIR, "features__{kwargs,[_:=a-zA-Z]*}.json")
     shell:
         "python {input.src} {input.tcga_hdf} {output.samples_json} {output.features_json}"
 
@@ -472,7 +513,7 @@ rule preprocess_tcga:
         src="scripts/python/preprocess_tcga.py",
         tcga_hdf=join(TCGA_DIR, "tcga_omic.hdf")
     output:
-        prep_hdf=join(TCGA_DIR, "tcga_omic_prep__{kwargs,[_:=a-zA-Z]*}.hdf") 
+        prep_hdf=join(EXP_DATA_DIR, "{kwargs,[_:=a-zA-Z]*}.hdf") 
     params:
         opts=lambda wc: " ".join(wc["kwargs"].split("__"))
     resources:

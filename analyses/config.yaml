@@ -254,6 +254,8 @@ sim_params:
 # TCGA evaluations config
 ################################
 
+cross_val_folds: 5
+
 tcga_runs:
     data:
         heldout_ctypes: ["OV:GBM:LAML"]
@@ -261,16 +263,19 @@ tcga_runs:
     pathways:
         top_pwys: [500]
     methods:
-        matfac:
-            l1_fraction: [0.5, 1.0]
-            use_gpu: [1]
-            lambda_X: [0.0, 0.01]
-            lambda_Y: [1.0]
-            lambda_layer: [0.1]
-            max_epochs: [2000]
-            capacity: [25000000]
-            lr: [0.05]
-            n_lambda: [2]
-            print_iter: [1]
+        #matfac:
+        #    l1_fraction: [0.5, 1.0]
+        #    use_gpu: [1]
+        #    lambda_X: [0.0, 0.01]
+        #    lambda_Y: [1.0]
+        #    lambda_layer: [0.1]
+        #    max_epochs: [2000]
+        #    capacity: [25000000]
+        #    lr: [0.05]
+        #    n_lambda: [2]
+        #    print_iter: [1]
+        pca:
+            k: [20]
+            var_filter: [0.5]
 
 

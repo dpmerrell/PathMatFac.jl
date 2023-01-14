@@ -101,58 +101,58 @@ if __name__=="__main__":
 
     parser = argparse.ArgumentParser()
     parser.add_argument("data_hdf", help="HDF5 containing tabular data")
-    parser.add_argument("transformed_hdf")
-    parser.add_argument("fitted_pca_hdf")
+    parser.add_argument("fitted_hdf")
+    parser.add_argument("transformed_train_hdf")
     parser.add_argument("--output_dim", help="Use the top-`output_dim` principal components.", type=int)
     parser.add_argument("--variance_filter", help="Discard the features with least variance, *keeping* this fraction of the features.", type=float, default=0.5)
     args = parser.parse_args()
 
     data_hdf = args.data_hdf
-    transformed_hdf = args.transformed_hdf
-    pcs_hdf = args.fitted_pca_hdf
+    fitted_hdf = args.fitted_hdf
+    trans_hdf = args.transformed_train_hdf
     output_dim = args.output_dim
     v_frac = args.variance_filter
 
     # Load data
-    X, sample_ids, sample_groups, feature_assays, feature_genes = load_data(data_hdf)
+    Z, sample_ids, sample_groups, feature_assays, feature_genes = load_data(data_hdf)
 
-    print("X SHAPE:")
-    print(X.shape)
+    print("Z SHAPE:")
+    print(Z.shape)
 
     # Remove empty rows and columns
-    X_nomissing, row_key, col_key = remove_missing(X)
+    Z_nomissing, row_key, col_key = remove_missing(Z)
     sample_ids = sample_ids[row_key]
     sample_groups = sample_groups[row_key]
     feature_assays = feature_assays[col_key]
     feature_genes = feature_genes[col_key]
 
-    print("X_NOMISSING SHAPE:")
-    print(X_nomissing.shape)
+    print("Z_NOMISSING SHAPE:")
+    print(Z_nomissing.shape)
 
     # Remove the columns with least variance
-    X_filtered, col_key = variance_filter(X_nomissing, v_frac)
+    Z_filtered, col_key = variance_filter(Z_nomissing, v_frac)
     feature_assays = feature_assays[col_key]
     feature_genes = feature_genes[col_key]
     
-    print("X_FILTERED SHAPE:")
-    print(X_filtered.shape)
+    print("Z_FILTERED SHAPE:")
+    print(Z_filtered.shape)
 
     # Standardize the remaining columns
-    X_std, mu, sigma = standardize_columns(X_filtered)
-    print("X_STD SHAPE:")
-    print(X_std.shape)
+    Z_std, mu, sigma = standardize_columns(Z_filtered)
+    print("Z_STD SHAPE:")
+    print(Z_std.shape)
 
     # Perform PCA
-    X_transformed, pcs = transform_data(X_std, n_components=output_dim)
+    X, pcs = transform_data(Z_std, n_components=output_dim)
 
-    # Output the transformed data 
-    with h5py.File(transformed_hdf, "w") as f:
-        su.write_hdf(f, "X", X_transformed)
+    # Output the transformed data and the 
+    # fitted principal components and standardization parameters
+    with h5py.File(trans_hdf, "w") as f:
+        su.write_hdf(f, "X", X)
         su.write_hdf(f, "instances", sample_ids, is_string=True) 
         su.write_hdf(f, "instance_groups", sample_groups, is_string=True) 
-
-    # Output the fitted principal components and standardization parameters
-    with h5py.File(pcs_hdf, "w") as f:
+    
+    with h5py.File(fitted_hdf, "w") as f:
         su.write_hdf(f, "Y", pcs)
         su.write_hdf(f, "mu", mu)
         su.write_hdf(f, "sigma", sigma)
