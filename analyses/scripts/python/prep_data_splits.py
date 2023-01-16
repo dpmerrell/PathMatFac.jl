@@ -102,8 +102,17 @@ def stratified_group_crossval_splits(class_labels, group_labels, n_folds=5):
 
 def define_sample_groups(barcodes, barcode_assays):
 
-    M, _ = barcodes.shape
-    group_labels = np.arange(M, dtype=int)
+    #M, _ = barcodes.shape
+    #group_labels = np.arange(M, dtype=int)
+
+    print("BARCODES: ", barcodes)
+    print("BARCODE ASSAYS: ", barcode_assays)
+    mrnaseq_idx = np.where(barcode_assays == "mrnaseq")[0][0]
+    print("MRNASEQ IDX: ", mrnaseq_idx)
+    mrnaseq_barcodes = barcodes[:,mrnaseq_idx]
+    print("MRNASEQ BARCODES: ", mrnaseq_barcodes)
+    group_labels = np.vectorize(lambda x: "-".join(x.split("-")[-2:]))(mrnaseq_barcodes) 
+    print("GROUP LABELS: ", group_labels)
 
     return group_labels
 

@@ -51,14 +51,15 @@ SIM_FACTORPLOT_DIR = join(SIM_VIS_DIR, "factor_plots")
 EXP_DIR = join(RESULT_DIR, "real_data_runs")
 EXP_DATA_DIR = join(EXP_DIR, "omic_data")
 EXP_FITTED_DIR = join(EXP_DIR, "fitted_transforms")
-EXP_REGRESSOR_DIR = join(EXP_DIR, "fitted_regressors")
 EXP_TRANS_TRAIN_DIR = join(EXP_DIR, "transformed_training_sets")
 EXP_TRANS_TEST_DIR = join(EXP_DIR, "transformed_test_sets")
-EXP_PRED_DIR = join(EXP_DIR, "predictions")
+EXP_CTYPE_REGRESSOR_DIR = join(EXP_DIR, "fitted_ctype_regressors")
+EXP_CTYPE_SCORE_DIR = join(EXP_DIR, "ctype_regression_scores")
 EXP_HISTORY_DIR = join(EXP_DIR, "training_histories")
 EXP_VIS_DIR = join(EXP_DIR, "visualizations")
 EXP_SCATTER_DIR = join(EXP_VIS_DIR, "embedding_scatter")
 EXP_FACTORPLOT_DIR = join(EXP_VIS_DIR, "factor_plots")
+
 
 #####################################################################
 # Downloading data
@@ -127,10 +128,16 @@ rule all:
        #exp_factorplots=expand(join(EXP_FACTORPLOT_DIR,"{method}/{data}/{pathways}/factors.html"),
        #                    method=TCGA_RUN_PARAMS["methods"], data=TCGA_RUN_PARAMS["data"],
        #                    pathways=TCGA_RUN_PARAMS["pathways"]),
-       exp_pca_regressors=expand(join(EXP_REGRESSOR_DIR, "{transform}/{data}__fold={fold}/{pathways}/regressor.pkl"),
-                                 transform=TCGA_RUN_PARAMS["methods"], data=TCGA_RUN_PARAMS["data"],
-                                 fold=list(range(EXP_DATA_FOLDS)), pathways=TCGA_RUN_PARAMS["pathways"])
-      
+       #exp_pca_regressors=expand(join(EXP_REGRESSOR_DIR, "{transform}/{data}__fold={fold}/{pathways}/regressor.pkl"),
+       #                          transform=TCGA_RUN_PARAMS["methods"], data=TCGA_RUN_PARAMS["data"],
+       #                          fold=list(range(EXP_DATA_FOLDS)), pathways=TCGA_RUN_PARAMS["pathways"]),
+       #exp_transformed_test=expand(join(EXP_TRANS_TEST_DIR, "{transform}/{data}__fold={fold}/{pathways}/transformed.hdf"),
+       #                          transform=TCGA_RUN_PARAMS["methods"], data=TCGA_RUN_PARAMS["data"],
+       #                          fold=list(range(EXP_DATA_FOLDS)), pathways=TCGA_RUN_PARAMS["pathways"]),
+       exp_ctype_scores=expand(join(EXP_CTYPE_SCORE_DIR, "{transform}/{data}__fold={fold}/{pathways}/scores.json"),
+                               transform=TCGA_RUN_PARAMS["methods"], data=TCGA_RUN_PARAMS["data"],
+                               fold=list(range(EXP_DATA_FOLDS)), pathways=TCGA_RUN_PARAMS["pathways"]),
+
 
 #####################################################################
 # Runs on real (TCGA) data
@@ -183,13 +190,24 @@ rule exp_fit_matfac:
         "julia --project=. -t 1 {input.src} {input.data} {input.pwy_json} {output.inferred_bson} {output.inferred_hdf} {params.matfac_kwargs} history_json={output.history_json} gpu_status_file={input.status_file}"
 
 
+rule exp_score_ctype_regressor:
+    input:
+        src="scripts/python/score_ctype_regressor.py",
+        fitted_regressor=join(EXP_CTYPE_REGRESSOR_DIR, "{transform}/{data}/{pathways}/regressor.pkl"),
+        transformed_test=join(EXP_TRANS_TEST_DIR, "{transform}/{data}/{pathways}/transformed.hdf")
+    output:
+        score_json=join(EXP_CTYPE_SCORE_DIR, "{transform}/{data}/{pathways}/scores.json")
+    shell:
+        "python {input.src} {input.fitted_regressor} {input.transformed_test} {output.score_json}"
+
+
 rule exp_fit_ctype_regressor:
     input:
         src="scripts/python/fit_ctype_regressor.py",
         transformed_train=join(EXP_TRANS_TRAIN_DIR, "{transform}/{data}/{pathways}/transformed.hdf")
     output:
-        trained_model=join(EXP_REGRESSOR_DIR, "{transform,[_.=:0-9a-zA-Z]+}/{data,[_.=:0-9a-zA-Z]+}/{pathways,[_.=:0-9a-zA-Z]+}/regressor.pkl"),
-        training_scores=join(EXP_REGRESSOR_DIR, "{transform,[_.=:0-9a-zA-Z]+}/{data,[_.=:0-9a-zA-Z]+}/{pathways,[_.=:0-9a-zA-Z]+}/scores.json")
+        trained_model=join(EXP_CTYPE_REGRESSOR_DIR, "{transform,[_.=:0-9a-zA-Z]+}/{data,[_.=:0-9a-zA-Z]+}/{pathways,[_.=:0-9a-zA-Z]+}/regressor.pkl"),
+        training_scores=join(EXP_CTYPE_REGRESSOR_DIR, "{transform,[_.=:0-9a-zA-Z]+}/{data,[_.=:0-9a-zA-Z]+}/{pathways,[_.=:0-9a-zA-Z]+}/scores.json")
     shell:
         "python {input.src} {input.transformed_train} {output.trained_model} {output.training_scores}"
 
@@ -201,6 +219,7 @@ rule exp_transform_pca:
         fitted_pca=join(EXP_FITTED_DIR, "method=pca__{method_params}/{data}/{pathways}/fitted.hdf")
     output:
         transformed_test=join(EXP_TRANS_TEST_DIR, "method=pca__{method_params,[_.=:0-9a-zA-Z]+}/{data,[_.=:0-9a-zA-Z]+}/{pathways,[_.=:0-9a-zA-Z]+}/transformed.hdf")
+    threads: 4
     shell:
         "python {input.src} {input.test_set} {input.fitted_pca} {output.transformed_test}"
 
