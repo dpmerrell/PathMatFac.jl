@@ -212,8 +212,7 @@ rule exp_fit_pca:
     output:
         fitted_hdf=join(EXP_FITTED_DIR, "method=pca__k={k}__var_filter={vf}/{data,[_.=:0-9a-zA-Z]+}/{pathways,[_.=0-9a-zA-Z]+}/fitted.hdf"),
         trans_train_hdf=join(EXP_TRANS_TRAIN_DIR, "method=pca__k={k,[0-9]+}__var_filter={vf,[.0-9]+}/{data,[_.=:0-9a-zA-Z]+}/{pathways,[_.=0-9a-zA-Z]+}/transformed.hdf")
-    resources:
-        cores=2
+    threads: 4
     shell:
         "python {input.src} {input.data_hdf} {output.fitted_hdf} {output.trans_train_hdf} --output_dim {wildcards.k} --variance_filter {wildcards.vf}"
  

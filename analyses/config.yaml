@@ -259,7 +259,7 @@ cross_val_folds: 5
 tcga_runs:
     data:
         heldout_ctypes: ["OV:GBM:LAML"]
-        kept_ctypes: ["HNSC:CESC"]
+        kept_ctypes: ["HNSC:CESC:BRCA"]
     pathways:
         top_pwys: [500]
     methods:
@@ -275,7 +275,7 @@ tcga_runs:
         #    n_lambda: [2]
         #    print_iter: [1]
         pca:
-            k: [20]
-            var_filter: [0.5]
+            k: [5]
+            var_filter: [0.05]
 
 

@@ -47,6 +47,7 @@ def remove_missing(X):
     return X_nomissing, row_key, col_key
 
 
+
 def variance_filter(X, filter_frac=0.5):
 
     col_vars = np.nanvar(X, axis=0)
