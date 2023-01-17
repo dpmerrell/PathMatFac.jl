@@ -1,5 +1,5 @@
 
-from sklearn.metrics import f1_score, roc_auc_score
+from sklearn.metrics import f1_score, roc_auc_score, accuracy_score
 import script_util as su
 import pickle as pkl
 import numpy as np
@@ -28,6 +28,7 @@ def compute_scores(y, pred_y, pred_y_probs):
 
     scores = {'f1_micro': f1_score(y, pred_y, average="micro"),
               'f1_macro': f1_score(y, pred_y, average="macro"),
+              'accuracy': accuracy_score(y, pred_y)
              }
    
     # Distinguish between multiclass and binary

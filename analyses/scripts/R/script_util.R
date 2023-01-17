@@ -41,6 +41,18 @@ get_omic_data <- function(all_data, all_features, omic_type){
 }
 
 
+load_clinical_hdf <- function(path){
+    data <- h5read(path, "data")
+    cols <- h5read(path, "index")   # Rows and columns got mixed up
+    rows <- h5read(path, "columns") # during preprocessing...
+    
+    colnames(data) <- cols
+    rownames(data) <- rows
+
+    return data
+}
+
+
 save_to_hdf <- function(results_matrix, output_hdf){
 
     h5write(results_matrix, output_hdf, "scores")
