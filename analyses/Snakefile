@@ -104,7 +104,8 @@ TCGA_REGRESSION_TARGETS = TCGA_REGRESSION_PARAMS["targets"]
 TCGA_REGRESSION_PARAMS = {"methods": ["__".join(["method={}".format(m), l]) for m, m_param in TCGA_REGRESSION_PARAMS["methods"].items() for l in param_dict_to_list(m_param) ],
                           "data": param_dict_to_list(TCGA_REGRESSION_PARAMS["data"]),
                           "pathways": param_dict_to_list(TCGA_REGRESSION_PARAMS["pathways"]),
-                          "folds": ["fold={}".format(x) for x in range(TCGA_FOLDS)]
+                          "targets": TCGA_REGRESSION_TARGETS,
+                          "folds": list(range(TCGA_FOLDS))
                          }
 
 
@@ -138,9 +139,10 @@ rule all:
        #exp_transformed_test=expand(join(EXP_TRANS_TEST_DIR, "{transform}/{data}__fold={fold}/{pathways}/transformed.hdf"),
        #                          transform=TCGA_REGRESSION_PARAMS["methods"], data=TCGA_REGRESSION_PARAMS["data"],
        #                          fold=list(range(TCGA_FOLDS)), pathways=TCGA_REGRESSION_PARAMS["pathways"]),
-       exp_ctype_scores=expand(join(EXP_CTYPE_SCORE_DIR, "{transform}/{data}__fold={fold}/{pathways}/scores.json"),
+       exp_ctype_scores=expand(join(EXP_CTYPE_SCORE_DIR, "{transform}/{data}__fold={fold}__targets={targets}/{pathways}/scores.json"),
                                transform=TCGA_REGRESSION_PARAMS["methods"], data=TCGA_REGRESSION_PARAMS["data"],
-                               fold=TCGA_REGRESSION_PARAMS["folds"], pathways=TCGA_REGRESSION_PARAMS["pathways"]),
+                               fold=TCGA_REGRESSION_PARAMS["folds"], targets=TCGA_REGRESSION_PARAMS["targets"],
+                               pathways=TCGA_REGRESSION_PARAMS["pathways"]),
 
 
 #####################################################################
@@ -200,7 +202,7 @@ rule exp_score_ctype_regressor:
         fitted_regressor=join(EXP_CTYPE_REGRESSOR_DIR, "{transform}/{data}/{pathways}/regressor.pkl"),
         transformed_test=join(EXP_TRANS_TEST_DIR, "{transform}/{data}/{pathways}/transformed.hdf")
     output:
-        score_json=join(EXP_CTYPE_SCORE_DIR, "{transform}/{data}/{pathways}/scores.json")
+        score_json=join(EXP_CTYPE_SCORE_DIR, "{transform,[_.=:0-9a-zA-Z]+}/{data,[_.=:0-9a-zA-Z]+}/{pathways,[_.=:0-9a-zA-Z]+}/scores.json")
     shell:
         "python {input.src} {input.fitted_regressor} {input.transformed_test} {output.score_json}"
 
@@ -226,8 +228,8 @@ rule exp_transform_pca:
     threads: 4
     shell:
         "python {input.src} {input.test_set} {input.fitted_pca} {output.transformed_test}"
-
-
+        
+        
 rule exp_fit_pca:
     input:
         src="scripts/python/fit_pca.py",
@@ -511,15 +513,16 @@ rule download_reactome:
 rule prep_tcga_splits:
     input:
         src="scripts/python/prep_tcga_splits.py",
-        data_hdf=join(EXP_DATA_DIR, "{data}.hdf")
+        data_hdf=join(EXP_DATA_DIR, "{data}.hdf"),
+        clinical_hdf=join(TCGA_DIR, "tcga_clinical.hdf")
     output:
-        train_sets=[join(EXP_DATA_DIR, "{data,[_.=:0-9a-zA-Z]+}__"+"fold={}__train.hdf".format(i)) for i in range(TCGA_FOLDS)],
-        test_sets=[join(EXP_DATA_DIR, "{data,[_.=:0-9a-zA-Z]+}__"+"fold={}__test.hdf".format(i)) for i in range(TCGA_FOLDS)]
+        train_sets=[join(EXP_DATA_DIR, "{data,[_.=:0-9a-zA-Z]+}__"+"fold={}".format(i)+"__targets={targets,[_:a-z]*}__train.hdf") for i in range(TCGA_FOLDS)],
+        test_sets=[join(EXP_DATA_DIR, "{data,[_.=:0-9a-zA-Z]+}__"+"fold={}".format(i)+"__targets={targets,[_:a-z]*}__test.hdf") for i in range(TCGA_FOLDS)]
     params:
         prefix=lambda wc: join(EXP_DATA_DIR, wc["data"]),
-        filters=[" ".join(s) for s in TCGA_REGRESSION_TARGETS] 
+        tar=lambda wc: " ".join(wc["targets"].split(":"))
     shell:
-        "python {input.src} {input.data_hdf} {params.prefix} --n_folds {TCGA_FOLDS} --sample_filters {params.filters}"
+        "python {input.src} {input.data_hdf} {input.clinical_hdf} {params.prefix} --n_folds {TCGA_FOLDS} --targets {params.tar}"
 
 
 rule extract_samples_features:

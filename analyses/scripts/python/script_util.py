@@ -46,9 +46,9 @@ def pwy_to_geneset(pwy, all_genes):
 def load_hdf(dataset_hdf, key, dtype=float):
     
     with h5py.File(dataset_hdf, "r") as f:
-        dataset = f[key][...]
+        dataset = f[key][...].astype(dtype)
     
-    return dataset.astype(dtype) 
+    return dataset 
 
 
 def load_hdf_dict(dataset_hdf, key, keytype=str, dtype=float):
