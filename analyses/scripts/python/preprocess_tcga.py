@@ -1,6 +1,8 @@
-import h5py
+
+import script_util as su
 import numpy as np
 import argparse
+import h5py
 import sys
 
 
@@ -87,19 +89,7 @@ def mut_threshold(a, u=0.0):
     return a
 
 
-def standardize_by_gp(a, groups):
-
-    unq_gps = np.unique(groups)
-    for gp in unq_gps:
-        gp_idx = (groups == gp)
-        mu = np.nanmean(a[:,gp_idx], axis=1)[:,np.newaxis]
-        std = np.nanstd(a[:,gp_idx], axis=1)[:,np.newaxis]
-        a[:,gp_idx] = (a[:,gp_idx] - mu)/std
-
-    return a
-
-
-def preprocess_features(omic_matrix, feature_assays, sample_groups, standardized_assays):
+def preprocess_features(omic_matrix, feature_assays, sample_groups):
 
     assays = ["methylation", "cna", "mutation", "mrnaseq", "rppa"]
     assay_rows = {assay: (feature_assays == assay) for assay in assays} 
@@ -108,9 +98,6 @@ def preprocess_features(omic_matrix, feature_assays, sample_groups, standardized
 
     omic_matrix[assay_rows["cna"],:] = cna_threshold(omic_matrix[assay_rows["cna"],:])
     omic_matrix[assay_rows["mutation"],:] = mut_threshold(omic_matrix[assay_rows["mutation"],:])
-
-    for std_assay in standardized_assays:
-        omic_matrix[assay_rows[std_assay],:] = standardize_by_gp(omic_matrix[assay_rows[std_assay],:], sample_groups)
 
     return omic_matrix
 
@@ -137,18 +124,15 @@ if __name__=="__main__":
     input_hdf = args[1]
     output_hdf = args[2]
 
+
     defaults = {"heldout_ctypes": [],
-                "kept_ctypes": [],
-                "std_assays": []
+                "kept_ctypes": su.ALL_CTYPES,
                 }
 
     opt_dict = parse_opts(args[3:], defaults)
 
     heldout_ctypes = opt_dict["heldout_ctypes"]
     kept_ctypes = opt_dict["kept_ctypes"]
-    standardized_assays = opt_dict["std_assays"]
-
-    print("STD_ASSAYS:", standardized_assays)
 
     omic_matrix,\
     sample_ids, sample_groups, \
@@ -176,7 +160,7 @@ if __name__=="__main__":
     print(sample_groups.shape)
     print(feature_assays.shape)
 
-    prepped_omics = preprocess_features(omic_matrix, feature_assays, sample_groups, standardized_assays)
+    prepped_omics = preprocess_features(omic_matrix, feature_assays, sample_groups)
     
     output_to_hdf(output_hdf, prepped_omics, 
                               sample_ids, sample_groups,

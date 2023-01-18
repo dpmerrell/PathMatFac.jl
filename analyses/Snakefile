@@ -95,17 +95,21 @@ for a, a_p in SIM_PARAMS.items():
 print(SIM_ANALYSES_SIZES)
 
 #####################################################################
-# Unpack TCGA run parameters
+# Unpack TCGA regression parameters
 #####################################################################
-TCGA_RUN_PARAMS = config["tcga_runs"]
-TCGA_RUN_PARAMS = {"methods": ["__".join(["method={}".format(m), l]) for m, m_param in TCGA_RUN_PARAMS["methods"].items() for l in param_dict_to_list(m_param) ],
-                   "data": param_dict_to_list(TCGA_RUN_PARAMS["data"]),
-                   "pathways": param_dict_to_list(TCGA_RUN_PARAMS["pathways"])}
+TCGA_REGRESSION_PARAMS = config["tcga_regressions"]
+TCGA_FOLDS = TCGA_REGRESSION_PARAMS["cross_val_folds"]
+TCGA_REGRESSION_TARGETS = TCGA_REGRESSION_PARAMS["targets"]
 
-EXP_DATA_FOLDS = config["cross_val_folds"]
+TCGA_REGRESSION_PARAMS = {"methods": ["__".join(["method={}".format(m), l]) for m, m_param in TCGA_REGRESSION_PARAMS["methods"].items() for l in param_dict_to_list(m_param) ],
+                          "data": param_dict_to_list(TCGA_REGRESSION_PARAMS["data"]),
+                          "pathways": param_dict_to_list(TCGA_REGRESSION_PARAMS["pathways"]),
+                          "folds": ["fold={}".format(x) for x in range(TCGA_FOLDS)]
+                         }
+
 
 print("\nTCGA Runs:")
-for k, v in TCGA_RUN_PARAMS.items():
+for k, v in TCGA_REGRESSION_PARAMS.items():
     print("\t", k, ": ", v)
 
 
@@ -120,23 +124,23 @@ rule all:
        #sim_snr_lineplot=join(SIM_VIS_DIR, "snr-lineplot.png"),
        #sim_snr_heatmap=join(SIM_VIS_DIR, "snr-heatmap.png")
        #exp_fitted=expand(join(EXP_FITTED_DIR,"{method}/{data}/{pathways}/fitted.hdf"),
-       #                  method=TCGA_RUN_PARAMS["methods"], data=TCGA_RUN_PARAMS["data"],
-       #                  pathways=TCGA_RUN_PARAMS["pathways"]),
+       #                  method=TCGA_REGRESSION_PARAMS["methods"], data=TCGA_REGRESSION_PARAMS["data"],
+       #                  pathways=TCGA_REGRESSION_PARAMS["pathways"]),
        #exp_scatters=expand(join(EXP_SCATTER_DIR,"{method}/{data}/{pathways}/scatter.html"),
-       #                    method=TCGA_RUN_PARAMS["methods"], data=TCGA_RUN_PARAMS["data"],
-       #                    pathways=TCGA_RUN_PARAMS["pathways"]),
+       #                    method=TCGA_REGRESSION_PARAMS["methods"], data=TCGA_REGRESSION_PARAMS["data"],
+       #                    pathways=TCGA_REGRESSION_PARAMS["pathways"]),
        #exp_factorplots=expand(join(EXP_FACTORPLOT_DIR,"{method}/{data}/{pathways}/factors.html"),
-       #                    method=TCGA_RUN_PARAMS["methods"], data=TCGA_RUN_PARAMS["data"],
-       #                    pathways=TCGA_RUN_PARAMS["pathways"]),
+       #                    method=TCGA_REGRESSION_PARAMS["methods"], data=TCGA_REGRESSION_PARAMS["data"],
+       #                    pathways=TCGA_REGRESSION_PARAMS["pathways"]),
        #exp_pca_regressors=expand(join(EXP_REGRESSOR_DIR, "{transform}/{data}__fold={fold}/{pathways}/regressor.pkl"),
-       #                          transform=TCGA_RUN_PARAMS["methods"], data=TCGA_RUN_PARAMS["data"],
-       #                          fold=list(range(EXP_DATA_FOLDS)), pathways=TCGA_RUN_PARAMS["pathways"]),
+       #                          transform=TCGA_REGRESSION_PARAMS["methods"], data=TCGA_REGRESSION_PARAMS["data"],
+       #                          fold=list(range(TCGA_FOLDS)), pathways=TCGA_REGRESSION_PARAMS["pathways"]),
        #exp_transformed_test=expand(join(EXP_TRANS_TEST_DIR, "{transform}/{data}__fold={fold}/{pathways}/transformed.hdf"),
-       #                          transform=TCGA_RUN_PARAMS["methods"], data=TCGA_RUN_PARAMS["data"],
-       #                          fold=list(range(EXP_DATA_FOLDS)), pathways=TCGA_RUN_PARAMS["pathways"]),
+       #                          transform=TCGA_REGRESSION_PARAMS["methods"], data=TCGA_REGRESSION_PARAMS["data"],
+       #                          fold=list(range(TCGA_FOLDS)), pathways=TCGA_REGRESSION_PARAMS["pathways"]),
        exp_ctype_scores=expand(join(EXP_CTYPE_SCORE_DIR, "{transform}/{data}__fold={fold}/{pathways}/scores.json"),
-                               transform=TCGA_RUN_PARAMS["methods"], data=TCGA_RUN_PARAMS["data"],
-                               fold=list(range(EXP_DATA_FOLDS)), pathways=TCGA_RUN_PARAMS["pathways"]),
+                               transform=TCGA_REGRESSION_PARAMS["methods"], data=TCGA_REGRESSION_PARAMS["data"],
+                               fold=TCGA_REGRESSION_PARAMS["folds"], pathways=TCGA_REGRESSION_PARAMS["pathways"]),
 
 
 #####################################################################
@@ -235,18 +239,6 @@ rule exp_fit_pca:
     shell:
         "python {input.src} {input.data_hdf} {output.fitted_hdf} {output.trans_train_hdf} --output_dim {wildcards.k} --variance_filter {wildcards.vf}"
  
-
-rule exp_make_splits:
-    input:
-        src="scripts/python/prep_data_splits.py",
-        data_hdf=join(EXP_DATA_DIR, "{data}.hdf")
-    output:
-        train_sets=[join(EXP_DATA_DIR, "{data,[_.=:0-9a-zA-Z]+}__"+"fold={}__train.hdf".format(i)) for i in range(EXP_DATA_FOLDS)],
-        test_sets=[join(EXP_DATA_DIR, "{data,[_.=:0-9a-zA-Z]+}__"+"fold={}__test.hdf".format(i)) for i in range(EXP_DATA_FOLDS)]
-    params:
-        prefix=lambda wc: join(EXP_DATA_DIR, wc["data"])
-    shell:
-        "python {input.src} {input.data_hdf} {params.prefix} --n_folds {EXP_DATA_FOLDS}"
 
 
 #####################################################################
@@ -514,6 +506,20 @@ rule download_reactome:
 #####################################################################
 # Preprocess TCGA
 #####################################################################
+
+
+rule prep_tcga_splits:
+    input:
+        src="scripts/python/prep_tcga_splits.py",
+        data_hdf=join(EXP_DATA_DIR, "{data}.hdf")
+    output:
+        train_sets=[join(EXP_DATA_DIR, "{data,[_.=:0-9a-zA-Z]+}__"+"fold={}__train.hdf".format(i)) for i in range(TCGA_FOLDS)],
+        test_sets=[join(EXP_DATA_DIR, "{data,[_.=:0-9a-zA-Z]+}__"+"fold={}__test.hdf".format(i)) for i in range(TCGA_FOLDS)]
+    params:
+        prefix=lambda wc: join(EXP_DATA_DIR, wc["data"]),
+        filters=[" ".join(s) for s in TCGA_REGRESSION_TARGETS] 
+    shell:
+        "python {input.src} {input.data_hdf} {params.prefix} --n_folds {TCGA_FOLDS} --sample_filters {params.filters}"
 
 
 rule extract_samples_features:

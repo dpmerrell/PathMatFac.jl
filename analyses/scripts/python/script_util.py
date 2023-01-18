@@ -20,6 +20,13 @@ NICE_NAMES = {"gender": "Sex",
               "X_pwy_spearman_corr": "Pathway Activation Spearman"
               }
 
+ALL_CTYPES = ["ACC", "CESC", "HNSC", 
+              "KIRC", "LGG", "LUSC", "PAAD", "READ", "STAD", 
+              "THCA", "UCS", "BLCA", "CHOL", "DLBC", "GBM", 
+              "KICH", "KIRP", "LIHC", "MESO", "PCPG", "SARC", 
+              "THYM", "UVM", "BRCA", "COAD", "ESCA", 
+              "LAML", "LUAD", "OV", "PRAD", 
+              "SKCM", "TGCT", "UCEC"]
 
 """
 Convert a pathway into a list of gene IDs.
