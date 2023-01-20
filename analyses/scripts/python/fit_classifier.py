@@ -13,14 +13,13 @@ def load_data(training_hdf):
 
     # Load the features and labels from the HDF file
     X = su.load_hdf(training_hdf, "X")
-    ctypes = su.load_hdf(training_hdf, "instance_groups", dtype=str)
+    labels = su.load_hdf(training_hdf, "target", dtype=str)
 
     # Encode the labels as integers.
     # (label --> its rank in sorted order)
-    unq_ctypes = np.unique(ctypes)
-    unq_ctypes.sort() 
-    encoder = {ct:i for i, ct in enumerate(unq_ctypes)}
-    y = np.vectorize(lambda x: encoder[x])(ctypes)
+    unq_labels = np.sort(np.unique(labels))
+    encoder = {ct:i for i, ct in enumerate(unq_labels)}
+    y = np.vectorize(lambda x: encoder[x])(labels)
 
     return X, y
 

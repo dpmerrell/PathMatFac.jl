@@ -25,21 +25,17 @@ def load_data(data_hdf, modality="mrnaseq"):
         feature_genes = feature_genes[relevant_cols]
         assays = assays[relevant_cols]
 
-    return X, sample_ids, sample_groups, assays, feature_genes
+        target = f["target"][...].astype(str)
+
+    return X, sample_ids, sample_groups, assays, feature_genes, target
 
 
 
-def remove_missing(X):
+def remove_missing(X, out_dim):
 
-    row_key = np.zeros(X.shape[0], dtype=bool)
-    for i in range(X.shape[0]):
-        if np.any(np.isfinite(X[i,:])):
-            row_key[i] = True
-
-    col_key = np.zeros(X.shape[1], dtype=bool)
-    for j in range(X.shape[1]):
-        if np.any(np.isfinite(X[:,j])):
-            col_key[j] = True
+    finite_X = np.isfinite(X)
+    row_key = (np.sum(finite_X, axis=1) > out_dim)
+    col_key = (np.sum(finite_X, axis=0) > out_dim)
 
     X_nomissing = X[row_key,:]
     X_nomissing = X_nomissing[:,col_key]
@@ -81,6 +77,7 @@ def find_knee(rsquare):
 def transform_data(X, n_components=None):
 
     result = PCA(X, standardize=False,
+                    method='nipals',
                     demean=False,
                     normalize=False,
                     ncomp=n_components, 
@@ -115,34 +112,23 @@ if __name__=="__main__":
     v_frac = args.variance_filter
 
     # Load data
-    Z, sample_ids, sample_groups, feature_assays, feature_genes = load_data(data_hdf)
-
-    print("Z SHAPE:")
-    print(Z.shape)
+    Z, sample_ids, sample_groups, feature_assays, feature_genes, target = load_data(data_hdf)
 
     # Remove empty rows and columns
-    Z_nomissing, row_key, col_key = remove_missing(Z)
+    Z_nomissing, row_key, col_key = remove_missing(Z, output_dim)
     sample_ids = sample_ids[row_key]
     sample_groups = sample_groups[row_key]
     feature_assays = feature_assays[col_key]
     feature_genes = feature_genes[col_key]
-
-    print("Z_NOMISSING SHAPE:")
-    print(Z_nomissing.shape)
 
     # Remove the columns with least variance
     Z_filtered, col_key = variance_filter(Z_nomissing, v_frac)
     feature_assays = feature_assays[col_key]
     feature_genes = feature_genes[col_key]
     
-    print("Z_FILTERED SHAPE:")
-    print(Z_filtered.shape)
-
     # Standardize the remaining columns
     Z_std, mu, sigma = standardize_columns(Z_filtered)
-    print("Z_STD SHAPE:")
-    print(Z_std.shape)
-
+    
     # Perform PCA
     X, pcs = transform_data(Z_std, n_components=output_dim)
 
@@ -151,7 +137,8 @@ if __name__=="__main__":
     with h5py.File(trans_hdf, "w") as f:
         su.write_hdf(f, "X", X)
         su.write_hdf(f, "instances", sample_ids, is_string=True) 
-        su.write_hdf(f, "instance_groups", sample_groups, is_string=True) 
+        su.write_hdf(f, "instance_groups", sample_groups, is_string=True)
+        su.write_hdf(f, "target", target, is_string=True) 
     
     with h5py.File(fitted_hdf, "w") as f:
         su.write_hdf(f, "Y", pcs)

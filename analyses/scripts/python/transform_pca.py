@@ -11,8 +11,9 @@ def load_data(data_hdf):
     feature_assays = su.load_hdf(data_hdf, "omic_data/feature_assays", dtype=str)
     instances = su.load_hdf(data_hdf, "omic_data/instances", dtype=str)
     instance_groups = su.load_hdf(data_hdf, "omic_data/instance_groups", dtype=str)
+    target = su.load_hdf(data_hdf, "target", dtype=str)
  
-    return Z_test, feature_genes, feature_assays, instances, instance_groups
+    return Z_test, feature_genes, feature_assays, instances, instance_groups, target
 
 
 def load_model(pc_hdf):
@@ -98,7 +99,7 @@ if __name__=="__main__":
     out_hdf = args.transformed_data_hdf
 
     # Load the data and model parameters
-    Z_test, test_genes, test_assays, sample_ids, sample_groups = load_data(data_hdf)
+    Z_test, test_genes, test_assays, sample_ids, sample_groups, target = load_data(data_hdf)
     Y, mu, sigma, model_genes, model_assays = load_model(pc_hdf)
 
     # Find the intersection of features that are (1) in the test data
@@ -128,4 +129,5 @@ if __name__=="__main__":
     with h5py.File(out_hdf, "w") as f:
         su.write_hdf(f, "X", X)
         su.write_hdf(f, "instances", sample_ids, is_string=True) 
-        su.write_hdf(f, "instance_groups", sample_groups, is_string=True) 
+        su.write_hdf(f, "instance_groups", sample_groups, is_string=True)
+        su.write_hdf(f, "target", target, is_string=True)

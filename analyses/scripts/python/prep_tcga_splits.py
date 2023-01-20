@@ -7,6 +7,9 @@ import argparse
 import h5py
 
 
+rng = np.random.default_rng(12345)
+
+
 def load_data(data_hdf, clinical_hdf):
 
     omic_data = su.load_hdf(data_hdf, "omic_data/data").transpose()
@@ -38,48 +41,54 @@ def omic_filter(omic_data, omic_assays):
     # For now, we just remove the samples that don't have
     # enough useful mrnaseq measurements
     rnaseq_data = omic_data[:,omic_assays == "mrnaseq"]
+    rnaseq_data = rnaseq_data[:,np.sum(np.isfinite(rnaseq_data), axis=0) > 50]
+
     column_vars = np.nanvar(rnaseq_data, axis=0)
-    best_idx = np.argsort(column_vars)[-int(rnaseq_data.shape[1]*0.25):]
+    srt_idx = np.argsort(column_vars)
+    best_idx = srt_idx[-int(rnaseq_data.shape[1]*0.05):]
+
     rnaseq_data = rnaseq_data[:,best_idx]
 
-    valid_rows = np.where(np.sum(np.isfinite(rnaseq_data), axis=1) > 50)[0]
-    
-    return valid_rows 
+    valid_rows = np.where(np.sum(np.isfinite(rnaseq_data), axis=1) > 50)
+    return valid_rows[0] 
     
 
-def survival_col_filter(clinical_columns):
-    dtd_idx = np.where(clinical_columns == "days_to_death")[0][0]
-    dtlf_idx = np.where(clinical_columns == "days_to_last_followup")[0][0]
-    return [dtd_idx, dtlf_idx]
+
+def survival_data_selector(features, data, ctypes):
+    dtd_idx = np.where(features == "days_to_death")[0][0]
+    dtlf_idx = np.where(features == "days_to_last_followup")[0][0]
+    return data[:,[dtd_idx,dtlf_idx]]
+
 
 def survival_row_filter(clinical_data, clinical_columns):
     days_to_death = clinical_data[:,np.where(clinical_columns == "days_to_death")[0][0]]
     t_final = clinical_data[:,np.where(clinical_columns == "days_to_last_followup")[0][0]]
 
-    valid_rows = np.where( (days_to_death != "nan") | (t_final != "nan") )[0]
+    valid_rows = np.where( (days_to_death != b"nan") | (t_final != b"nan") )[0]
     return valid_rows
 
 
-def default_col_filter(clinical_columns, filter_col):
-    idx = np.where(clinical_columns == filter_col)[0][0]
-    return [idx]
+def default_col_filter(features, data, target):
+    idx = np.where(features == target)[0][0]
+    return data[:,idx]
+
 
 def default_row_filter(clinical_data, clinical_columns, filter_col):
     col_idx = np.where(clinical_columns == filter_col)[0][0]
-    valid_rows = np.where(clinical_data[:,col_idx] != "nan")[0]
+    valid_rows = np.where((clinical_data[:,col_idx] != b"nan") & (clinical_data[:,col_idx] != b"indeterminate"))[0]
 
     return valid_rows
 
 def id_row_filter(clinical_data, clinical_columns):
     return np.arange(clinical_data.shape[0])
 
-def select_col_filter(target):
+def target_data_selector(target):
     if target == "ctype":
-        return lambda x: []
+        return lambda feat, dat, ctypes: ctypes
     if target == "survival":
-        return survival_col_filter
+        return survival_data_selector
     else:
-        return lambda x: default_col_filter(x, target)
+        return lambda feat, dat, ctypes: default_col_filter(feat, dat, target)
 
 def select_row_filter(target):
     if target == "ctype":
@@ -90,9 +99,9 @@ def select_row_filter(target):
         return lambda x,y: default_row_filter(x,y,target)
 
 
-def apply_filters(target_ls, omic_data, samples, sample_groups, 
-                             assays, genes, barcodes, barcode_assays,
-                             clinical_data, clinical_samples, clinical_features):
+def apply_filters(target, omic_data, samples, sample_groups, 
+                          assays, genes, barcodes, barcode_assays,
+                          clinical_data, clinical_samples, clinical_features):
 
     # First, restrict ourselves to the intersection
     # of samples with omic and clinical data   
@@ -102,42 +111,33 @@ def apply_filters(target_ls, omic_data, samples, sample_groups,
     # we can apply subsequent filters to them uniformly.
     to_filter = [omic_data, samples, sample_groups, barcodes]
     to_filter = idx_select(omic_idx, *to_filter)
-    clinical_data = clinical_data[clinical_idx]
+    clinical_data = clinical_data[clinical_idx,:]
     to_filter.append(clinical_data)
 
-    # First, we filter out bad samples based on the omic data
+    # Filter out samples that don't have target data
+    print("TARGET: ", target)
+    # Get the corresponding row filter function;
+    filter_fn = select_row_filter(target) 
+    # Compute the filtered row indices;
+    filter_idx = filter_fn(to_filter[-1], clinical_features)
+    # and apply them to the samples of data
+    to_filter = idx_select(filter_idx, *to_filter) 
+
+    # Next: filter out samples that don't have enough omic data
     filter_idx = omic_filter(to_filter[0], assays)
     to_filter = idx_select(filter_idx, *to_filter)
-
-    # Apply row filters 
-    for target in target_ls:
-        print("TARGET: ", target)
-        # Get the corresponding row filter function;
-        filter_fn = select_row_filter(target) 
-        # Compute the filtered row indices;
-        filter_idx = filter_fn(to_filter[-1], clinical_features)
-        # and apply them to the samples of data
-        to_filter = idx_select(filter_idx, *to_filter) 
 
     filtered_omic, filtered_samples, filtered_groups, filtered_barcodes,\
     filtered_clinical = tuple(to_filter) 
 
-    # Apply clinical data column filters
-    clinical_idx = []
-    for target in target_ls:
-        filter_fn = select_col_filter(target)
-        clinical_idx += filter_fn(clinical_features)
-    
-    clinical_features = clinical_features[clinical_idx] 
-    filtered_clinical = filtered_clinical[:,clinical_idx]
-
+    # Select the regression target data
+    target_data = target_data_selector(target)(clinical_features, filtered_clinical, sample_groups)
+ 
     return filtered_omic, filtered_samples, filtered_groups,\
            assays, genes,\
            filtered_barcodes, barcode_assays,\
-           filtered_clinical, clinical_features
+           target_data
            
-
-
 
 def stratified_group_shuffle_split(class_labels, group_labels, split_fracs, srt_by_size=False):
     """
@@ -149,6 +149,7 @@ def stratified_group_shuffle_split(class_labels, group_labels, split_fracs, srt_
     
     Assume discrete class labels.
     """
+    print(class_labels)
     split_fracs = np.array(split_fracs)
     
     # Get the unique classes and their occurrences
@@ -163,7 +164,7 @@ def stratified_group_shuffle_split(class_labels, group_labels, split_fracs, srt_
     
     # Get the unique groups. By default, sort them by decreasing size.
     # It makes the evaluation more challenging.
-    unq_groups = np.random.permutation(np.unique(group_labels))
+    unq_groups = rng.permutation(np.unique(group_labels))
     if srt_by_size:
         gp_size_dict = Counter(group_labels)
         gp_sizes = [gp_size_dict[gp] for gp in unq_groups]
@@ -187,7 +188,7 @@ def stratified_group_shuffle_split(class_labels, group_labels, split_fracs, srt_
         # (b) the group's class distribution.
         gp_counts = gp_vecs[i,:]
         weight_vec = np.dot(capacity, gp_counts)
-        split_idx = np.random.choice(len(split_fracs), p=weight_vec/np.sum(weight_vec))
+        split_idx = rng.choice(len(split_fracs), p=weight_vec/np.sum(weight_vec))
         
         # Add group to split; decrement capacity
         split_sets[split_idx].add(unq_groups[i])
@@ -195,9 +196,32 @@ def stratified_group_shuffle_split(class_labels, group_labels, split_fracs, srt_
         capacity[capacity < 0] = 0
     
     split_idxs = [np.array(sorted(sum((gp_to_samples[gp] for gp in s), [])), dtype=int) for s in split_sets]
- 
+
     # Return splits
     return split_idxs
+
+
+def print_split_summary(split_idxs, class_labels, gp_labels):
+
+    n_groups = len(np.unique(gp_labels))
+
+    for i, (train_idx, test_idx) in enumerate(split_idxs):
+        train_labels = class_labels[train_idx]
+        train_gps = gp_labels[train_idx]
+        test_labels = class_labels[test_idx]
+        test_gps = gp_labels[test_idx]       
+
+        unq_tr_l, unq_tr_l_c = np.unique(train_labels, return_counts=True)
+        train_label_printout = " ".join([f"{l} ({c})" for (l, c) in zip(unq_tr_l, unq_tr_l_c)])
+        
+        unq_test_l, unq_test_l_c = np.unique(test_labels, return_counts=True)
+        test_label_printout = " ".join([f" {l} ({c});" for (l, c) in zip(unq_test_l, unq_test_l_c)])
+
+        n_gp_train = len(np.unique(train_gps))
+        n_gp_test = len(np.unique(test_gps))
+
+        print(f"Fold {i}:| N_train={len(train_labels)}: {train_label_printout} | N_test={len(test_labels)}: {test_label_printout}") 
+        print(f"           train groups={n_gp_train}/{n_groups} | test groups = {n_gp_test}/{n_groups}")
 
 
 def stratified_group_crossval_splits(class_labels, group_labels, n_folds=5):
@@ -215,29 +239,53 @@ def stratified_group_crossval_splits(class_labels, group_labels, n_folds=5):
     # Zip the training and test sets together.
     cv_splits = list(zip(train_sets, test_sets))
  
+    print_split_summary(cv_splits, class_labels, group_labels)
+ 
     return cv_splits
 
 
-def define_sample_groups(barcodes, barcode_assays):
+def survival_target_stratification(target_data):
+    labels = np.zeros(target_data.shape[0])
 
-    #M, _ = barcodes.shape
-    #group_labels = np.arange(M, dtype=int)
+    dead_times = target_data[:,0].astype(float)
+    dead_med = np.nanmedian(dead_times)
+    labels[dead_times <= dead_med] = 0
+    labels[dead_times > dead_med] = 1
 
-    print("BARCODES: ", barcodes)
-    print("BARCODE ASSAYS: ", barcode_assays)
-    mrnaseq_idx = np.where(barcode_assays == "mrnaseq")[0][0]
-    print("MRNASEQ IDX: ", mrnaseq_idx)
-    mrnaseq_barcodes = barcodes[:,mrnaseq_idx]
-    print("MRNASEQ BARCODES: ", mrnaseq_barcodes)
-    group_labels = np.vectorize(lambda x: "-".join(x.split("-")[-2:]))(mrnaseq_barcodes) 
-    print("GROUP LABELS: ", group_labels)
+    alive_times = target_data[:,1].astype(float)
+    alive_med = np.nanmedian(alive_times)
+    labels[alive_times <= alive_med] = 2
+    labels[alive_times > alive_med] = 3
+    
+    return labels 
+
+
+def target_stratification_labels(target, target_data):
+    
+    strat_target = target_data
+    if target == "survival":
+        strat_target = survival_target_stratification(target_data)
+
+    return strat_target
+
+
+def define_sample_groups(target, ctypes, barcodes, barcode_assays):
+
+    group_labels = ctypes
+    
+    # For certain tasks it makes more sense to group by
+    # batch rather than cancer type
+    if (target == "ctype"): # or (target == "hpv_status"): 
+        mrnaseq_idx = np.where(barcode_assays == "mrnaseq")[0][0]
+        mrnaseq_barcodes = barcodes[:,mrnaseq_idx]
+        group_labels = np.vectorize(lambda x: "-".join(x.split("-")[-2:]))(mrnaseq_barcodes) 
 
     return group_labels
 
 
 def split_to_hdf(omic_data, samples, ctype_labels,
                  assays, genes, barcodes, barcode_assays,
-                 targets, target_names, idx, output_path):
+                 target_data, idx, output_path):
 
     with h5py.File(output_path, "w") as f:
         su.write_hdf(f, "omic_data/data", omic_data[idx,:].transpose())
@@ -250,34 +298,34 @@ def split_to_hdf(omic_data, samples, ctype_labels,
         su.write_hdf(f, "barcodes/instances", samples[idx], is_string=True)
         su.write_hdf(f, "barcodes/features", barcode_assays, is_string=True)
         
-        su.write_hdf(f, "targets/data", targets[idx,:].transpose(), is_string=True)
-        su.write_hdf(f, "targets/features", target_names, is_string=True)
+        su.write_hdf(f, "target", target_data[idx,...].transpose(), is_string=True)
 
     return
 
 
 def save_split(omic_data, samples, ctype_labels,
                assays, genes, barcodes, barcode_assays,
-               targets, target_names, train_idx, test_idx, output_path_prefix):
+               target_data, train_idx, test_idx, output_path_prefix):
+
 
     split_to_hdf(omic_data, samples, ctype_labels,
                  assays, genes, barcodes, barcode_assays,
-                 targets, target_names, train_idx, output_path_prefix+"__train.hdf")    
+                 target_data, train_idx, output_path_prefix+"__train.hdf")    
     split_to_hdf(omic_data, samples, ctype_labels,
                  assays, genes, barcodes, barcode_assays,
-                 targets, target_names, test_idx, output_path_prefix+"__test.hdf") 
+                 target_data, test_idx, output_path_prefix+"__test.hdf") 
     return
 
 
 def save_splits(omic_data, samples, ctype_labels,
                 assays, genes, barcodes, barcode_assays,
-                targets, target_names, splits, output_path_prefix, target_ls):
+                target_data, target, splits, output_path_prefix):
 
     for i, (train_idx, test_idx) in enumerate(splits):
-        pref = output_path_prefix + f"__fold={i}" + f"__targets=" + (":".join(target_ls))
+        pref = output_path_prefix + f"__fold={i}" + f"__target={target}"
         save_split(omic_data, samples, ctype_labels,
                    assays, genes, barcodes, barcode_assays,
-                   targets, target_names, train_idx, test_idx, pref)
+                   target_data, train_idx, test_idx, pref)
     return
 
 
@@ -288,16 +336,15 @@ if __name__=="__main__":
     parser.add_argument("clinical_hdf")
     parser.add_argument("output_prefix")
     parser.add_argument("--n_folds", type=int, default=5)
-    parser.add_argument("--targets", nargs="*")
+    parser.add_argument("--target")
     
     args = parser.parse_args()
     data_hdf = args.omic_hdf
     clinical_hdf = args.clinical_hdf
     out_prefix = args.output_prefix
     n_folds = args.n_folds
-    target_ls = args.targets
+    target = args.target
 
-    print(clinical_hdf)
     data_arrays = load_data(data_hdf, clinical_hdf)
 
     filtered_omic, filtered_samples,\
@@ -305,17 +352,19 @@ if __name__=="__main__":
     assays, genes, \
     barcodes, \
     barcode_assays,\
-    filtered_clinical,\
-    filtered_clinical_features = apply_filters(target_ls, *data_arrays)
+    target_data = apply_filters(target, *data_arrays)
 
-    split_groups = define_sample_groups(barcodes, barcode_assays)
+    strat_target_data = target_stratification_labels(target, target_data)
+    unq_targets, cnt = np.unique(strat_target_data, return_counts=True)
+    print(unq_targets, " ", cnt)
+    split_groups = define_sample_groups(target, filtered_ctype_labels, barcodes, barcode_assays)
 
-    cross_val_splits = stratified_group_crossval_splits(filtered_ctype_labels, 
+    cross_val_splits = stratified_group_crossval_splits(strat_target_data, 
                                                         split_groups,
                                                         n_folds=n_folds)
     
     save_splits(filtered_omic, filtered_samples, filtered_ctype_labels,
                 assays, genes, barcodes, barcode_assays,
-                filtered_clinical, filtered_clinical_features, cross_val_splits, out_prefix, target_ls)
+                target_data, target, cross_val_splits, out_prefix)
 
     

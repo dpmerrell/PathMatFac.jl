@@ -259,10 +259,10 @@ cross_val_folds: 5
 tcga_regressions:
     data:
         #heldout_ctypes: ["OV:GBM:LAML"]
-        #kept_ctypes: []
-        kept_ctypes: ["HNSC:CESC:BRCA"]
-    targets: ["survival:pathologic_stage:ctype"]
-    cross_val_folds: 5
+        kept_ctypes: ["HNSC:CESC:ESCA:STAD"]
+    #targets: ["hpv_status", "ctype", "survival"] #, "pathologic_stage"]
+    targets: ["hpv_status"] 
+    cross_val_folds: 4
     pathways:
         top_pwys: [500]
     methods:
