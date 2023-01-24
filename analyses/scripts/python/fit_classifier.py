@@ -12,7 +12,7 @@ import json
 def load_data(training_hdf):
 
     # Load the features and labels from the HDF file
-    X = su.load_hdf(training_hdf, "X")
+    X = su.load_hdf(training_hdf, "X").transpose()
     labels = su.load_hdf(training_hdf, "target", dtype=str)
 
     # Encode the labels as integers.

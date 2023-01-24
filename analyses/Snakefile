@@ -196,6 +196,31 @@ rule exp_fit_matfac:
         "julia --project=. -t 1 {input.src} {input.data} {input.pwy_json} {output.inferred_bson} {output.inferred_hdf} {params.matfac_kwargs} history_json={output.history_json} gpu_status_file={input.status_file}"
 
 
+#############################################################
+# TCGA regression tasks
+#############################################################
+
+rule exp_score_survival_regressor:
+    input:
+        src="scripts/R/score_survival_regressor.R",
+        fitted_regressor=join(EXP_REGRESSOR_DIR, "{transform}/{data}__target=survival/{pathways}/regressor.rds"),
+        transformed_test=join(EXP_TRANS_TEST_DIR, "{transform}/{data}__target=survival/{pathways}/transformed.hdf")
+    output:
+        score_json=join(EXP_REGRESSOR_SCORE_DIR, "{transform,[_.=:0-9a-zA-Z]+}/{data,[_.=:0-9a-zA-Z]+}__target=survival/{pathways,[_.=:0-9a-zA-Z]+}/scores.json")
+    shell:
+        "Rscript {input.src} {input.fitted_regressor} {input.transformed_test} {output.score_json}"
+
+
+rule exp_fit_survival_regressor:
+    input:
+        src="scripts/R/fit_survival_regressor.R",
+        transformed_train=join(EXP_TRANS_TRAIN_DIR, "{transform}/{data}__target=survival/{pathways}/transformed.hdf")
+    output:
+        trained_model=join(EXP_REGRESSOR_DIR, "{transform,[_.=:0-9a-zA-Z]+}/{data,[_.=:0-9a-zA-Z]+}__target=survival/{pathways,[_.=:0-9a-zA-Z]+}/regressor.rds"),
+    shell:
+        "Rscript {input.src} {input.transformed_train} {output.trained_model}"
+
+
 rule exp_score_classifier:
     input:
         src="scripts/python/score_classifier.py",
@@ -218,13 +243,17 @@ rule exp_fit_classifier:
         "python {input.src} {input.transformed_train} {output.trained_model} {output.training_scores}"
 
 
+#############################################################
+# PCA fit/transform
+#############################################################
+
 rule exp_transform_pca:
     input:
         src="scripts/python/transform_pca.py",
         test_set=join(EXP_DATA_DIR, "{data}__test.hdf"),
         fitted_pca=join(EXP_FITTED_DIR, "method=pca__{method_params}/{data}/{pathways}/fitted.hdf")
     output:
-        transformed_test=temp(join(EXP_TRANS_TEST_DIR, "method=pca__{method_params,[_.=:0-9a-zA-Z]+}/{data,[_.=:0-9a-zA-Z]+}/{pathways,[_.=:0-9a-zA-Z]+}/transformed.hdf"))
+        transformed_test=join(EXP_TRANS_TEST_DIR, "method=pca__{method_params,[_.=:0-9a-zA-Z]+}/{data,[_.=:0-9a-zA-Z]+}/{pathways,[_.=:0-9a-zA-Z]+}/transformed.hdf")
     threads: 4
     shell:
         "python {input.src} {input.test_set} {input.fitted_pca} {output.transformed_test}"
@@ -236,7 +265,7 @@ rule exp_fit_pca:
         data_hdf=join(EXP_DATA_DIR, "{data}__train.hdf"),
     output:
         fitted_hdf=join(EXP_FITTED_DIR, "method=pca__k={k}__var_filter={vf}/{data,[_.=:0-9a-zA-Z]+}/{pathways,[_.=0-9a-zA-Z]+}/fitted.hdf"),
-        trans_train_hdf=temp(join(EXP_TRANS_TRAIN_DIR, "method=pca__k={k,[0-9]+}__var_filter={vf,[.0-9]+}/{data,[_.=:0-9a-zA-Z]+}/{pathways,[_.=0-9a-zA-Z]+}/transformed.hdf"))
+        trans_train_hdf=join(EXP_TRANS_TRAIN_DIR, "method=pca__k={k,[0-9]+}__var_filter={vf,[.0-9]+}/{data,[_.=:0-9a-zA-Z]+}/{pathways,[_.=0-9a-zA-Z]+}/transformed.hdf")
     threads: 4
     shell:
         "python {input.src} {input.data_hdf} {output.fitted_hdf} {output.trans_train_hdf} --output_dim {wildcards.k} --variance_filter {wildcards.vf}"
@@ -246,6 +275,9 @@ rule exp_fit_pca:
 #####################################################################
 # Simulation study
 #####################################################################
+
+############################
+# Simulation plots
 
 #rule sim_l1frac_lineplot:
 #    input:
@@ -303,6 +335,9 @@ rule exp_fit_pca:
 #        mem_mb=5000
 #    shell:
 #        "python {input.src} {input.params_hdf} {input.clinical_hdf} 0 {output.scatter_html}"
+
+#########################
+# Simulations: run MatFac
 
 def construct_paths(analysis, size, keys=["methods", "top_pwys", "schema", "sim", "corruption", "replicates"]):
     return [join(*l) for l in product(*[SIM_PARAMS[analysis][size][k] for k in keys])]
@@ -377,6 +412,9 @@ rule sim_fit_matfac:
         "julia --project=. -t 1 {input.src} {input.data} {input.pwy_json} {output.inferred_bson} {output.inferred_hdf} {params.matfac_kwargs} history_json={output.history_json} gpu_status_file={input.status_file}"
 
 
+#################################
+# Simulated data corruption
+
 rule shuffle_pathway_edges:
     input:
         src=join("scripts","python", "corrupt_pathway_edges.py"),
@@ -419,6 +457,9 @@ rule copy_pathways:
     shell:
         "cp {input.pwy_json} {output.cp_json}"        
 
+
+###############################
+# Simulate data
 
 rule simulate_data:
     input:
@@ -506,7 +547,7 @@ rule download_reactome:
 
 
 #####################################################################
-# Preprocess TCGA
+# Download and preprocess TCGA
 #####################################################################
 
 

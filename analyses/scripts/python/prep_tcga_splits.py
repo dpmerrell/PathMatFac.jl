@@ -275,7 +275,7 @@ def define_sample_groups(target, ctypes, barcodes, barcode_assays):
     
     # For certain tasks it makes more sense to group by
     # batch rather than cancer type
-    if (target == "ctype") or (target == "hpv_status"): 
+    if (target == "ctype") or (target == "hpv_status") or (target == "survival"): 
         mrnaseq_idx = np.where(barcode_assays == "mrnaseq")[0][0]
         mrnaseq_barcodes = barcodes[:,mrnaseq_idx]
         group_labels = np.vectorize(lambda x: "-".join(x.split("-")[-2:]))(mrnaseq_barcodes) 

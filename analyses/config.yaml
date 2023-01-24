@@ -261,7 +261,7 @@ tcga_regressions:
         #heldout_ctypes: ["OV:GBM:LAML"]
         kept_ctypes: ["HNSC:CESC:ESCA:STAD"]
     #targets: ["hpv_status", "ctype", "survival"] #, "pathologic_stage"]
-    targets: ["hpv_status"] 
+    targets: ["survival"] 
     cross_val_folds: 5
     pathways:
         top_pwys: [500]
