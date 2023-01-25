@@ -49,6 +49,15 @@ pwys_to_genesets <- function(pwys, pwy_names){
 }
 
 
+median_impute <- function(omic_data){
+    cmeds <- apply(omic_data, 2, function(v) median(v, na.rm=TRUE))
+    for(i in 1:length(cmeds)){
+        omic_data[is.nan(omic_data[,i]),i] <- cmeds[i]
+    } 
+    return(omic_data)
+}
+
+
 #get_omic_data <- function(all_data, all_features, omic_type){
 #
 #    splt_features <- strsplit(all_features, "_")

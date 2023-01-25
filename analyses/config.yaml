@@ -254,8 +254,6 @@ sim_params:
 # TCGA evaluations config
 ################################
 
-cross_val_folds: 5
-
 tcga_regressions:
     data:
         #heldout_ctypes: ["OV:GBM:LAML"]
@@ -280,5 +278,7 @@ tcga_regressions:
         pca:
             k: [5]
             var_filter: [0.05]
+        gsva:
+            k: [5]
 
 
