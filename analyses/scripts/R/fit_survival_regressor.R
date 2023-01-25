@@ -14,7 +14,6 @@ fit_model <- function(data){
 
     model <- rfsrc(Surv(t_final, is_dead)~., data,
                    n_tree=100)
-
     return(model)
 }
 

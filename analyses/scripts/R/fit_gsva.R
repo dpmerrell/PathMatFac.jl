@@ -17,12 +17,12 @@ option_list <- list(
     make_option("--cores", default=1, help="number of CPU cores to use. Default 1.")
     )
 
-parser <- OptionParser(usage="fit_gsva.R DATA_HDF PATHWAY_JSON OUTPUT_HDF [OPTS]",
+parser <- OptionParser(usage="fit_gsva.R DATA_HDF PATHWAY_JSON TRANSFORMED_HDF FITTED_MODEL_RDS [OPTS]",
                        option_list=option_list)
 
 print("PARSING ARGS")
 
-arguments <- parse_args(parser, positional_arguments=3)
+arguments <- parse_args(parser, positional_arguments=4)
 
 opts <- arguments$options
 omic_type <- opts$omic_type
@@ -34,8 +34,8 @@ cores <- opts$cores
 pargs <- arguments$args
 data_hdf <- pargs[1]
 pwy_json <- pargs[2]
-output_hdf <- pargs[3]
-
+transformed_hdf <- pargs[3]
+fitted_model_rds <- pargs[4]
 
 ####################################
 # LOAD PATHWAYS
@@ -58,6 +58,7 @@ omic_data <- h5read(data_hdf, "omic_data/data")
 feature_genes <- h5read(data_hdf, "omic_data/feature_genes")
 feature_assays <- h5read(data_hdf, "omic_data/feature_assays")
 instances <- h5read(data_hdf, "omic_data/instances")
+instance_groups <- h5read(data_hdf, "omic_data/instance_groups")
 
 mrnaseq_cols <- (feature_assays == "mrnaseq")
 omic_data <- omic_data[,mrnaseq_cols]
@@ -77,10 +78,11 @@ print(dim(omic_data))
 #omic_data <- imp_obj$ximp
 
 # Never mind: missForest is too costly, we'll
-# stick to mean imputation for now.
-cm <- colMeans(omic_data, na.rm=TRUE)
-for(i in 1:length(cm)){
-    omic_data[is.nan(omic_data[,i]),i] <- cm[i]
+# stick to median imputation for now.
+# (Reduces the effect on enrichment??)
+cmeds <- apply(omic_data, 2, function(v) median(v, na.rm=TRUE))
+for(i in 1:length(cmeds)){
+    omic_data[is.nan(omic_data[,i]),i] <- cmeds[i]
 } 
 
 ############################################
@@ -96,11 +98,24 @@ curried_gsva <- function(omic_data, genesets){
 }
 
 
-results <- curried_gsva(omic_data, genesets)
+fitted_model <- list()
 
-###########################
-# SAVE OUTPUTS TO HDF5
+gsva_results <- curried_gsva(omic_data, genesets)
+used_pwys <- colnames(gsva_results)
 
-save_to_hdf(results, output_hdf)
+fitted_model[["used_pathways"]] <- used_pwys
+
+###########################################
+# SAVE FITTED MODEL AND TRANSFORMED DATA
+
+saveRDS(fitted_model, fitted_model_rds)
+
+# Need to get the target data
+target <- h5read(data_hdf, "target")
+
+h5write(gsva_results, transformed_hdf, "X")
+h5write(rownames(gsva_results), transformed_hdf, "instances")
+h5write(instance_groups, transformed_hdf, "instance_groups")
+h5write(target, transformed_hdf, "target") 
 
 
