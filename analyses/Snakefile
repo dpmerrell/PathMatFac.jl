@@ -247,6 +247,33 @@ rule exp_fit_classifier:
 
 
 #############################################################
+# PLIER fit/transform
+#############################################################
+
+rule exp_transform_plier:
+    input:
+        fitted_rds=join(EXP_FITTED_DIR, "method=plier__{method_params}/{data}/{pathways}/fitted.rds"),
+        test_set=join(EXP_DATA_DIR, "{data}__test.hdf"),
+    output:
+        transformed_test=join(EXP_TRANS_TEST_DIR, "method=plier__{method_params,[_.=:0-9a-zA-Z]+}/{data,[_.=:0-9a-zA-Z]+}/{pathways,[_.=:0-9a-zA-Z]+}/transformed.hdf")
+    shell:
+        "echo 'poop' > {output.transformed_test}"
+
+rule exp_fit_plier:
+    input:
+        src="scripts/R/fit_plier.R",
+        data_hdf=join(EXP_DATA_DIR, "{data}__train.hdf"),
+        pwy_json=join(REACTOME_DIR, "{pathways}.json")
+    output:
+        fitted_rds=join(EXP_FITTED_DIR, "method=plier__k={k}/{data,[_.=:0-9a-zA-Z]+}/{pathways,[_.=0-9a-zA-Z]+}/fitted.rds"),
+        trans_train_hdf=join(EXP_TRANS_TRAIN_DIR, "method=plier__k={k,[0-9]+}/{data,[_.=:0-9a-zA-Z]+}/{pathways,[_.=0-9a-zA-Z]+}/transformed.hdf")
+    threads: 4
+    shell:
+        "Rscript {input.src} {input.data_hdf} {input.pwy_json} {output.fitted_rds} {output.trans_train_hdf} --output_dim {wildcards.k}"
+
+
+
+#############################################################
 # PARADIGM fit/transform
 #############################################################
 

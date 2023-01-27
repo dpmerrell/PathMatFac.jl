@@ -289,5 +289,7 @@ tcga_regressions:
         paradigm:
             k: [5]
             var_filter: [0.05]
+        plier:
+            k: [5]
 
 

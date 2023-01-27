@@ -4,7 +4,12 @@ library("PLIER")
 library("jsonlite")
 library("optparse")
 
-source("script_util.R")
+source("scripts/R/script_util.R")
+
+###################################################
+# SOME HELPER FUNCTIONS
+###################################################
+
 
 geneset_to_binvec <- function(geneset, feat_to_idx){
     
@@ -36,40 +41,63 @@ genesets_to_priormat <- function(genesets, omic_features){
     return(priormat)
 }
 
-keep_pwy_features <- function(omic_data, pwy_features){
-    return(omic_data[,pwy_features])
-}
-
-###########################
+###################################################
 # PARSE ARGUMENTS
+###################################################
 option_list <- list(
-    make_option("--mode", type="character", default="groupwise", help="either 'groupwise' or 'combined'. Default 'groupwise'."),
-    make_option("--omic_type", type="character", default="mrnaseq", help="The type of omic data to use. Default 'mrnaseq'.")
+    make_option("--omic_type", type="character", default="mrnaseq", help="The type of omic data to use. Default 'mrnaseq'."),
+    make_option("--output_dim", type="integer", default=10, help="Number of dimensions the output should take")
     )
 
-
-parser <- OptionParser(usage="run_plier.R DATA_HDF PATHWAY_JSON OUTPUT_HDF [--mode MODE]",
+parser <- OptionParser(usage="run_plier.R DATA_HDF PATHWAY_JSON FITTED_RDS OUTPUT_HDF [--mode MODE]",
                        option_list=option_list)
 
-arguments <- parse_args(parser, positional_arguments=3)
+arguments <- parse_args(parser, positional_arguments=4)
 
 opts <- arguments$options
-mode <- opts$mode
 omic_type <- opts$omic_type
+output_dim <- opts$output_dim
 
 pargs <- arguments$args
 data_hdf <- pargs[1]
 pwy_json <- pargs[2]
-output_hdf <- pargs[3]
+fitted_rds <- pargs[3]
+output_hdf <- pargs[4]
 
 
-all_data <- h5read(data_hdf, "data")
-featurenames <- h5read(data_hdf, "features")
-instancenames <- h5read(data_hdf, "instances")
-instance_groups <- h5read(data_hdf, "groups")
+###################################################
+# LOAD & PREP DATA
+###################################################
 
-omic_data <- get_omic_data(all_data, featurenames, omic_type)
-rownames(omic_data) <- instancenames
+omic_data <- h5read(data_hdf, "omic_data/data")
+feature_genes <- h5read(data_hdf, "omic_data/feature_genes")
+feature_assays <- h5read(data_hdf, "omic_data/feature_assays")
+instances <- h5read(data_hdf, "omic_data/instances")
+instance_groups <- h5read(data_hdf, "omic_data/instance_groups")
+target <- h5read(data_hdf, "target")
+
+mrnaseq_cols <- (feature_assays == omic_type)
+omic_data <- omic_data[,mrnaseq_cols]
+feature_genes <- feature_genes[mrnaseq_cols]
+rownames(omic_data) <- instances
+colnames(omic_data) <- feature_genes
+
+# Filter out the columns with too many NaNs
+omic_data <- omic_data[,(colSums(is.nan(omic_data)) < 0.05*nrow(omic_data))]
+
+# Mean imputation for the remaining NaNs
+cmeans <- colMeans(omic_data, na.rm=TRUE)
+nan_idx <- is.nan(omic_data)
+omic_data[nan_idx] <- 0.0
+omic_data <- omic_data + (nan_idx*cmeans)
+
+#print(omic_data)
+print("OMIC DATA")
+print(dim(omic_data))
+
+####################################################
+# LOAD & PREP PATHWAYS
+####################################################
 
 pwy_dict <- read_json(pwy_json)
 pwys <- pwy_dict$pathways
@@ -77,51 +105,36 @@ pwy_names <- pwy_dict$names
 genesets <- pwys_to_genesets(pwys, pwy_names)
 priormat <- genesets_to_priormat(genesets, colnames(omic_data)) 
 
+#print(priormat)
+print("PRIOR MAT")
+print(dim(priormat))
+
+# Only keep the features that are present in the pathways
+omic_data <- omic_data[, rownames(priormat)]
+
+print("OMIC DATA")
+print(dim(omic_data))
+
+##################################################
+# RUN PLIER
+##################################################
+
 # Call PLIER with the given parameter settings.
-curried_plier <- function(omic_data, priormat){
-    results <- PLIER(t(omic_data), priormat)
-    scores <- results[["U"]] %*% results[["B"]]
-    return(t(scores))
-}
+plier_result <- PLIER(t(omic_data), priormat, trace=TRUE)
 
-# Call PLIER separately on each *group* of instances.
-# Then combine the results into one matrix.
-groupwise_plier <- function(omic_data, genesets, groups){
-
-   unq_groups <- unique(groups)
-
-   result_ls <- list()
-
-   for(gp in unq_groups){
-       cat("Group: ")
-       cat(gp)
-       cat("\n")
-
-       gp_data <- omic_data[groups == gp,]
-       gp_results <- curried_plier(gp_data, genesets)
-
-       cat("\tgroup results: ")
-       cat(dim(gp_results))
-       cat("\n")
-       result_ls[[gp]] <- gp_results 
-   }
-
-   result <- do.call(rbind, result_ls)
-
-   return(result)
-}
+X <- t(plier_result$B)
+X[,c(1:output_dim)]  # Keep the top-`output_dim` dimensions
 
 
-if(mode == "combined"){
+#################################################
+# SAVE RESULTS
+#################################################
 
-    scores <- curried_plier(omic_data, priormat)
+saveRDS(plier_result, fitted_rds)
 
-}else if(mode == "groupwise"){
-
-    scores <- groupwise_plier(omic_data, priormat, instance_groups)
-
-}
-
-save_to_hdf(scores, output_hdf)
+h5write(X, output_hdf, "X")
+h5write(instances, output_hdf, "instances")
+h5write(instance_groups, output_hdf, "instance_groups")
+h5write(target, output_df, "target")
 
 
