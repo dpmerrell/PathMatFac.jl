@@ -104,14 +104,14 @@ fitted_model[["used_pathways"]] <- used_pwys
 ###########################################
 # RUN PCA
 
-pca_results <- nipals(gsva_results, ncomp=output_dim)
+pca_result <- nipals(gsva_results, ncomp=output_dim)
 
 X <- pca_result$scores
 
-fitted_model[["mu"]] <- pca_results$center
-fitted_model[["sigma"]] <- pca_results$scale
-fitted_model[["Y"]] <- t(pca_results$loadings)
-fitted_model[["R2"]] <- pca_results$R2
+fitted_model[["mu"]] <- pca_result$center
+fitted_model[["sigma"]] <- pca_result$scale
+fitted_model[["Y"]] <- t(pca_result$loadings)
+fitted_model[["R2"]] <- pca_result$R2
 
 ###########################################
 # SAVE FITTED MODEL AND TRANSFORMED DATA

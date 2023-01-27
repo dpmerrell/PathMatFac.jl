@@ -5,6 +5,12 @@ tcga_dir: "data/tcga/"
 reactome_url: "https://www.pathwaycommons.org/archives/PC2/v12/PathwayCommons12.reactome.hgnc.txt.gz" 
 reactome_dir: "data/reactome/"
 
+# PARADIGM outputs on TCGA, as found here: 
+# https://gdc.cancer.gov/about-data/publications/PanCan-CellOfOrigin
+# "PARADIGM Pathway Inference Matrix"
+paradigm_url: "https://api.gdc.cancer.gov/data/7d4c0344-f018-4ab0-949a-09815f483480"
+paradigm_dir: "data/paradigm/"
+
 ################################
 # Simulation study config
 ################################
@@ -259,7 +265,7 @@ tcga_regressions:
         #heldout_ctypes: ["OV:GBM:LAML"]
         kept_ctypes: ["HNSC:CESC:ESCA:STAD"]
     #targets: ["hpv_status", "ctype", "survival"] #, "pathologic_stage"]
-    targets: ["survival"] 
+    targets: ["survival", "ctype", "hpv_status"] 
     cross_val_folds: 5
     pathways:
         top_pwys: [500]
@@ -278,7 +284,10 @@ tcga_regressions:
         pca:
             k: [5]
             var_filter: [0.05]
-        gsva:
+        #gsva:
+        #    k: [5]
+        paradigm:
             k: [5]
+            var_filter: [0.05]
 
 

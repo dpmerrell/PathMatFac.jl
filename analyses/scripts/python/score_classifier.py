@@ -32,6 +32,8 @@ def compute_scores(y, pred_y, pred_y_probs):
    
     # Distinguish between multiclass and binary
     if pred_y_probs.shape[1] > 2:
+        print(y)
+        print(pred_y_probs)
         scores['roc_auc_ovr'] = roc_auc_score(y, pred_y_probs, multi_class="ovr")
         scores['roc_auc_ovo'] = roc_auc_score(y, pred_y_probs, multi_class="ovo")
     else:

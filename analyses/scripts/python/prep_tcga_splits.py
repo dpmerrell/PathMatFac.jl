@@ -139,7 +139,7 @@ def apply_filters(target, omic_data, samples, sample_groups,
            target_data
            
 
-def stratified_group_shuffle_split(class_labels, group_labels, split_fracs, srt_by_size=False):
+def stratified_group_shuffle_split(class_labels, group_labels, split_fracs, max_tries=10):
     """
     A randomized algorithm for generating shuffled splits that 
     (1) are grouped by `group_labels` and 
@@ -157,44 +157,44 @@ def stratified_group_shuffle_split(class_labels, group_labels, split_fracs, srt_
     unq_classes = np.array(sorted(list(cls_counts.keys())))
     cls_encoder = {cls: idx for idx, cls in enumerate(unq_classes)}
     cls_counts = np.vectorize(lambda x: cls_counts[x])(unq_classes) 
-    
-    # Compute a grid of "capacities": ideal quantities 
-    # of samples for each (group, class) pair.
-    capacity = np.outer(split_fracs, cls_counts)
-    
-    # Get the unique groups. By default, sort them by decreasing size.
-    # It makes the evaluation more challenging.
-    unq_groups = rng.permutation(np.unique(group_labels))
-    if srt_by_size:
-        gp_size_dict = Counter(group_labels)
-        gp_sizes = [gp_size_dict[gp] for gp in unq_groups]
-        gp_srt_idx = np.argsort(gp_sizes)[::-1]
-        unq_groups = unq_groups[gp_srt_idx]
-    
+  
     # Collect information about the groups' samples and labels
+    unq_groups = rng.permutation(np.unique(group_labels))
     gp_encoder = {gp: idx for idx, gp in enumerate(unq_groups)}
     gp_vecs = np.zeros((len(unq_groups), len(unq_classes)))
     gp_to_samples = defaultdict(lambda : [])
     for idx, (gp, cls) in enumerate(zip(group_labels, class_labels)):
         gp_vecs[gp_encoder[gp], cls_encoder[cls]] += 1
         gp_to_samples[gp].append(idx)
-    
-    # We will assign groups to these splits
-    split_sets = [set() for _ in split_fracs]
-    
-    # Randomly assign groups to splits
-    for i in range(gp_vecs.shape[0]):
-        # Randomization is weighted by (a) available capacity and
-        # (b) the group's class distribution.
-        gp_counts = gp_vecs[i,:]
-        weight_vec = np.dot(capacity, gp_counts)
-        split_idx = rng.choice(len(split_fracs), p=weight_vec/np.sum(weight_vec))
+
+    # Repeat this until we get a valid split 
+    for _ in range(max_tries): 
+        # Compute a grid of "capacities": ideal quantities 
+        # of samples for each (split, class) pair.
+        capacity = np.outer(split_fracs, cls_counts)
+        orig_capacity = capacity[:,:]
+ 
+        # We will assign groups to these splits
+        split_sets = [set() for _ in split_fracs]
         
-        # Add group to split; decrement capacity
-        split_sets[split_idx].add(unq_groups[i])
-        capacity[split_idx,:] -= gp_counts
-        capacity[capacity < 0] = 0
-    
+        # Randomly assign groups to splits
+        for i in range(gp_vecs.shape[0]):
+            # Randomization is weighted by (a) available capacity and
+            # (b) the group's class distribution.
+            gp_counts = gp_vecs[i,:]
+            weight_vec = np.dot(capacity, gp_counts)
+            split_idx = rng.choice(len(split_fracs), p=weight_vec/np.sum(weight_vec))
+            
+            # Add group to split; decrement capacity
+            split_sets[split_idx].add(unq_groups[i])
+            capacity[split_idx,:] -= gp_counts
+            capacity[capacity < 0] = 0
+
+        # Check that there's at least one sample assigned
+        # to each (split, class) pair 
+        if np.all(orig_capacity != capacity):
+            break 
+
     split_idxs = [np.array(sorted(sum((gp_to_samples[gp] for gp in s), [])), dtype=int) for s in split_sets]
 
     # Return splits
@@ -231,7 +231,7 @@ def stratified_group_crossval_splits(class_labels, group_labels, n_folds=5):
     # the cross-validation test sets.
     split_fracs = [1.0/n_folds]*n_folds    
     test_sets = stratified_group_shuffle_split(class_labels, group_labels, 
-                                               split_fracs, srt_by_size=False)
+                                               split_fracs)
  
     # Let their complements be the cross-validation training sets.
     train_sets = [np.concatenate(tuple(v for j, v in enumerate(test_sets) if j != i)) for i, _ in enumerate(test_sets)]
@@ -334,25 +334,42 @@ if __name__=="__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("omic_hdf")
     parser.add_argument("clinical_hdf")
+    parser.add_argument("paradigm_hdf")
     parser.add_argument("output_prefix")
-    parser.add_argument("--n_folds", type=int, default=5)
     parser.add_argument("--target")
-    
+    parser.add_argument("--n_folds", type=int, default=5)
+    parser.add_argument("--paradigm_filter", action="store_true", default=False)
+ 
     args = parser.parse_args()
     data_hdf = args.omic_hdf
     clinical_hdf = args.clinical_hdf
+    paradigm_hdf = args.paradigm_hdf
     out_prefix = args.output_prefix
-    n_folds = args.n_folds
     target = args.target
+    n_folds = args.n_folds
+    paradigm_filter = args.paradigm_filter
 
+    # Load the omic and clinical data
     data_arrays = load_data(data_hdf, clinical_hdf)
 
+    # Keep only samples with prediction target data
     filtered_omic, filtered_samples,\
     filtered_ctype_labels,\
     assays, genes, \
     barcodes, \
     barcode_assays,\
     target_data = apply_filters(target, *data_arrays)
+
+    # Keep only samples with PARADIGM data
+    if paradigm_filter:
+        paradigm_samples = su.load_hdf(paradigm_hdf, "instances", dtype=str)
+        left_idx, _ = su.keymatch(filtered_samples, paradigm_samples)
+        filtered_omic, filtered_samples,\
+        filtered_ctype_labels,\
+        barcodes, target_data = idx_select(left_idx, filtered_omic, 
+                                                     filtered_samples,
+                                                     filtered_ctype_labels,
+                                                     barcodes, target_data) 
 
     strat_target_data = target_stratification_labels(target, target_data)
     unq_targets, cnt = np.unique(strat_target_data, return_counts=True)
