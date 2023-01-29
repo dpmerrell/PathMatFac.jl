@@ -114,7 +114,7 @@ mu <- fitted_params[["mu"]]
 sigma <- fitted_params[["sigma"]]
 
 print("TRANSFORMING VIA PCA")
-gsva_results <- (gsva_results - mu)/sigma
+gsva_results <- t((t(gsva_results) - mu)/sigma)
 
 # Fortunately, we know gsva_results contains no NaNs.
 # So the PCA transform is just matrix multiplication!

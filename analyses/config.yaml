@@ -263,7 +263,7 @@ sim_params:
 tcga_regressions:
     data:
         #heldout_ctypes: ["OV:GBM:LAML"]
-        kept_ctypes: ["HNSC:CESC:ESCA:STAD"]
+        kept_ctypes: ["HNSC:CESC"] # :ESCA:STAD"]
     #targets: ["hpv_status", "ctype", "survival"] #, "pathologic_stage"]
     targets: ["survival", "ctype", "hpv_status"] 
     cross_val_folds: 5
@@ -284,8 +284,8 @@ tcga_regressions:
         pca:
             k: [5]
             var_filter: [0.05]
-        #gsva:
-        #    k: [5]
+        gsva:
+            k: [5]
         paradigm:
             k: [5]
             var_filter: [0.05]

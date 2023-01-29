@@ -1,4 +1,7 @@
-
+# fit_plier.R
+#
+#
+ 
 library("rhdf5")
 library("PLIER")
 library("jsonlite")
@@ -49,7 +52,7 @@ option_list <- list(
     make_option("--output_dim", type="integer", default=10, help="Number of dimensions the output should take")
     )
 
-parser <- OptionParser(usage="run_plier.R DATA_HDF PATHWAY_JSON FITTED_RDS OUTPUT_HDF [--mode MODE]",
+parser <- OptionParser(usage="fit_plier.R DATA_HDF PATHWAY_JSON FITTED_RDS OUTPUT_HDF [--mode MODE]",
                        option_list=option_list)
 
 arguments <- parse_args(parser, positional_arguments=4)
@@ -85,12 +88,6 @@ colnames(omic_data) <- feature_genes
 # Filter out the columns with too many NaNs
 omic_data <- omic_data[,(colSums(is.nan(omic_data)) < 0.05*nrow(omic_data))]
 
-# Mean imputation for the remaining NaNs
-cmeans <- colMeans(omic_data, na.rm=TRUE)
-nan_idx <- is.nan(omic_data)
-omic_data[nan_idx] <- 0.0
-omic_data <- omic_data + (nan_idx*cmeans)
-
 #print(omic_data)
 print("OMIC DATA")
 print(dim(omic_data))
@@ -119,22 +116,30 @@ print(dim(omic_data))
 # RUN PLIER
 ##################################################
 
+# Rescale the data and store the means and variances
+# (PLIER doesn't track these quantities itself!)
+fitted_params <- list()
+fitted_params[["mu"]] <- colMeans(omic_data, na.rm=TRUE)
+fitted_params[["sigma"]] <- apply(omic_data, 2, function(v) sd(v, na.rm=TRUE)) 
+omic_data <- t((t(omic_data) - fitted_params[["mu"]])/fitted_params[["sigma"]])
+omic_data[is.nan(omic_data)] <- 0.0 # Set NaNs to zero. (Equivalent to mean imputation, since data is Z-scored)
+
 # Call PLIER with the given parameter settings.
-plier_result <- PLIER(t(omic_data), priormat, trace=TRUE)
+plier_result <- PLIER(t(omic_data), priormat, trace=TRUE, scale=FALSE, k=output_dim)
 
 X <- t(plier_result$B)
-X[,c(1:output_dim)]  # Keep the top-`output_dim` dimensions
 
+fitted_params[["plier"]] <- plier_result
 
 #################################################
 # SAVE RESULTS
 #################################################
 
-saveRDS(plier_result, fitted_rds)
+saveRDS(fitted_params, fitted_rds)
 
 h5write(X, output_hdf, "X")
 h5write(instances, output_hdf, "instances")
 h5write(instance_groups, output_hdf, "instance_groups")
-h5write(target, output_df, "target")
+h5write(target, output_hdf, "target")
 
 
