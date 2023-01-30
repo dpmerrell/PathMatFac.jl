@@ -7,7 +7,6 @@ library("rhdf5")
 library("MOFA2")
 library("jsonlite")
 library("optparse")
-library("reticulate")
 source("scripts/R/script_util.R")
 
 
@@ -125,8 +124,6 @@ mofa_object <-prepare_mofa(object=mofa_object,
 ####################################################
 # FIT MOFA MODEL
 ####################################################
-
-use_condaenv("pathmatfac")
 
 outfile <- system.file("extdata","test_data.RData", package="MOFA2")
 trained_mofa <- run_mofa(mofa_object, outfile=outfile, save_data=FALSE,

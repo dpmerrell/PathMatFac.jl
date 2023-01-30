@@ -247,6 +247,34 @@ rule exp_fit_classifier:
 
 
 #############################################################
+# MOFA fit/transform
+#############################################################
+
+rule exp_transform_mofa:
+    input:
+        #src="scripts/R/transform_mofa.R",
+        fitted_rds=join(EXP_FITTED_DIR, "method=mofa__{method_params}/{data}/{pathways}/fitted.rds"),
+        test_set=join(EXP_DATA_DIR, "{data}__test.hdf"),
+    output:
+        transformed_test=join(EXP_TRANS_TEST_DIR, "method=mofa__{method_params,[_.=:0-9a-zA-Z]+}/{data,[_.=:0-9a-zA-Z]+}/{pathways,[_.=:0-9a-zA-Z]+}/transformed.hdf")
+    shell:
+        "echo 'dummy' > {output.transformed_test}"
+        #"Rscript {input.src} {input.test_set} {input.fitted_rds} {output.transformed_test}"
+
+
+rule exp_fit_mofa:
+    input:
+        src="scripts/R/fit_mofa.R",
+        data_hdf=join(EXP_DATA_DIR, "{data}__train.hdf"),
+    output:
+        fitted_rds=join(EXP_FITTED_DIR, "method=mofa__k={k}/{data,[_.=:0-9a-zA-Z]+}/{pathways,[_.=0-9a-zA-Z]+}/fitted.rds"),
+        trans_train_hdf=join(EXP_TRANS_TRAIN_DIR, "method=mofa__k={k,[0-9]+}/{data,[_.=:0-9a-zA-Z]+}/{pathways,[_.=0-9a-zA-Z]+}/transformed.hdf")
+    threads: 4
+    shell:
+        "Rscript {input.src} {input.data_hdf} {output.fitted_rds} {output.trans_train_hdf} --output_dim {wildcards.k}"
+
+
+#############################################################
 # PLIER fit/transform
 #############################################################
 

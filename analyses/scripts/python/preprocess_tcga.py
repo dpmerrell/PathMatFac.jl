@@ -66,8 +66,9 @@ def output_to_hdf(output_hdf, omic_matrix, sample_ids, sample_groups,
     return
 
 
-def inv_logistic(a):
-    return np.log(a / (1.0 - a))
+def inv_logistic(a, shrinkage=0.99):
+    x = 0.5 + (a - 0.5)*shrinkage
+    return np.log(x / (1.0 - x))
 
 
 def cna_threshold(a, l=-0.5, u=0.5):
@@ -96,6 +97,7 @@ def preprocess_features(omic_matrix, feature_assays, sample_groups):
 
     print("ASSAY ROWS:", assay_rows)
 
+    omic_matrix[assay_rows["methylation"],:] = inv_logistic(omic_matrix[assay_rows["methylation"],:])
     omic_matrix[assay_rows["cna"],:] = cna_threshold(omic_matrix[assay_rows["cna"],:])
     omic_matrix[assay_rows["mutation"],:] = mut_threshold(omic_matrix[assay_rows["mutation"],:])
 
