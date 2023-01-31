@@ -293,5 +293,6 @@ tcga_regressions:
         #    k: [5]
         mofa:
             k: [5]
+            var_filter: [0.1]
 
 

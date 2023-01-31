@@ -55,13 +55,7 @@ fitted_params <- readRDS(fitted_rds)
 mu <- fitted_params[["mu"]]
 sigma <- fitted_params[["sigma"]]
 fitted_plier <- fitted_params[["plier"]]
-factors <- fitted_plier$Z
-print("FACTORS:")
-print(factors[1:3,1:3])
-print(dim(factors))
-factor_norms <- apply(factors, 2, function(v) norm(v, "2")) 
-factors <- t(t(factors) / factor_norms)
-
+factors <- t(fitted_plier$Z)
 
 #########################################################
 # TRANSFORM DATA
@@ -73,7 +67,7 @@ omic_data <- omic_data[,used_cols]
 omic_data <- t((t(omic_data) - mu)/sigma)
 omic_data[is.nan(omic_data)] <- 0.0
 
-X <- omic_data %*% factors
+X <- linear_transform(omic_data, factors)
 
 ########################################################
 # SAVE RESULTS

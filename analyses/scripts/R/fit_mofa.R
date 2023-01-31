@@ -5,7 +5,6 @@
 
 library("rhdf5")
 library("MOFA2")
-library("jsonlite")
 library("optparse")
 source("scripts/R/script_util.R")
 
@@ -14,6 +13,21 @@ source("scripts/R/script_util.R")
 # HELPER FUNCTIONS
 ###################################################
 
+reconstruct_matrix <- function(matrix_ls, original_rows){
+
+    M <- length(original_rows)
+    N <- ncol(matrix_ls[[1]])
+    full_matrix <- matrix(NaN, M, N)
+    rownames(full_matrix) <- original_rows
+
+    gp_names <- names(matrix_ls) 
+    for(gp in gp_names){
+        gp_rows <- rownames(matrix_ls[[gp]])
+        full_matrix[gp_rows,] <- matrix_ls[[gp]][gp_rows,] 
+    }
+
+    return(full_matrix)
+}
 
 ###################################################
 # PARSE ARGUMENTS
@@ -21,7 +35,8 @@ source("scripts/R/script_util.R")
 option_list <- list(
     make_option("--output_dim", type="integer", default=10, help="Number of dimensions the output should take"),
     make_option("--omic_types", type="character", default="mrnaseq,methylation", help="List of omic assays to use, separated by commas (no spaces). Default 'mrnaseq,methylation,mutation'."),
-    make_option("--is_grouped", action="store_true", default=FALSE, help="Toggles sample grouping by cancer type.")
+    make_option("--is_grouped", action="store_true", default=FALSE, help="Toggles sample grouping by cancer type."),
+    make_option("--variance_filter", type="numeric", default=0.5, help="fraction of most-variable features to keep within each view") 
     )
 
 parser <- OptionParser(usage="fit_mofa.R DATA_HDF FITTED_RDS OUTPUT_HDF [--mode MODE]",
@@ -34,6 +49,7 @@ omic_types <- opts$omic_types
 omic_types <- strsplit(omic_types, ",")[[1]]
 output_dim <- opts$output_dim
 is_grouped <- opts$is_grouped
+var_filter <- opts$variance_filter
 
 pargs <- arguments$args
 data_hdf <- pargs[1]
@@ -53,10 +69,6 @@ target <- h5read(data_hdf, "target")
 
 rownames(omic_data) <- instances
 
-#print(omic_data)
-print("OMIC DATA")
-print(dim(omic_data))
-
 assay_dists <- list("mrnaseq"="gaussian",
                     "methylation"="gaussian",
                     "mutation"="bernoulli",
@@ -67,19 +79,25 @@ assay_dists <- list("mrnaseq"="gaussian",
 # PREPARE DATA 
 ####################################################
 
-data_matrices <- list()
+data_matrices <- list() # List of omic views
+all_features <- list()  # Will be a vector of all feature names
 for(ot in omic_types){
     relevant_cols <- (feature_assays == ot)
     relevant_data <- omic_data[,relevant_cols]
-    colnames(relevant_data) <- feature_genes[relevant_cols]
+    relevant_genes <- feature_genes[relevant_cols]
+    colnames(relevant_data) <- sapply(relevant_genes, function(g) paste(g, "_", ot, sep=""))
 
+    # Filter the data by NaNs and variance
     relevant_data <- relevant_data[,colSums(is.nan(relevant_data)) < 0.05*nrow(relevant_data)]
- 
+    feature_vars <- apply(relevant_data, 1, function(v) var(v, na.rm=TRUE))
+    min_var <- quantile(feature_vars, 1-var_filter)
+    relevant_data <- relevant_data[,feature_vars >= min_var]
+
+    all_features[[ot]] <- colnames(relevant_data)
     data_matrices[[ot]] <- t(relevant_data) 
 }
+all_features <- unlist(all_features)
 
-print("DATA")
-print(lapply(data_matrices, dim))
 
 ####################################################
 # PREPARE MOFA OBJECT
@@ -105,10 +123,6 @@ model_opts$num_factors <- output_dim
 
 model_opts$likelihoods <- sapply(omic_types, function(n){ return(assay_dists[[n]]) }, USE.NAMES=TRUE)
 
-print("VIEW LIKELIHOODS")
-print(model_opts$likelihoods)
-
-
 ###########################
 # training options 
 train_opts <- get_default_training_options(mofa_object)
@@ -125,14 +139,24 @@ mofa_object <-prepare_mofa(object=mofa_object,
 # FIT MOFA MODEL
 ####################################################
 
-outfile <- system.file("extdata","test_data.RData", package="MOFA2")
-trained_mofa <- run_mofa(mofa_object, outfile=outfile, save_data=FALSE,
-                                                       use_basilisk=TRUE) 
+trained_mofa <- run_mofa(mofa_object, save_data=FALSE,
+                                      use_basilisk=TRUE) 
 
+X_ls <- get_expectations(trained_mofa, "Z")
+Y_ls <- get_expectations(trained_mofa, "W")
+
+X <- reconstruct_matrix(X_ls, instances)
+Y <- reconstruct_matrix(Y_ls, all_features)  
 
 ####################################################
 # SAVE MODEL & TRANSFORMED DATA
 ####################################################
 
+h5write(X, output_hdf, "X")
+h5write(instances, output_hdf, "instances")
+h5write(instance_groups, output_hdf, "instance_groups")
+h5write(target, output_hdf, "target")
+
+saveRDS(Y, fitted_rds)
 
 
