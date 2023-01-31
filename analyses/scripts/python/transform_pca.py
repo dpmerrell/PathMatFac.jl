@@ -71,7 +71,7 @@ def pca_transform(Z, Y, lr=2.0, rel_tol=1e-8, max_iter=1000):
         new_lss += np.sum(delta)
 
         # Check termination criterion
-        if (lss - new_lss)/lss < rel_tol:
+        if abs((lss - new_lss)/new_lss) < rel_tol:
             print("Loss decrease < rel tol ({}). Terminating".format(rel_tol))
             break
 

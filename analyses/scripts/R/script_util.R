@@ -1,10 +1,16 @@
 
 
 load_survival_data <- function(hdf_path){
+
     # Load features as dataframe
     mydata <- h5read(hdf_path, "X")
     myrows <- h5read(hdf_path, "instances")
+    print("MYROWS")
+    print(dim(myrows))
+    print("MYDATA")
+    print(dim(mydata))
     rownames(mydata) <- myrows
+
     mydata <- data.frame(mydata)
     # Load labels
     labels <- h5read(hdf_path, "target")
@@ -57,10 +63,10 @@ median_impute <- function(omic_data){
 }
 
 
-linear_transform <- function(Z, Y){
+linear_transform <- function(Z, Y, max_iter=2000, lr=5.0, rel_tol=1e-8){
 
     K <- nrow(Y)
-    N <- ncol(y)
+    N <- ncol(Y)
     M <- nrow(Z)
 
     X <- matrix(0, K, M)
@@ -76,9 +82,9 @@ linear_transform <- function(Z, Y){
         new_lss <- 0.0
             
         # Compute the gradient of squared loss w.r.t. X
-        delta <- (X.transpose() %*% Y) - Z
+        delta <- (t(X) %*% Y) - Z
         delta[nan_idx] <- 0.0
-        grad_X <- Y %*% delta.transpose()
+        grad_X <- Y %*% t(delta)
   
         # Update the sum of squared gradients
         grad_ssq <- grad_ssq + grad_X*grad_X
@@ -88,10 +94,10 @@ linear_transform <- function(Z, Y){
       
         # Compute the loss 
         delta <- delta*delta 
-        new_lss <- new_lss + np.sum(delta)
+        new_lss <- new_lss + sum(delta)
 
         # Check termination criterion
-        if( (lss - new_lss)/lss < rel_tol ){
+        if( abs((lss - new_lss)/new_lss) < rel_tol ){
             print(paste("Loss decrease < rel tol (",rel_tol,"). Terminating", sep=""))
             break
         }
@@ -105,7 +111,7 @@ linear_transform <- function(Z, Y){
         print(paste("Reached max iter (",max_iter,"). Terminating", sep=""))
     }
 
-    return(X)
+    return(t(X))
 }
 
 

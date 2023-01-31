@@ -253,6 +253,7 @@ rule exp_fit_classifier:
 rule exp_transform_mofa:
     input:
         src="scripts/R/transform_mofa.R",
+        util="scripts/R/script_util.R",
         fitted_rds=join(EXP_FITTED_DIR, "method=mofa__{method_params}/{data}/{pathways}/fitted.rds"),
         test_set=join(EXP_DATA_DIR, "{data}__test.hdf"),
     output:
