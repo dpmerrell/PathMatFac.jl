@@ -257,6 +257,7 @@ rule exp_transform_mofa:
         test_set=join(EXP_DATA_DIR, "{data}__test.hdf"),
     output:
         transformed_test=join(EXP_TRANS_TEST_DIR, "method=mofa__{method_params,[_.=:0-9a-zA-Z]+}/{data,[_.=:0-9a-zA-Z]+}/{pathways,[_.=:0-9a-zA-Z]+}/transformed.hdf")
+    threads: 4
     shell:
         "Rscript {input.src} {input.test_set} {input.fitted_rds} {output.transformed_test}"
 
