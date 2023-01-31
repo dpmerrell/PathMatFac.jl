@@ -223,3 +223,20 @@ def aggregate_replicates(df, replicate_cols, op="mean"):
     return result
 
 
+stage_enc_dict = {"stage i": 0,
+                  "stage ii": 1,
+                  "stage iii": 2,
+                  "stage iv": 3,
+                  "stage v": 4} 
+
+def stage_encoder(stage_str):
+    if isinstance(stage_str, bytes):
+        stage_str = stage_str.decode()
+    if not (stage_str[-1] in ("i","v")):
+        stage_str = stage_str[:-1]
+    return stage_enc_dict[stage_str]
+
+
+def encode_pathologic_stage(y):
+    return np.vectorize(stage_encoder)(y)
+

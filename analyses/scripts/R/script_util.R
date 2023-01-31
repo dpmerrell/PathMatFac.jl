@@ -63,7 +63,7 @@ median_impute <- function(omic_data){
 }
 
 
-linear_transform <- function(Z, Y, max_iter=2000, lr=5.0, rel_tol=1e-8){
+linear_transform <- function(Z, Y, max_iter=5000, lr=0.01, rel_tol=1e-8){
 
     K <- nrow(Y)
     N <- ncol(Y)
@@ -84,7 +84,7 @@ linear_transform <- function(Z, Y, max_iter=2000, lr=5.0, rel_tol=1e-8){
         # Compute the gradient of squared loss w.r.t. X
         delta <- (t(X) %*% Y) - Z
         delta[nan_idx] <- 0.0
-        grad_X <- Y %*% t(delta)
+        grad_X <- (Y %*% t(delta))
   
         # Update the sum of squared gradients
         grad_ssq <- grad_ssq + grad_X*grad_X
@@ -105,7 +105,9 @@ linear_transform <- function(Z, Y, max_iter=2000, lr=5.0, rel_tol=1e-8){
         # Update loop variables
         lss <- new_lss
         i <- i + 1
-        print(paste("Iteration: ", i, "; Loss: ", lss, sep=""))
+        if(i == 1  || i %% 100 == 0){
+            print(paste("Iteration: ", i, "; Loss: ", lss, sep=""))
+        }
     }
     if(i >= max_iter){
         print(paste("Reached max iter (",max_iter,"). Terminating", sep=""))

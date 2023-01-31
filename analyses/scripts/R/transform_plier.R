@@ -65,8 +65,9 @@ used_cols <- names(mu)
 omic_data <- omic_data[,used_cols]
 
 omic_data <- t((t(omic_data) - mu)/sigma)
-omic_data[is.nan(omic_data)] <- 0.0
 
+# No mean imputation, since this "linear transform"
+# function accommodates missing values
 X <- linear_transform(omic_data, factors)
 
 ########################################################

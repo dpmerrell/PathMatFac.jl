@@ -115,7 +115,7 @@ def apply_filters(target, omic_data, samples, sample_groups,
     to_filter.append(clinical_data)
 
     # Filter out samples that don't have target data
-    print("TARGET: ", target)
+    print("TARGET: ", np.unique(target))
     # Get the corresponding row filter function;
     filter_fn = select_row_filter(target) 
     # Compute the filtered row indices;
@@ -149,7 +149,6 @@ def stratified_group_shuffle_split(class_labels, group_labels, split_fracs, max_
     
     Assume discrete class labels.
     """
-    print(class_labels)
     split_fracs = np.array(split_fracs)
     
     # Get the unique classes and their occurrences
@@ -245,6 +244,7 @@ def stratified_group_crossval_splits(class_labels, group_labels, n_folds=5):
 
 
 def survival_target_stratification(target_data):
+
     labels = np.zeros(target_data.shape[0])
 
     dead_times = target_data[:,0].astype(float)
@@ -265,20 +265,18 @@ def target_stratification_labels(target, target_data):
     strat_target = target_data
     if target == "survival":
         strat_target = survival_target_stratification(target_data)
+    if target == "pathologic_stage":
+        strat_target = su.encode_pathologic_stage(target_data)
 
     return strat_target
 
 
 def define_sample_groups(target, ctypes, barcodes, barcode_assays):
 
-    group_labels = ctypes
-    
-    # For certain tasks it makes more sense to group by
-    # batch rather than cancer type
-    if (target == "ctype") or (target == "hpv_status") or (target == "survival"): 
-        mrnaseq_idx = np.where(barcode_assays == "mrnaseq")[0][0]
-        mrnaseq_barcodes = barcodes[:,mrnaseq_idx]
-        group_labels = np.vectorize(lambda x: "-".join(x.split("-")[-2:]))(mrnaseq_barcodes) 
+    # For now, group by batch rather than cancer type
+    mrnaseq_idx = np.where(barcode_assays == "mrnaseq")[0][0]
+    mrnaseq_barcodes = barcodes[:,mrnaseq_idx]
+    group_labels = np.vectorize(lambda x: "-".join(x.split("-")[-2:]))(mrnaseq_barcodes) 
 
     return group_labels
 
