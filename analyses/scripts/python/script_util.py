@@ -6,6 +6,9 @@ import h5py
 
 
 NICE_NAMES = {"gender": "Sex",
+              "survival": "Survival",
+              "ctype": "Cancer type",
+              "pathologic_stage": "Pathologic stage",
               "hpv_status": "HPV",
               "tobacco_smoking_history": "Smoking",
               "age_at_initial_pathologic_diagnosis": "Age",
@@ -17,8 +20,17 @@ NICE_NAMES = {"gender": "Sex",
               "snr": "SNR",
               "missing": "Missing Data",
               "l1_fraction": "$L^1$ Fraction",
-              "X_pwy_spearman_corr": "Pathway Activation Spearman"
+              "X_pwy_spearman_corr": "Pathway Activation Spearman",
+              "aucroc": "AUCROC",
+              "mse": "MSE",
+              "accuracy": "Accuracy",
+              "matfac": "PathMatFac",
+              "mofa": "MOFA+",
+              "plier": "PLIER",
+              "pca": "PCA",
+              "gsva": "GSVA"
               }
+
 
 ALL_CTYPES = ["ACC", "CESC", "HNSC", 
               "KIRC", "LGG", "LUSC", "PAAD", "READ", "STAD", 
@@ -27,6 +39,12 @@ ALL_CTYPES = ["ACC", "CESC", "HNSC",
               "THYM", "UVM", "BRCA", "COAD", "ESCA", 
               "LAML", "LUAD", "OV", "PRAD", 
               "SKCM", "TGCT", "UCEC"]
+
+
+ALL_TARGETS = ["survival","ctype","pathologic_stage","hpv_status"]
+
+ALL_METHODS = ["matfac", "mofa", "plier", "pca", "gsva"]
+
 
 """
 Convert a pathway into a list of gene IDs.
