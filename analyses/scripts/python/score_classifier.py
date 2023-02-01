@@ -1,5 +1,5 @@
 
-from sklearn.metrics import f1_score, roc_auc_score, accuracy_score
+from sklearn.metrics import f1_score, roc_auc_score, roc_curve, accuracy_score, confusion_matrix
 import script_util as su
 import pickle as pkl
 import numpy as np
@@ -20,7 +20,7 @@ def load_data(test_hdf):
     encoder = {lab:i for i, lab in enumerate(unq_labels)}
     y = np.vectorize(lambda x: encoder[x])(labels)
 
-    return X, y
+    return X, y, unq_labels
 
 
 def compute_scores(y, pred_y, pred_y_probs):
@@ -32,14 +32,28 @@ def compute_scores(y, pred_y, pred_y_probs):
    
     # Distinguish between multiclass and binary
     if pred_y_probs.shape[1] > 2:
-        print(y)
-        print(pred_y_probs)
         scores['roc_auc_ovr'] = roc_auc_score(y, pred_y_probs, multi_class="ovr")
         scores['roc_auc_ovo'] = roc_auc_score(y, pred_y_probs, multi_class="ovo")
     else:
         scores['roc_auc'] = roc_auc_score(y, pred_y_probs[:,1])
 
     return scores
+
+
+def compute_other_attributes(y_labels, y, pred_y, pred_y_probs):
+
+    results = {"classes": list(y_labels)}
+    
+    results["confusion"] = confusion_matrix(y,pred_y).tolist() 
+
+    # Produce an ROC curve if this is binary classification
+    if pred_y_probs.shape == 2: 
+        fpr, tpr, thresholds = roc_curve(y, pred_y[:,1])
+        results["roc"] = {"fpr": list(fpr),
+                          "tpr": list(tpr)
+                         }
+
+    return results
 
 
 if __name__=="__main__":
@@ -49,18 +63,20 @@ if __name__=="__main__":
     parser.add_argument("model_pkl")
     parser.add_argument("data_hdf")
     parser.add_argument("score_json")
+    parser.add_argument("other_output_json")
 
     args = parser.parse_args()
 
     model_pkl = args.model_pkl
     data_hdf = args.data_hdf
     score_json = args.score_json
+    other_output_json = args.other_output_json
 
     # Load model
     model = pkl.load(open(model_pkl, "rb"))
  
     # Load data
-    X, y = load_data(data_hdf)
+    X, y, y_labels = load_data(data_hdf)
 
     # Make predictions
     y_pred_probs = model.predict_proba(X)
@@ -69,7 +85,12 @@ if __name__=="__main__":
     # Score predictions
     score_dict = compute_scores(y, y_pred, y_pred_probs)
 
-    # Output to JSON
+    # Output scores to JSON
     json.dump(score_dict, open(score_json, "w")) 
+
+    # Compute other attributes of the prediction task
+    # (E.g., confusion matrices or ROC curves)
+    other_output = compute_other_attributes(y_labels, y, y_pred, y_pred_probs)
+    json.dump(other_output, open(other_output_json, "w")) 
 
 

@@ -26,6 +26,15 @@ def compute_scores(y, pred_y):
     return scores
 
 
+def compute_other_attributes(y, pred_y):
+
+    result = {"y_true": y.astype(float).tolist(),
+              "y_pred": pred_y.astype(float).tolist()
+             }
+
+    return result
+
+
 if __name__=="__main__":
 
     # Parse command line arguments
@@ -33,6 +42,7 @@ if __name__=="__main__":
     parser.add_argument("model_pkl")
     parser.add_argument("data_hdf")
     parser.add_argument("score_json")
+    parser.add_argument("other_output_json")
     parser.add_argument("--target", default="pathologic_stage")
 
     args = parser.parse_args()
@@ -40,6 +50,7 @@ if __name__=="__main__":
     model_pkl = args.model_pkl
     data_hdf = args.data_hdf
     score_json = args.score_json
+    other_output_json = args.other_output_json
     target = args.target
 
     # Load model
@@ -59,4 +70,7 @@ if __name__=="__main__":
     # Output to JSON
     json.dump(score_dict, open(score_json, "w")) 
 
-
+    # Compute other attributes of the prediction task
+    other_output = compute_other_attributes(y, y_pred)
+    json.dump(other_output, open(other_output_json, "w")) 
+    

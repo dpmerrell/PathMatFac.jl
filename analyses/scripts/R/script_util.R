@@ -63,7 +63,7 @@ median_impute <- function(omic_data){
 }
 
 
-linear_transform <- function(Z, Y, max_iter=5000, lr=0.01, rel_tol=1e-8){
+linear_transform <- function(Z, Y, lr=2.0, rel_tol=1e-8, max_iter=5000){
 
     K <- nrow(Y)
     N <- ncol(Y)
@@ -71,7 +71,7 @@ linear_transform <- function(Z, Y, max_iter=5000, lr=0.01, rel_tol=1e-8){
 
     X <- matrix(0, K, M)
     grad_X <- matrix(0, K, M) 
-    grad_ssq = matrix(0, K, M) + 1e-8
+    grad_ssq = matrix(1e-8, K, M) 
 
     nan_idx <- is.nan(Z) 
     lss <- Inf
@@ -90,7 +90,7 @@ linear_transform <- function(Z, Y, max_iter=5000, lr=0.01, rel_tol=1e-8){
         grad_ssq <- grad_ssq + grad_X*grad_X
 
         # Apply the update
-        X <- lr*(grad_X / sqrt(grad_ssq))
+        X <- X - (lr*(grad_X / sqrt(grad_ssq)))
       
         # Compute the loss 
         delta <- delta*delta 
@@ -105,9 +105,9 @@ linear_transform <- function(Z, Y, max_iter=5000, lr=0.01, rel_tol=1e-8){
         # Update loop variables
         lss <- new_lss
         i <- i + 1
-        if(i == 1  || i %% 100 == 0){
-            print(paste("Iteration: ", i, "; Loss: ", lss, sep=""))
-        }
+        #if(i == 1  || i %% 100 == 0){
+        print(paste("Iteration: ", i, "; Loss: ", lss, sep=""))
+        #}
     }
     if(i >= max_iter){
         print(paste("Reached max iter (",max_iter,"). Terminating", sep=""))

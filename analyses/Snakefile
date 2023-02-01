@@ -142,11 +142,11 @@ rule all:
        #exp_transformed_test=expand(join(EXP_TRANS_TEST_DIR, "{transform}/{data}__fold={fold}/{pathways}/transformed.hdf"),
        #                          transform=TCGA_REGRESSION_PARAMS["methods"], data=TCGA_REGRESSION_PARAMS["data"],
        #                          fold=list(range(TCGA_FOLDS)), pathways=TCGA_REGRESSION_PARAMS["pathways"]),
-       exp_ctype_scores=expand(join(EXP_REGRESSOR_SCORE_DIR, "{transform}/{data}__fold={fold}__target={target}/{pathways}/scores.json"),
-                               transform=TCGA_REGRESSION_PARAMS["methods"], data=TCGA_REGRESSION_PARAMS["data"],
-                               fold=TCGA_REGRESSION_PARAMS["folds"], target=TCGA_REGRESSION_PARAMS["targets"],
-                               pathways=TCGA_REGRESSION_PARAMS["pathways"]),
-
+       #exp_ctype_scores=expand(join(EXP_REGRESSOR_SCORE_DIR, "{transform}/{data}__fold={fold}__target={target}/{pathways}/scores.json"),
+       #                        transform=TCGA_REGRESSION_PARAMS["methods"], data=TCGA_REGRESSION_PARAMS["data"],
+       #                        fold=TCGA_REGRESSION_PARAMS["folds"], target=TCGA_REGRESSION_PARAMS["targets"],
+       #                        pathways=TCGA_REGRESSION_PARAMS["pathways"]),
+       score_tsv=join(EXP_REGRESSOR_SCORE_DIR, "scores.tsv")
 
 #####################################################################
 # Runs on real (TCGA) data
@@ -203,6 +203,18 @@ rule exp_fit_matfac:
 # TCGA regression tasks
 #############################################################
 
+rule tabulate_regression_scores:
+    input:
+        src="scripts/python/tabulate_jsons.py",
+        score_jsons=expand(join(EXP_REGRESSOR_SCORE_DIR, "{transform}/{data}__fold={fold}__target={target}/{pathways}/scores.json"),
+                           transform=TCGA_REGRESSION_PARAMS["methods"], data=TCGA_REGRESSION_PARAMS["data"],
+                           fold=TCGA_REGRESSION_PARAMS["folds"], target=TCGA_REGRESSION_PARAMS["targets"],
+                           pathways=TCGA_REGRESSION_PARAMS["pathways"])
+    output:
+        score_tsv=join(EXP_REGRESSOR_SCORE_DIR, "scores.tsv")
+    shell:
+        "python {input.src} {output.score_tsv} {input.score_jsons}"
+
 rule exp_score_survival_regressor:
     input:
         src="scripts/R/score_survival_regressor.R",
@@ -230,9 +242,10 @@ rule exp_score_regressor:
         fitted_regressor=join(EXP_REGRESSOR_DIR, "{transform}/{data}__target={target}/{pathways}/regressor.pkl"),
         transformed_test=join(EXP_TRANS_TEST_DIR, "{transform}/{data}__target={target}/{pathways}/transformed.hdf")
     output:
-        score_json=join(EXP_REGRESSOR_SCORE_DIR, "{transform,[_.=:0-9a-zA-Z]+}/{data,[_.=:0-9a-zA-Z]+}__target={target,(pathologic_stage)}/{pathways,[_.=:0-9a-zA-Z]+}/scores.json")
+        score_json=join(EXP_REGRESSOR_SCORE_DIR, "{transform,[_.=:0-9a-zA-Z]+}/{data,[_.=:0-9a-zA-Z]+}__target={target,(pathologic_stage)}/{pathways,[_.=:0-9a-zA-Z]+}/scores.json"),
+        other_output_json=join(EXP_REGRESSOR_SCORE_DIR, "{transform,[_.=:0-9a-zA-Z]+}/{data,[_.=:0-9a-zA-Z]+}__target={target,(pathologic_stage)}/{pathways,[_.=:0-9a-zA-Z]+}/other_output.json")
     shell:
-        "python {input.src} {input.fitted_regressor} {input.transformed_test} {output.score_json} --target {wildcards.target}"
+        "python {input.src} {input.fitted_regressor} {input.transformed_test} {output.score_json} {output.other_output_json} --target {wildcards.target}"
 
 
 rule exp_fit_regressor:
@@ -252,9 +265,10 @@ rule exp_score_classifier:
         fitted_regressor=join(EXP_REGRESSOR_DIR, "{transform}/{data}__target={target}/{pathways}/classifier.pkl"),
         transformed_test=join(EXP_TRANS_TEST_DIR, "{transform}/{data}__target={target}/{pathways}/transformed.hdf")
     output:
-        score_json=join(EXP_REGRESSOR_SCORE_DIR, "{transform,[_.=:0-9a-zA-Z]+}/{data,[_.=:0-9a-zA-Z]+}__target={target,(ctype|hpv_status)}/{pathways,[_.=:0-9a-zA-Z]+}/scores.json")
+        score_json=join(EXP_REGRESSOR_SCORE_DIR, "{transform,[_.=:0-9a-zA-Z]+}/{data,[_.=:0-9a-zA-Z]+}__target={target,(ctype|hpv_status)}/{pathways,[_.=:0-9a-zA-Z]+}/scores.json"),
+        other_output_json=join(EXP_REGRESSOR_SCORE_DIR, "{transform,[_.=:0-9a-zA-Z]+}/{data,[_.=:0-9a-zA-Z]+}__target={target,(ctype|hpv_status)}/{pathways,[_.=:0-9a-zA-Z]+}/other_output.json")
     shell:
-        "python {input.src} {input.fitted_regressor} {input.transformed_test} {output.score_json}"
+        "python {input.src} {input.fitted_regressor} {input.transformed_test} {output.score_json} {output.other_output_json}"
 
 
 rule exp_fit_classifier:
@@ -319,7 +333,7 @@ rule exp_fit_plier:
     output:
         fitted_rds=join(EXP_FITTED_DIR, "method=plier__k={k}/{data,[_.=:0-9a-zA-Z]+}/{pathways,[_.=0-9a-zA-Z]+}/fitted.rds"),
         trans_train_hdf=join(EXP_TRANS_TRAIN_DIR, "method=plier__k={k,[0-9]+}/{data,[_.=:0-9a-zA-Z]+}/{pathways,[_.=0-9a-zA-Z]+}/transformed.hdf")
-    threads: 2
+    threads: 4
     shell:
         "Rscript {input.src} {input.data_hdf} {input.pwy_json} {output.fitted_rds} {output.trans_train_hdf} --output_dim {wildcards.k}"
 
@@ -350,6 +364,7 @@ rule exp_fit_paradigm:
     output:
         fitted_hdf=join(EXP_FITTED_DIR, "method=paradigm__k={k}__var_filter={vf,[.0-9]+}/{data,[_.=:0-9a-zA-Z]+}/{pathways,[_.=0-9a-zA-Z]+}/fitted.hdf"),
         trans_train_hdf=join(EXP_TRANS_TRAIN_DIR, "method=paradigm__k={k,[0-9]+}__var_filter={vf,[.0-9]+}/{data,[_.=:0-9a-zA-Z]+}/{pathways,[_.=0-9a-zA-Z]+}/transformed.hdf")
+    threads: 4
     shell:
         "python {input.src} {input.train_hdf} {input.paradigm_hdf} {output.fitted_hdf} {output.trans_train_hdf} --output_dim {wildcards.k} --variance_filter {wildcards.vf} "
 

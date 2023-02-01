@@ -182,11 +182,12 @@ def parse_value(v):
             return v
     
 
-def parse_path_kvs(pth):
+def parse_path_kvs(filepath):
 
     result = {}
-    dir_strs = pth.split(path.sep)
-    dir_strs[-1] = dir_strs[-1].split(".")[0]
+    dir_strs = filepath.split(path.sep)
+    # Exclude file extension
+    dir_strs[-1] = ".".join(dir_strs[-1].split(".")[:-1]) 
     for dir_str in dir_strs:
         sep = "__"
         for kv_str in dir_str.split(sep):
@@ -239,4 +240,53 @@ def stage_encoder(stage_str):
 
 def encode_pathologic_stage(y):
     return np.vectorize(stage_encoder)(y)
+
+
+def linear_transform(Z, Y, lr=2.0, rel_tol=1e-8, max_iter=1000):
+
+    K, N = Y.shape
+    M = Z.shape[0]
+
+    X = np.zeros((K, M))
+    grad_X = np.zeros((K,M))
+    grad_ssq = np.zeros((K,M)) + 1e-8
+
+    nan_idx = np.logical_not(np.isfinite(Z))
+    lss = np.inf
+    i = 0
+
+    # Apply Adagrad updates until convergence...
+    while i < max_iter:
+        new_lss = 0.0
+            
+        # Compute the gradient of squared loss w.r.t. X
+        delta = np.dot(X.transpose(), Y) - Z
+        delta[nan_idx] = 0.0
+        grad_X = np.dot(Y, delta.transpose())
+  
+        # Update the sum of squared gradients
+        grad_ssq += grad_X*grad_X
+
+        # Apply the update
+        X -= lr*(grad_X / np.sqrt(grad_ssq))
+      
+        # Compute the loss 
+        np.square(delta, out=delta) 
+        new_lss += np.sum(delta)
+
+        # Check termination criterion
+        if abs((lss - new_lss)/new_lss) < rel_tol:
+            print("Loss decrease < rel tol ({}). Terminating".format(rel_tol))
+            break
+
+        # Update loop variables
+        lss = new_lss
+        i += 1
+        print("Iteration: {}; Loss: {:.2f}".format(i, lss))
+
+    if i >= max_iter:
+        print("Reached max iter ({}). Terminating".format(max_iter))
+
+    return X
+
 

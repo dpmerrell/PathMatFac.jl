@@ -90,6 +90,8 @@ for(ot in omic_types){
     # Filter the data by NaNs and variance
     relevant_data <- relevant_data[,colSums(is.nan(relevant_data)) < 0.05*nrow(relevant_data)]
     feature_vars <- apply(relevant_data, 1, function(v) var(v, na.rm=TRUE))
+    print("FEATURE VARS:")
+    print(feature_vars)
     min_var <- quantile(feature_vars, 1-var_filter)
     relevant_data <- relevant_data[,feature_vars >= min_var]
 
