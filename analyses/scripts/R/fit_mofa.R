@@ -81,6 +81,9 @@ assay_dists <- list("mrnaseq"="gaussian",
 
 data_matrices <- list() # List of omic views
 all_features <- list()  # Will be a vector of all feature names
+mu <- list() # list of views' means
+sigma <- list() # list of views' standard deviations
+
 for(ot in omic_types){
     relevant_cols <- (feature_assays == ot)
     relevant_data <- omic_data[,relevant_cols]
@@ -89,17 +92,20 @@ for(ot in omic_types){
 
     # Filter the data by NaNs and variance
     relevant_data <- relevant_data[,colSums(is.nan(relevant_data)) < 0.05*nrow(relevant_data)]
-    feature_vars <- apply(relevant_data, 1, function(v) var(v, na.rm=TRUE))
-    print("FEATURE VARS:")
-    print(feature_vars)
+    feature_vars <- apply(relevant_data, 2, function(v) var(v, na.rm=TRUE))
     min_var <- quantile(feature_vars, 1-var_filter)
     relevant_data <- relevant_data[,feature_vars >= min_var]
 
     all_features[[ot]] <- colnames(relevant_data)
     data_matrices[[ot]] <- t(relevant_data) 
+    mu[[ot]] <- colMeans(omic_data, na.rm=TRUE)                     
+    sigma[[ot]] <- apply(omic_data, 2, function(v) sd(v, na.rm=TRUE))
+
+    data_matrices[[ot]] <- (data_matrices[[ot]] - mu[[ot]])/sigma[[ot]] 
 }
 all_features <- unlist(all_features)
-
+mu <- unlist(mu)
+sigma <- unlist(sigma)
 
 ####################################################
 # PREPARE MOFA OBJECT
@@ -116,7 +122,7 @@ if(is_grouped){
 ###########################
 # data options
 data_opts <- get_default_data_options(mofa_object)
-data_opts$scale_views <- TRUE
+data_opts$scale_views <- FALSE
 
 ###########################
 # model options
