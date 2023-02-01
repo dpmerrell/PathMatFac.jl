@@ -98,8 +98,8 @@ for(ot in omic_types){
 
     all_features[[ot]] <- colnames(relevant_data)
     data_matrices[[ot]] <- t(relevant_data) 
-    mu[[ot]] <- colMeans(omic_data, na.rm=TRUE)                     
-    sigma[[ot]] <- apply(omic_data, 2, function(v) sd(v, na.rm=TRUE))
+    mu[[ot]] <- rowMeans(omic_data, na.rm=TRUE)                     
+    sigma[[ot]] <- apply(omic_data, 1, function(v) sd(v, na.rm=TRUE))
 
     data_matrices[[ot]] <- (data_matrices[[ot]] - mu[[ot]])/sigma[[ot]] 
 }
@@ -164,6 +164,11 @@ h5write(X, output_hdf, "X")
 h5write(instances, output_hdf, "instances")
 h5write(instance_groups, output_hdf, "instance_groups")
 h5write(target, output_hdf, "target")
+
+fitted_model <- list()
+fitted_model[["Y"]] <- Y
+fitted_model[["mu"]] <- mu
+fitted_model[["sigma"]] <- sigma
 
 saveRDS(Y, fitted_rds)
 

@@ -45,7 +45,10 @@ colnames(omic_data) <- features
 # LOAD FITTED MODEL
 ######################################################
 
-Y <- t(readRDS(fitted_rds))
+fitted_params = readRDS(fitted_rds)
+Y <- t(fitted_params[["Y"]])
+mu <- fitted_params[["mu"]]
+sigma <- fitted_params[["sigma"]]
 
 
 ######################################################
@@ -53,6 +56,7 @@ Y <- t(readRDS(fitted_rds))
 ######################################################
 
 omic_data <- omic_data[,colnames(Y)] # Restrict to the modeled features
+omic_data <- t((t(omic_data) - mu)/sigma)
 X <- linear_transform(omic_data, Y)
 
 ######################################################
