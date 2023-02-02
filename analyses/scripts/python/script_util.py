@@ -1,4 +1,7 @@
 
+from collections import defaultdict
+from matplotlib import pyplot as plt
+import matplotlib as mpl
 from os import path
 import numpy as np
 import pandas as pd
@@ -306,5 +309,72 @@ def linear_transform(Z, Y, lr=2.0, rel_tol=1e-8, max_iter=1000):
         print("Reached max iter ({}). Terminating".format(max_iter))
 
     return X
+
+
+def sort_by_order(ls, ordered_vocab):
+    ordering_dict = {x:i for i,x in enumerate(ordered_vocab)}
+    srt_idx = sorted([ordering_dict[x] for x in ls])
+    return [ordered_vocab[i] for i in srt_idx]
+
+
+def get_method_target(result_json):
+    path_kvs = parse_path_kvs(result_json)
+    method = path_kvs["method"]
+    target = path_kvs["target"]
+    return method, target
+
+
+def get_methods_targets(result_jsons):
+    """
+    Given a list of JSON filepaths, store them in 
+    a nested dictionary indexed by "method" and "target".
+    """
+    result = defaultdict(lambda : defaultdict(list)) 
+    for rjs in result_jsons:
+        method, target = get_method_target(rjs)
+        result[method][target].append(rjs)
+
+    return result
+    
+
+def dict_to_grid(d, row_order=ALL_METHODS, col_order=ALL_TARGETS):
+
+    rownames = list(d.keys())
+    colnames = set()
+    for rname in rownames:
+        colnames |= d[rname]
+    
+    rownames = sort_by_order(rownames, row_order)
+    colnames = sort_by_order(list(colnames), col_order)
+    
+    mat = [[d[rname][cname] for cname in colnames] for rname in rownames]
+
+    return mat, rownames, colnames
+
+
+def make_subplot_grid(plt_func, grid, rownames, colnames):
+    """
+    Construct a set of subplots populated with data from `grid`.
+        * `grid`: a list of lists of data indexed by (row, column, data).
+        * `rownames`, `colnames`: string labels for the grid rows and columns
+        * `plt_func`: a function that receives an `axes` object and an entry from `grid`;
+                      and mutates the `axes` object (i.e., calls pyplot functions 
+                      on it, using the data contained in the list.)
+    """
+
+    n_rows = len(rownames)
+    n_cols = len(colnames)
+
+    fig, axarr = plt.subplots(n_rows, n_cols,
+                              sharey=True, sharex=True,
+                              figsize=(2.0*n_cols, 2.0*n_rows))
+
+    for i, rowname in enumerate(rownames):
+        for j, colname in enumerate(colnames):
+            ax = axarr[i][j]
+            plt_func(ax, grid[i][j])
+           
+    return fig, axarr
+
 
 
