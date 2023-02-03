@@ -2,6 +2,7 @@
 #
 # 
 
+library("reticulate")
 
 library("rhdf5")
 library("MOFA2")
@@ -36,7 +37,8 @@ option_list <- list(
     make_option("--output_dim", type="integer", default=10, help="Number of dimensions the output should take"),
     make_option("--omic_types", type="character", default="mrnaseq,methylation", help="List of omic assays to use, separated by commas (no spaces). Default 'mrnaseq,methylation,mutation'."),
     make_option("--is_grouped", action="store_true", default=FALSE, help="Toggles sample grouping by cancer type."),
-    make_option("--variance_filter", type="numeric", default=0.5, help="fraction of most-variable features to keep within each view") 
+    make_option("--variance_filter", type="numeric", default=0.5, help="fraction of most-variable features to keep within each view"),
+    make_option("--mofa_python", help="path to python that has mofapy2 installed")
     )
 
 parser <- OptionParser(usage="fit_mofa.R DATA_HDF FITTED_RDS OUTPUT_HDF [--mode MODE]",
@@ -50,6 +52,9 @@ omic_types <- strsplit(omic_types, ",")[[1]]
 output_dim <- opts$output_dim
 is_grouped <- opts$is_grouped
 var_filter <- opts$variance_filter
+mofa_python <- opts$mofa_python
+
+reticulate::use_python(mofa_python) 
 
 pargs <- arguments$args
 data_hdf <- pargs[1]
@@ -147,9 +152,12 @@ mofa_object <-prepare_mofa(object=mofa_object,
 # FIT MOFA MODEL
 ####################################################
 
-trained_mofa <- run_mofa(mofa_object, save_data=FALSE,
-                                      use_basilisk=TRUE) 
+temp_file <- paste(output_hdf, "_temp", sep="")
 
+trained_mofa <- run_mofa(mofa_object, temp_file,
+                                      save_data=FALSE,
+                                      use_basilisk=FALSE) 
+file.remove(temp_file)
 X_ls <- get_expectations(trained_mofa, "Z")
 Y_ls <- get_expectations(trained_mofa, "W")
 
