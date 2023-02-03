@@ -395,7 +395,7 @@ rule exp_prep_paradigm:
 
 rule exp_download_paradigm:
     output:
-        #paradigm_tar=join(PARADIGM_DIR, "merge_merged_reals.tar.gz"),
+        paradigm_tar=join(PARADIGM_DIR, "merge_merged_reals.tar.gz"),
         paradigm_txt=join(PARADIGM_DIR, "merge_merged_reals.txt")
     shell:
         "curl {PARADIGM_URL} --output {output.paradigm_tar} && tar -xvzf {output.paradigm_tar} --directory {PARADIGM_DIR}"
