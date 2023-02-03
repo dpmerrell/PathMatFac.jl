@@ -170,6 +170,6 @@ fitted_model[["Y"]] <- Y
 fitted_model[["mu"]] <- mu
 fitted_model[["sigma"]] <- sigma
 
-saveRDS(Y, fitted_rds)
+saveRDS(fitted_model, fitted_rds)
 
 
