@@ -47,8 +47,8 @@ def compute_other_attributes(y_labels, y, pred_y, pred_y_probs):
     results["confusion"] = confusion_matrix(y,pred_y).tolist() 
 
     # Produce an ROC curve if this is binary classification
-    if pred_y_probs.shape == 2: 
-        fpr, tpr, thresholds = roc_curve(y, pred_y[:,1])
+    if pred_y_probs.shape[1] == 2: 
+        fpr, tpr, thresholds = roc_curve(y, pred_y_probs[:,1])
         results["roc"] = {"fpr": list(fpr),
                           "tpr": list(tpr)
                          }

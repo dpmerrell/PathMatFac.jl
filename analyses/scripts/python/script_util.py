@@ -31,6 +31,7 @@ NICE_NAMES = {"gender": "Sex",
               "mofa": "MOFA+",
               "plier": "PLIER",
               "pca": "PCA",
+              "paradigm": "PARADIGM",
               "gsva": "GSVA"
               }
 
@@ -46,7 +47,7 @@ ALL_CTYPES = ["ACC", "CESC", "HNSC",
 
 ALL_TARGETS = ["survival","ctype","pathologic_stage","hpv_status"]
 
-ALL_METHODS = ["matfac", "mofa", "plier", "pca", "gsva"]
+ALL_METHODS = ["matfac", "mofa", "plier", "pca", "paradigm", "gsva"]
 
 
 """
@@ -342,8 +343,8 @@ def dict_to_grid(d, row_order=ALL_METHODS, col_order=ALL_TARGETS):
     rownames = list(d.keys())
     colnames = set()
     for rname in rownames:
-        colnames |= d[rname]
-    
+        colnames |= d[rname].keys()
+   
     rownames = sort_by_order(rownames, row_order)
     colnames = sort_by_order(list(colnames), col_order)
     
@@ -366,7 +367,7 @@ def make_subplot_grid(plt_func, grid, rownames, colnames):
     n_cols = len(colnames)
 
     fig, axarr = plt.subplots(n_rows, n_cols,
-                              sharey=True, sharex=True,
+                              #sharey=True, sharex=True,
                               figsize=(2.0*n_cols, 2.0*n_rows))
 
     for i, rowname in enumerate(rownames):
