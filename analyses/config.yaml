@@ -11,6 +11,9 @@ reactome_dir: "data/reactome/"
 paradigm_url: "https://api.gdc.cancer.gov/data/7d4c0344-f018-4ab0-949a-09815f483480"
 paradigm_dir: "data/paradigm/"
 
+mofa_python: "/home/dmerrell/envs/py38/bin/python"
+
+
 ################################
 # Simulation study config
 ################################

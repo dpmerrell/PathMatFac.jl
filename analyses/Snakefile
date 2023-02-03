@@ -302,6 +302,8 @@ rule exp_fit_classifier:
 # MOFA fit/transform
 #############################################################
 
+MOFA_PYTHON = config["mofa_python"]
+
 rule exp_transform_mofa:
     input:
         src="scripts/R/transform_mofa.R",
@@ -324,7 +326,7 @@ rule exp_fit_mofa:
         trans_train_hdf=join(EXP_TRANS_TRAIN_DIR, "method=mofa__k={k,[0-9]+}__var_filter={vf,[.0-9]+}/{data,[_.=:0-9a-zA-Z]+}/{pathways,[_.=0-9a-zA-Z]+}/transformed.hdf")
     threads: 4
     shell:
-        "Rscript {input.src} {input.data_hdf} {output.fitted_rds} {output.trans_train_hdf} --output_dim {wildcards.k} --variance_filter {wildcards.vf}"
+        "Rscript {input.src} {input.data_hdf} {output.fitted_rds} {output.trans_train_hdf} --output_dim {wildcards.k} --variance_filter {wildcards.vf} --mofa_python {MOFA_PYTHON}"
 
 
 #############################################################
