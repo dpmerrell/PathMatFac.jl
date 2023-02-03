@@ -239,7 +239,7 @@ rule exp_score_survival_regressor:
         score_json=join(EXP_REGRESSOR_SCORE_DIR, "{transform,[_.=:0-9a-zA-Z]+}/{data,[_.=:0-9a-zA-Z]+}__target=survival/{pathways,[_.=:0-9a-zA-Z]+}/scores.json"),
         other_output_json=join(EXP_REGRESSOR_SCORE_DIR, "{transform,[_.=:0-9a-zA-Z]+}/{data,[_.=:0-9a-zA-Z]+}__target=survival/{pathways,[_.=:0-9a-zA-Z]+}/other_output.json")
     shell:
-        "Rscript {input.src} {input.fitted_regressor} {input.transformed_test} {output.score_json}"
+        "Rscript {input.src} {input.fitted_regressor} {input.transformed_test} {output.score_json} {output.other_output_json}"
 
 
 rule exp_fit_survival_regressor:
