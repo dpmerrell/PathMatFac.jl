@@ -16,15 +16,19 @@ def plot_roc_curves(ax, result_jsons):
         return
 
     result_data = [json.load(open(js, "r")) for js in result_jsons]
+
+    aucs = []
     for d in result_data:
         fpr = d["roc"]["fpr"]
         tpr = d["roc"]["tpr"]
 
         ax.plot(fpr, tpr, linewidth=0.5, color="grey")
+        aucs.append(np.trapz(tpr, x=fpr)
 
     ax.plot([0,1],[0,1], "k--", linewidth=1.0)
     ax.set_xlim([-0.05,1])
     ax.set_ylim([0,1.05])
+    ax.annotate("Mean AUC: {}".format(np.mean(aucs)), (0.75,0.25))
 
     return
 
@@ -104,8 +108,6 @@ def plot_survival_scatter(ax, result_jsons):
     ax.scatter(true_alive, pred_alive, s=0.25, marker='o', color='blue')
     ax.scatter(true_dead, pred_dead, s=0.75, marker='x', color='red')
 
-    #ax.set_xlim([0,150])
-    #ax.set_ylim([0,150])
     return
 
 
@@ -167,6 +169,8 @@ if __name__=="__main__":
     fig, axarr = su.make_subplot_grid(plot_prediction_results, grid, 
                                       method_names, target_names)
 
+    fig.text(0.5, 0.04, "Prediction targets", ha="center")
+    fig.text(0.04, 0.5, "Dimension reduction methods", rotation="vertical", ha="center")
     plt.tight_layout()
     plt.savefig(out_png, dpi=300)
 

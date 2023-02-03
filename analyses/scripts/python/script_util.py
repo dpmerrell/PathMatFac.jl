@@ -44,6 +44,7 @@ ALL_CTYPES = ["ACC", "CESC", "HNSC",
               "LAML", "LUAD", "OV", "PRAD", 
               "SKCM", "TGCT", "UCEC"]
 
+ALL_COLORS = ["red","blue","black","orange","yellow","grey","silver"]
 
 ALL_TARGETS = ["survival","ctype","pathologic_stage","hpv_status"]
 
@@ -348,7 +349,7 @@ def dict_to_grid(d, row_order=ALL_METHODS, col_order=ALL_TARGETS):
     rownames = sort_by_order(rownames, row_order)
     colnames = sort_by_order(list(colnames), col_order)
     
-    mat = [[d[rname][cname] for cname in colnames] for rname in rownames]
+    mat = [[sorted(d[rname][cname]) for cname in colnames] for rname in rownames]
 
     return mat, rownames, colnames
 

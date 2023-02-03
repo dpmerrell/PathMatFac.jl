@@ -147,7 +147,8 @@ rule all:
        #                        fold=TCGA_REGRESSION_PARAMS["folds"], target=TCGA_REGRESSION_PARAMS["targets"],
        #                        pathways=TCGA_REGRESSION_PARAMS["pathways"]),
         score_tsv=join(EXP_REGRESSOR_SCORE_DIR, "scores.tsv"),
-        out_png=join(EXP_REGRESSOR_SCORE_DIR, "results.png")
+        pred_result_png=join(EXP_REGRESSOR_SCORE_DIR, "results.png"),
+        pred_embedding_png=join(EXP_REGRESSOR_SCORE_DIR, "embeddings.png")
 
 #####################################################################
 # Runs on real (TCGA) data
@@ -203,6 +204,23 @@ rule exp_fit_matfac:
 #############################################################
 # TCGA prediction tasks
 #############################################################
+
+rule plot_prediction_embeddings:
+    input:
+        src="scripts/python/vis_prediction_embeddings.py",
+        train_hdfs=expand(join(EXP_TRANS_TRAIN_DIR, "{transform}/{data}__fold={fold}__target={target}/{pathways}/transformed.hdf"),
+                           transform=TCGA_REGRESSION_PARAMS["methods"], data=TCGA_REGRESSION_PARAMS["data"],
+                           fold=TCGA_REGRESSION_PARAMS["folds"], target=TCGA_REGRESSION_PARAMS["targets"],
+                           pathways=TCGA_REGRESSION_PARAMS["pathways"]),
+        test_hdfs=expand(join(EXP_TRANS_TEST_DIR, "{transform}/{data}__fold={fold}__target={target}/{pathways}/transformed.hdf"),
+                           transform=TCGA_REGRESSION_PARAMS["methods"], data=TCGA_REGRESSION_PARAMS["data"],
+                           fold=TCGA_REGRESSION_PARAMS["folds"], target=TCGA_REGRESSION_PARAMS["targets"],
+                           pathways=TCGA_REGRESSION_PARAMS["pathways"])
+    output:
+        out_png=join(EXP_REGRESSOR_SCORE_DIR, "embeddings.png")
+    shell:
+        "python {input.src} {output.out_png} --train_hdfs {input.train_hdfs} --test_hdfs {input.test_hdfs}"
+
 
 rule plot_prediction_results:
     input:
