@@ -23,12 +23,12 @@ def plot_roc_curves(ax, result_jsons):
         tpr = d["roc"]["tpr"]
 
         ax.plot(fpr, tpr, linewidth=0.5, color="grey")
-        aucs.append(np.trapz(tpr, x=fpr)
+        aucs.append(np.trapz(tpr, x=fpr))
 
     ax.plot([0,1],[0,1], "k--", linewidth=1.0)
     ax.set_xlim([-0.05,1])
     ax.set_ylim([0,1.05])
-    ax.annotate("Mean AUC: {}".format(np.mean(aucs)), (0.75,0.25))
+    ax.annotate("Mean AUC: {:.2f}".format(np.mean(aucs)), (0.4,0.25), fontsize=6)
 
     return
 
@@ -169,8 +169,8 @@ if __name__=="__main__":
     fig, axarr = su.make_subplot_grid(plot_prediction_results, grid, 
                                       method_names, target_names)
 
-    fig.text(0.5, 0.04, "Prediction targets", ha="center")
-    fig.text(0.04, 0.5, "Dimension reduction methods", rotation="vertical", ha="center")
+#    fig.text(0.5, 0.04, "Prediction targets", ha="center")
+#    fig.text(0.04, 0.5, "Dimension reduction methods", rotation="vertical", ha="center")
     plt.tight_layout()
     plt.savefig(out_png, dpi=300)
 
