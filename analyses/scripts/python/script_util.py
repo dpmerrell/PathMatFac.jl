@@ -12,7 +12,7 @@ NICE_NAMES = {"gender": "Sex",
               "survival": "Survival",
               "ctype": "Cancer type",
               "pathologic_stage": "Pathologic stage",
-              "hpv_status": "HPV",
+              "hpv_status": "HPV status",
               "tobacco_smoking_history": "Smoking",
               "age_at_initial_pathologic_diagnosis": "Age",
               "race": "Race",
@@ -24,9 +24,10 @@ NICE_NAMES = {"gender": "Sex",
               "missing": "Missing Data",
               "l1_fraction": "$L^1$ Fraction",
               "X_pwy_spearman_corr": "Pathway Activation Spearman",
-              "aucroc": "AUCROC",
+              "roc_auc": "AUCROC",
               "mse": "MSE",
               "accuracy": "Accuracy",
+              "concordance": "Concordance",
               "matfac": "PathMatFac",
               "mofa": "MOFA+",
               "plier": "PLIER",
@@ -53,7 +54,7 @@ ALL_METHODS = ["matfac", "mofa", "plier", "pca", "paradigm", "gsva"]
 ALL_SCORES = {"survival": "concordance",
               "ctype": "accuracy",
               "pathologic_stage": "mse",
-              "hpv_status": "aucroc"}
+              "hpv_status": "roc_auc"}
 
 """
 Convert a pathway into a list of gene IDs.
@@ -358,7 +359,7 @@ def dict_to_grid(d, row_order=ALL_METHODS, col_order=ALL_TARGETS):
     return mat, rownames, colnames
 
 
-def make_subplot_grid(plt_func, grid, rownames, colnames):
+def make_subplot_grid(plt_func, grid, rownames, colnames, figsize=None):
     """
     Construct a set of subplots populated with data from `grid`.
         * `grid`: a list of lists of data indexed by (row, column, data).
@@ -371,13 +372,20 @@ def make_subplot_grid(plt_func, grid, rownames, colnames):
     n_rows = len(rownames)
     n_cols = len(colnames)
 
-    fig, axarr = plt.subplots(n_rows, n_cols,
-                              figsize=(2.0*n_cols, 2.0*n_rows))
+    if figsize is None:
+        figsize=(2.0*n_cols, 2.0*n_rows)
 
-    for i, rowname in enumerate(rownames):
+    fig, axarr = plt.subplots(n_rows, n_cols, figsize=figsize)
+
+    if n_rows > 1:
+        for i, rowname in enumerate(rownames):
+            for j, colname in enumerate(colnames):
+                ax = axarr[i][j]
+                plt_func(ax, grid[i][j])
+    else:
         for j, colname in enumerate(colnames):
-            ax = axarr[i][j]
-            plt_func(ax, grid[i][j])
+            ax = axarr[j]
+            plt_func(ax, grid[0][j])
            
     return fig, axarr
 
