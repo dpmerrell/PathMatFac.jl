@@ -50,6 +50,10 @@ ALL_TARGETS = ["survival","ctype","pathologic_stage","hpv_status"]
 
 ALL_METHODS = ["matfac", "mofa", "plier", "pca", "paradigm", "gsva"]
 
+ALL_SCORES = {"survival": "concordance",
+              "ctype": "accuracy",
+              "pathologic_stage": "mse",
+              "hpv_status": "aucroc"}
 
 """
 Convert a pathway into a list of gene IDs.
@@ -368,7 +372,6 @@ def make_subplot_grid(plt_func, grid, rownames, colnames):
     n_cols = len(colnames)
 
     fig, axarr = plt.subplots(n_rows, n_cols,
-                              #sharey=True, sharex=True,
                               figsize=(2.0*n_cols, 2.0*n_rows))
 
     for i, rowname in enumerate(rownames):

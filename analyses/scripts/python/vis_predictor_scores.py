@@ -13,23 +13,25 @@ import argparse
 import json
 
 NAMES = su.NICE_NAMES
+SCORE_MAP = su.ALL_SCORES
 
 
 def plot_prediction_scores(ax, result_data): 
     """
 
     """
-
     methods = su.sort_by_order(list(result_data.keys()), su.ALL_METHODS)
+    score_str = SCORE_MAP[result_data[methods[0]["target"]]] 
 
-    i,j = result_data["idx"]
-    nrow, ncol = result_data["N"]
-    target = result_data["names"]
-    result_jsons = result_data["jsons"] 
-
-
-    if j == 0:
-        ax.set_ylabel(NAMES[rowname])
+    scores = []
+    for method in methods:
+        dat = result_data[method]
+        result_jsons = dat["jsons"]
+        all_scores = [json.load(open(rj,"r")) for rj in result_jsons]
+        scores.append([score_dict[score_str] for score_dict in all_scores])
+        
+    ax.boxplot(scores, labels=methods)
+    ax.set_ylabel(NAMES[score_str])
 
     return 
 
@@ -37,7 +39,7 @@ if __name__=="__main__":
 
     parser = argparse.ArgumentParser()
     parser.add_argument("out_png")
-    parser.add_argument("--result_jsons", nargs="+")
+    parser.add_argument("--score_jsons", nargs="+")
 
     args = parser.parse_args()
     result_jsons = args.result_jsons
@@ -53,19 +55,17 @@ if __name__=="__main__":
     # Add some auxiliary data to the grid
     grid = [[{method: {"idx":(i,j), 
                        "N": (nrow, ncol), 
-                       "target":(target_names[j]), 
-                       "jsons": dat} for method in method_names[i] } for j, dat in enumerate(row)] for i, row in enumerate(grid)]
+                       "target": target, 
+                       "jsons": grid[i][j]} for i, method in enumerate(method_names))} for j, target in enumerate(target_names)]] 
 
-    method_names = [NAMES[mn] for mn in method_names]
     target_names = [NAMES[tn] for tn in target_names]
     
     # Plot prediction results across the grid
-    fig, axarr = su.make_subplot_grid(plot_prediction_results, grid, 
-                                      method_names, target_names)
+    fig, axarr = su.make_subplot_grid(plot_prediction_scores, grid, 
+                                      [1], target_names)
 
-#    fig.text(0.5, 0.04, "Prediction targets", ha="center")
-#    fig.text(0.04, 0.5, "Dimension reduction methods", rotation="vertical", ha="center")
     plt.tight_layout()
     plt.savefig(out_png, dpi=300)
+
 
  

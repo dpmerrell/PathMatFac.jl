@@ -147,6 +147,7 @@ rule all:
        #                        fold=TCGA_REGRESSION_PARAMS["folds"], target=TCGA_REGRESSION_PARAMS["targets"],
        #                        pathways=TCGA_REGRESSION_PARAMS["pathways"]),
         score_tsv=join(EXP_REGRESSOR_SCORE_DIR, "scores.tsv"),
+        score_png=join(EXP_REGRESSOR_SCORE_DIR, "scores.png"),
         pred_result_png=join(EXP_REGRESSOR_SCORE_DIR, "results.png"),
         pred_embedding_png=join(EXP_REGRESSOR_SCORE_DIR, "embeddings.png")
 
@@ -235,7 +236,20 @@ rule plot_prediction_results:
         "python {input.src} {output.out_png} --result_jsons {input.other_output_jsons}"
 
 
-rule tabulate_regression_scores:
+rule plot_prediction_scores:
+    input:
+        src="scripts/python/vis_predictor_scores.py",
+        score_jsons=expand(join(EXP_REGRESSOR_SCORE_DIR, "{transform}/{data}__fold={fold}__target={target}/{pathways}/scores.json"),
+                           transform=TCGA_REGRESSION_PARAMS["methods"], data=TCGA_REGRESSION_PARAMS["data"],
+                           fold=TCGA_REGRESSION_PARAMS["folds"], target=TCGA_REGRESSION_PARAMS["targets"],
+                           pathways=TCGA_REGRESSION_PARAMS["pathways"])
+    output:
+        score_png=join(EXP_REGRESSOR_SCORE_DIR, "scores.png")
+    shell:
+        "python {input.src} {output.score_png} --score_jsons {input.score_jsons}"
+
+
+rule tabulate_prediction_scores:
     input:
         src="scripts/python/tabulate_jsons.py",
         score_jsons=expand(join(EXP_REGRESSOR_SCORE_DIR, "{transform}/{data}__fold={fold}__target={target}/{pathways}/scores.json"),
