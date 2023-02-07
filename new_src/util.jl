@@ -397,3 +397,28 @@ function csc_select(A, rng1::UnitRange, rng2::UnitRange)
 end
 
 
+function compute_nonpwy_features(model_features, pathway_edgelists)
+
+    result = []
+    for el in pathway_edgelists
+        pwy_nodes = get_all_nodes(el)
+        pwy_proteins = Set([split(node[1],"_")[1] for node in pwy_nodes])
+        
+        l1_feat = [mf for mf in model_features if !in(mf[1], pwy_proteins)]
+        push!(result, l1_feat)
+    end
+
+    return result
+end
+
+
+function rec_compose(layers::AbstractVector)
+    if length(layers) == 0
+        return identity
+    else
+        return x -> layers[end](rec_compose(layers[1:end-1])(x))
+    end
+end
+
+
+

@@ -8,6 +8,9 @@ mutable struct PathMatFacModel
     # Matrix factorization model
     matfac::MatFacModel
 
+    # Data
+    data::Union{<:AbstractMatrix,Nothing}
+
     # Information about data samples
     sample_ids::AbstractVector
     sample_conditions::AbstractVector
@@ -26,10 +29,53 @@ end
 
 @functor PathMatFacModel (matfac,)
 
-# TODO make more of these optional
-# TODO require data at construction. Constructing
-#      an untrained model without a reference dataset
-#      makes little sense
+
+
+#############################################################
+# Model assembly
+#############################################################
+
+function assemble_model(X, K, sample_ids, sample_conditions,
+                              feature_ids, feature_views, feature_distributions,
+                              batch_dict,
+                              feature_graphs, sample_graphs,
+                              lambda_X_l2, lambda_X_condition, lambda_X_graph, 
+                              lambda_Y_l1, lambda_Y_selective_l1, lambda_Y_graph,
+                              lambda_layer)
+
+    # Construct the column layers and their regularizer
+    col_layers = construct_model_layers(feature_views, batch_dict) 
+    layer_reg = construct_layer_reg(feature_views, batch_dict, lambda_layer) 
+
+    # Construct regularizers for X and Y
+    X_reg = construct_X_reg(sample_ids, sample_conditions, sample_graphs, 
+                            lambda_X_l2, lambda_X_group, lambda_X_graph)
+    Y_reg = construct_Y_reg(feature_ids, feature_graphs,
+                            lambda_Y_l1, lambda_Y_selective_l1, lambda_Y_graph)
+
+    # Construct MatFacModel
+    M,N = size(X)
+    matfac = MatFacModel(M, N, K, feature_distributions;
+                         col_transform=col_layers,
+                         X_reg=X_reg, Y_reg=Y_reg, 
+                         col_transform_reg=layer_reg)
+
+    # Construct the PathMatFacModel
+    model = PathMatFacModel(matfac, X, 
+                            sample_ids, sample_conditions, 
+                            feature_ids, feature_views,
+                            used_feature_idx,
+                            data_to_model)
+
+    return model
+end
+
+
+"""
+    PathMatFacModel(X; K=10)
+
+    Construct a PathMatFacModel matrix factorization model for dataset X.
+"""
 function PathMatFacModel(X::AbstractMatrix{<:Real};
                          K::Integer=10,
                          sample_ids::Union{<:AbstractVector,Nothing}=nothing, 
@@ -37,29 +83,84 @@ function PathMatFacModel(X::AbstractMatrix{<:Real};
                          feature_ids::Union{<:AbstractVector,Nothing}=nothing, 
                          feature_views::Union{<:AbstractVector,Nothing}=nothing,
                          feature_distributions::Union{<:AbstractVector,Nothing}=nothing,
-                         batch_map::Union{<:AbstractDict,Nothing}=nothing,
-                         lambda_X::Union{Real,Nothing}=nothing,
-                         lambda_Y::Union{Real,Nothing}=nothing,
-                         lambda_layer::Union{Real,Nothing}=nothing,
-                         lambda_l1::Union{Real,Nothing}=nothing,
-                         lambda_pathway::Union{Real,Nothing}=nothing) 
+                         batch_dict::Union{<:AbstractDict,Nothing}=nothing,
+                         feature_graphs::Union{<:AbstractVector,Nothing}=nothing,
+                         sample_graphs::Union{<:AbstractVector,Nothing}=nothing,
+                         lambda_X_l2::Union{Real,Nothing}=nothing,
+                         lambda_X_condition::Union{Real,Nothing}=nothing,
+                         lambda_X_graph::Union{Real,Nothing}=nothing, 
+                         lambda_Y_l1::Union{Real,Nothing}=nothing,
+                         lambda_Y_selective_l1::Union{Real,Nothing}=nothing,
+                         lambda_Y_graph::Union{Real,Nothing}=nothing, 
+                         lambda_layer::Union{Real,Nothing}=nothing)
       
-     
-    data_features = collect(zip(data_genes, data_assays))
+    ################################################
+    # Validate input
+    M, N = size(X)
 
-    return assemble_model(pathway_sif_data, 
-                          pathway_names,
-                          sample_ids, sample_conditions,
-                          sample_batch_dict,
-                          data_features,
-                          lambda_X, lambda_Y;
-                          lambda_layer=lambda_layer,
-                          l1_fraction=l1_fraction,
-                          model_features=model_features)
+    # Latent dimension; Graph regularization
+    K_feature = (feature_graphs == nothing) ? K : length(feature_graphs)
+    K_sample = (sample_graphs == nothing) ? K : length(sample_graphs)
+    @assert K_feature == K_sample
+    K = K_feature
 
+    # Sample IDs
+    if sample_ids != nothing
+        @assert length(sample_ids) == length(unique(sample_ids)) "`sample_ids` must be unique"
+        @assert length(sample_ids) == M "`sample_ids` must be nothing or have length equal to size(X,1)"
+    else
+        sample_ids = collect(1:M)
+    end
+
+    # Sample conditions
+    if sample_conditions != nothing
+        @assert length(sample_conditions) == M "`sample_conditions` must be nothing or have length equal to size(X,1)"
+    end
+    
+    # Feature IDs 
+    if feature_ids != nothing
+        @assert length(feature_ids) == length(unique(feature_ids)) "`feature_ids` must be unique"
+        @assert length(feature_ids) == M "`sample_ids` must have length equal to dim(X,2)"
+    else
+        feature_ids = ones(N)
+    end
+
+    # Batch Dictionary
+    if batch_dict != nothing
+        @assert feature_views != nothing "`feature_views` must be provided whenever `batch_dict` is provided"
+        @assert Set(keys(batch_dict)) == Set(unique(feature_views)) "The `batch_dict` keys must match the set of `feature_views`"
+        for v in values(batch_dict)
+            @assert length(v) == M "Each value of `batch_dict` must be a vector of length size(X,1)"
+        end
+    end
+
+    # Feature views
+    if feature_view != nothing
+        @assert length(feature_views) == N "`feature_views` must be nothing or have length equal to size(X,2)"
+    else
+        feature_views = ones(N)
+    end
+
+    # Feature distributions
+    if feature_distributions != nothing
+        @assert length(feature_distributions) == N "`feature_distributions` must be nothing or have length equal to size(X,2)"
+        all_distributions = set(keys(LOSS_ORDER))
+        @assert all(map(x->in(x,all_distributions), feature_distributions)) string("Each entry of `feature_distributions` must be one of ", all_distributions)
+    else
+        feature_distributions = fill("normal", N)
+    end
+
+    ###############################
+    # Assemble the model
+    return assemble_model(X, K, sample_ids, sample_conditions, 
+                          feature_ids, feature_views, feature_distributions,
+                          batch_dict, feature_graphs, sample_graphs,
+                          lambda_X_l2, lambda_X_condition, lambda_X_graph,
+                          lambda_Y_l1, lambda_Y_selective_l1, lambda_Y_graph, 
+                          lambda_layer) 
 end
 
-PMTypes = Union{MultiomicModel,NetworkRegularizer,NetworkL1Regularizer, ClusterRegularizer,
+PMTypes = Union{MultiomicModel,NetworkRegularizer,NetworkL1Regularizer,GroupRegularizer,
                 L1Regularizer, PMLayers,PMLayerReg,ColScale,ColShift,BatchScale,BatchShift,
                 BatchArray,BatchArrayReg}
 
