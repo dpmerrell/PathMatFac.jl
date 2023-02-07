@@ -233,7 +233,7 @@ rule plot_prediction_results:
     output:
         out_png=join(EXP_REGRESSOR_SCORE_DIR, "results.png")
     shell:
-        "python {input.src} {output.out_png} --result_jsons {input.other_output_jsons}"
+        "python {input.src} {output.out_png} --result_jsons {input.other_output_jsons} --n_folds {TCGA_FOLDS}"
 
 
 rule plot_prediction_scores:
@@ -246,7 +246,7 @@ rule plot_prediction_scores:
     output:
         score_png=join(EXP_REGRESSOR_SCORE_DIR, "scores.png")
     shell:
-        "python {input.src} {output.score_png} --score_jsons {input.score_jsons}"
+        "python {input.src} {output.score_png} --score_jsons {input.score_jsons} --n_folds {TCGA_FOLDS}"
 
 
 rule tabulate_prediction_scores:

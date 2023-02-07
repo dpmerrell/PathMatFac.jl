@@ -144,10 +144,12 @@ if __name__=="__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("out_png")
     parser.add_argument("--result_jsons", nargs="+")
+    parser.add_argument("--n_folds", type=int, default=5)
 
     args = parser.parse_args()
     result_jsons = args.result_jsons
     out_png = args.out_png
+    n_folds = args.n_folds
 
     # Arrange the JSON filepaths into a grid,
     # indexed by (method, target)
@@ -171,6 +173,7 @@ if __name__=="__main__":
 
 #    fig.text(0.5, 0.04, "Prediction targets", ha="center")
 #    fig.text(0.04, 0.5, "Dimension reduction methods", rotation="vertical", ha="center")
+    plt.suptitle("Prediction task performance ({}-fold cross-validation)".format(n_folds))
     plt.tight_layout()
     plt.savefig(out_png, dpi=300)
 
