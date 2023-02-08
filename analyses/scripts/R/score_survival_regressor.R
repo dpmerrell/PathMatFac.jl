@@ -40,6 +40,7 @@ c_index <- 1 - pred_obj$err.rate[pred_obj$ntree]
 ####################################
 results <- list()
 results[["concordance"]] <- c_index
+results[["concordance_baseline"]] <- 0.5
  
 write_json(results, scores_json, auto_unbox=TRUE)
 

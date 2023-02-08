@@ -23,25 +23,34 @@ def plot_prediction_scores(ax, result_data):
     methods = su.sort_by_order(list(result_data.keys()), su.ALL_METHODS)
     target = result_data[methods[0]]["target"]
     score_str = SCORE_MAP[target] 
+    trivial_score_str = score_str + "_baseline"
 
     ymin = 0.0
     ymax = 1.0
+    xmin = -0.5
+    xmax = len(methods) - 0.5
 
-    scores = []
+    all_scores = []
+    all_trivial_scores = set()
     for method in methods:
         dat = result_data[method]
         score_jsons = dat["jsons"]
-        all_scores = [json.load(open(rj,"r")) for rj in score_jsons]
-        all_scores = [score_dict[score_str] for score_dict in all_scores]
+        score_dicts = [json.load(open(rj,"r")) for rj in score_jsons]
+        scores = [score_dict[score_str] for score_dict in score_dicts]
+        trivial_scores = [score_dict[trivial_score_str] for score_dict in score_dicts]
         ymin = min(ymin, np.min(all_scores))
         ymax = max(ymax, np.max(all_scores))
-        scores.append(all_scores)
-      
-    
+        scores.append(scores)
+        all_trivial_scores |= set(trivial_scores)
+
+    for ts in list(all_trivial_scores):
+        ax.plot([xmin, xmax],[ts, ts], "--", linewidth=0.5, color="grey")
+ 
     method_names = [NAMES[m] for m in methods]
-    ax.boxplot(scores, labels=method_names)
+    ax.boxplot(all_scores, labels=method_names)
     
     y_spread = ymax - ymin
+    ax.set_xlim([xmin, xmax])
     ax.set_ylim([ymin - 0.05*y_spread, ymax + 0.05*y_spread]) 
     ax.tick_params(axis='x', labelrotation=45)
     ax.set_title(NAMES[target]) 

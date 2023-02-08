@@ -17,12 +17,17 @@ def load_data(test_hdf):
     return X, y
 
 
-def compute_scores(y, pred_y):
+def compute_scores(y, pred_y, y_train):
 
     scores = {'mse': mean_squared_error(y, pred_y),
               'r2': r2_score(y, y_pred)
              }
    
+    # Compute the score of a trivial regressor
+    trivial_pred = np.mean(y_train)
+    delta = (y - trivial_pred)
+    scores["mse_baseline"] = np.sum(delta*delta)/len(y)
+
     return scores
 
 
@@ -40,7 +45,8 @@ if __name__=="__main__":
     # Parse command line arguments
     parser = argparse.ArgumentParser()
     parser.add_argument("model_pkl")
-    parser.add_argument("data_hdf")
+    parser.add_argument("train_hdf")
+    parser.add_argument("test_hdf")
     parser.add_argument("score_json")
     parser.add_argument("other_output_json")
     parser.add_argument("--target", default="pathologic_stage")
@@ -48,7 +54,8 @@ if __name__=="__main__":
     args = parser.parse_args()
 
     model_pkl = args.model_pkl
-    data_hdf = args.data_hdf
+    train_hdf = args.train_hdf
+    test_hdf = args.test_hdf
     score_json = args.score_json
     other_output_json = args.other_output_json
     target = args.target
@@ -57,7 +64,7 @@ if __name__=="__main__":
     model = pkl.load(open(model_pkl, "rb"))
  
     # Load data
-    X, y = load_data(data_hdf)
+    X, y = load_data(test_hdf)
     if target == "pathologic_stage":
         y = su.encode_pathologic_stage(y)
 
@@ -71,6 +78,7 @@ if __name__=="__main__":
     json.dump(score_dict, open(score_json, "w")) 
 
     # Compute other attributes of the prediction task
-    other_output = compute_other_attributes(y, y_pred)
+    _, y_train = load_data(train_hdf)
+    other_output = compute_other_attributes(y, y_pred, y_train)
     json.dump(other_output, open(other_output_json, "w")) 
     
