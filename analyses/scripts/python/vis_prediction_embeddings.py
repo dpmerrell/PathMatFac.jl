@@ -147,7 +147,7 @@ def plot_prediction_embeddings(ax, result_data):
 
     embedded_data = hdfs_to_embedding(train_hdfs, test_hdfs) 
 
-    print(rowname, colname) 
+    print(rowname, colname, embedded_data[0].shape, embedded_data[2].shape)
 
     if colname in ("hpv_status"):
         plot_binary_embedding(ax, *embedded_data)

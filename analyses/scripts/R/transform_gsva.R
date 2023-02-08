@@ -47,9 +47,9 @@ used_pathways <- fitted_params[["used_pathways"]]
 
 # Need to use the training set again during test; 
 # have to run GSVA on the combined (train, test) data 
-# for better consistency in the gene-wise statistics.
+# for better consistency in the gene-wise KCDF estimates.
 # Even this is imperfect, though. It would be better
-# if GSVA could store gene-wise statistics from the 
+# if GSVA could store gene-wise KCDFs from the 
 # train set and use them to score the test set.
 # Implementing that seems out-of-scope for this project.
 
@@ -103,7 +103,7 @@ combined_omic <- median_impute(combined_omic)
 
 print("RUNNING GSVA")
 gsva_results <- t(gsva(t(combined_omic), genesets, min.sz=1,
-                       max.sz=Inf, kcdf=kcdf, parallel.sz=1))
+                       max.sz=Inf, kcdf=kcdf, parallel.sz=threads))
 
 gsva_results <- gsva_results[test_instances,]
 
@@ -118,6 +118,8 @@ gsva_results <- t((t(gsva_results) - mu)/sigma)
 
 # Fortunately, we know gsva_results contains no NaNs.
 # So the PCA transform is just matrix multiplication!
+print("GSVA RESULT NANS:")
+print(sum(is.nan(gsva_results)))
 Y <- fitted_params[["Y"]]
 gsva_results <- gsva_results %*% t(Y)
 

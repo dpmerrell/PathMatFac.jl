@@ -72,13 +72,16 @@ if __name__=="__main__":
     y_pred = model.predict(X)
 
     # Score predictions
-    score_dict = compute_scores(y, y_pred)
+    _, y_train = load_data(train_hdf)
+    if target == "pathologic_stage":
+        y_train = su.encode_pathologic_stage(y_train)
+ 
+    score_dict = compute_scores(y, y_pred, y_train)
 
     # Output to JSON
     json.dump(score_dict, open(score_json, "w")) 
 
     # Compute other attributes of the prediction task
-    _, y_train = load_data(train_hdf)
-    other_output = compute_other_attributes(y, y_pred, y_train)
+    other_output = compute_other_attributes(y, y_pred)
     json.dump(other_output, open(other_output_json, "w")) 
     

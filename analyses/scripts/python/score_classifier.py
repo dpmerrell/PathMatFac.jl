@@ -40,7 +40,7 @@ def compute_scores(y, pred_y, pred_y_probs, y_train):
     # Compute the performance of a trivial baseline
     unq_train, train_counts = np.unique(y_train, return_counts=True)
     trivial_pred = unq_train[np.argmax(train_counts)]
-    test_counts = dict(zip(np.unique(y, return_counts=True)))
+    test_counts = dict(zip(*np.unique(y, return_counts=True)))
     trivial_accuracy = test_counts[trivial_pred] / len(y) 
 
     scores["accuracy_baseline"] = trivial_accuracy

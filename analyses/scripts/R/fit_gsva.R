@@ -13,7 +13,7 @@ option_list <- list(
     make_option("--omic_type", type="character", default="mrnaseq", help="The type of omic data to use. Default 'mrnaseq'."),
     make_option("--kcdf", type="character", default="Gaussian", help="'Gaussian' or 'Poisson'."),
     make_option("--minsize", default=10, help="Minimum gene set size. Default 10."),
-    make_option("--maxsize", default=1000, help="Maximum gene set size. Default 100."),
+    make_option("--maxsize", default=500, help="Maximum gene set size. Default 100."),
     make_option("--threads", default=1, help="number of CPU threads to use. Default 1."),
     make_option("--output_dim", default=10, help="Dimension of the output. We use PCA to transform the GSVA output to this dimension")
     )
@@ -77,7 +77,7 @@ omic_data <- omic_data[,colSums(is.nan(omic_data)) < 0.1*dim(omic_data)[1]]
 print(dim(omic_data))
 
 # Stick to inexpensive median imputation for now.
-# (Reduces impact on enrichment??)
+# (Reduces impact on KCDF estimates??)
 omic_data <- median_impute(omic_data)
 
 ############################################
@@ -88,7 +88,7 @@ curried_gsva <- function(omic_data, genesets){
     cat("Running GSVA...\n")
     omic_data <- t(omic_data)
     results <- gsva(omic_data, genesets, min.sz=minsize,
-                    max.sz=maxsize, kcdf=kcdf, parallel.sz=1)
+                    max.sz=maxsize, kcdf=kcdf, parallel.sz=threads)
     return(t(results))
 }
 
