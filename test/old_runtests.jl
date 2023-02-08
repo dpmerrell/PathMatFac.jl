@@ -48,6 +48,19 @@ function util_tests()
         @test l_idx == [1, 2, 4]
         @test r_idx == [3, 1, 2]
 
+        # get_assay
+        @test PM.get_assay(("BRCA","mrnaseq")) == "mrnaseq"
+
+        # get_loss
+        @test PM.get_loss(("BRCA","mrnaseq")) == "normal"
+        @test PM.get_loss(("BRCA","mutation")) == "bernoulli"
+
+        # sort_features
+        @test PM.sort_features(feature_list) == [("GENE1", "mrnaseq"),("GENE2","methylation"), 
+                                                 ("GENE4", "mutation"), ("GENE3","cna"), 
+                                                 #("VIRTUAL1", "activation")
+                                                 ]
+
         # nansum
         @test PM.nansum([1.0, NaN, 2.0, NaN, 3.0]) == 6.0
         @test PM.nansum([1.0, NaN, 2.0, Inf, 3.0]) == Inf
@@ -83,10 +96,6 @@ function util_tests()
         correct_pruned = vcat(edgelist, [["c","f",1]])
         @test Set([Set(edge) for edge in pruned]) == Set([Set(edge) for edge in correct_pruned])
 
-        # rec_compose
-        fn = PM.rec_compose((x->x+1, x->x*2, exp))
-        @test isapprox(fn(pi), exp(2*(pi+1)))
- 
     end
 end
 
@@ -221,9 +230,7 @@ function layers_tests()
         X_view = view(X,:,1:M)
         Y_view = view(Y,:,1:view_N)
         view_xy = transpose(X_view)*Y_view
-       
-        feature_ids = map(x->string("x_",x), 1:N)
- 
+        
         ###################################
         # Column Scale
         cscale = PM.ColScale(N)
@@ -246,8 +253,6 @@ function layers_tests()
         # Batch Scale
         col_batches = repeat([string("colbatch",i) for i=1:n_col_batches], inner=div(N,n_col_batches))
         row_batches = [repeat([string("rowbatch",i) for i=1:n_row_batches], inner=div(M,n_row_batches)) for j=1:n_col_batches]
-        batch_dict = Dict(zip(unique(col_batches), row_batches))
-
         bscale = PM.BatchScale(col_batches, row_batches)
         @test length(bscale.logdelta.values) == n_col_batches
         @test size(bscale.logdelta.values[1]) == (n_row_batches,)
@@ -267,28 +272,6 @@ function layers_tests()
         bshift_grads = Zygote.gradient((f,x)->sum(f(x)), bshift, xy)
         @test bshift_grads[1].theta.values == Tuple(ones(n_row_batches).*(div(M,n_row_batches)*div(N,n_col_batches)) for j=1:n_col_batches)
         @test bshift_grads[2] == ones(M,N)
-
-        ###################################
-        # Layer composition
-        transform_nobatch = PM.construct_model_layers(col_batches, nothing)
-        @test length(transform_nobatch.layers) == 2 
-        @test typeof(transform_nobatch.layers[1]) <: PM.ColScale 
-        @test typeof(transform_nobatch.layers[2]) <: PM.ColShift
-        transform_grads = Zygote.gradient((f,x)->sum(f(x)), transform_nobatch, xy)
-        @test transform_grads[1].layers[1].logsigma != nothing
-        @test transform_grads[1].layers[2].mu != nothing
- 
-        transform_w_batch = PM.construct_model_layers(col_batches, batch_dict) 
-        @test length(transform_w_batch.layers) == 4 
-        @test typeof(transform_w_batch.layers[1]) <: PM.ColScale 
-        @test typeof(transform_w_batch.layers[2]) <: PM.ColShift
-        @test typeof(transform_w_batch.layers[3]) <: PM.BatchScale 
-        @test typeof(transform_w_batch.layers[4]) <: PM.BatchShift
-        transform_grads = Zygote.gradient((f,x)->sum(f(x)), transform_w_batch, xy)
-        @test transform_grads[1].layers[1].logsigma != nothing
-        @test transform_grads[1].layers[2].mu != nothing
-        @test transform_grads[1].layers[3].logdelta != nothing
-        @test transform_grads[1].layers[4].theta != nothing
 
     end
 end
@@ -334,6 +317,7 @@ function preprocess_tests()
                         [("PAK1","mrna"), ("PAK1","protein"), 1],
                        ]
     #test_dogma_edges = map(tuplify, test_dogma_edges)
+
 
     test_data_edges = [[("PLK1","dna"), ("PLK1","cna"), 1],
                        [("PLK1","dna"), ("PLK1","mutation"), -1],
@@ -490,29 +474,73 @@ function reg_tests()
         mu_regularizer = (x, reg) -> reg(x)
 
         loss, grads = Zygote.withgradient(mu_regularizer, transpose([1.0, 1.0, 1.0]), nr)
-        @test loss == 1.5
-        @test isapprox(grads[1], transpose([1.0, 1.0, 1.0]))
-        @test isapprox(grads[2].net_virtual[1], [-3.0])
+        @test loss == 0.5
+        @test isapprox(grads[1], transpose([1.0, 1.0, 1.0]) ./3.0 )
+        @test isapprox(grads[2].net_virtual[1], [-1.0])
 
     end
     
-    @testset "Selective L1 regularizers" begin
+    @testset "Network L1 regularizers" begin
 
-        K = 2
-        N = 5
+        #############################################
+        # Test on synthetic network
         edgelists = [[[1, 2, 1.0],[2, 3, 1.0],[3, 4, 1.0]],
                      [[1, 3, -1.0],[2, 4, -1.0]]
                     ]
-        data_features = [1,2,3,4,5]
-        test_Y = randn(2,5)
-        reg = PM.L1Regularizer(data_features, edgelists)
-  
-        @test isapprox(reg.l1_idx, [0 0 0 0 1;
-                                    0 0 0 0 1])
-        @test isapprox(reg(test_Y), sum(abs.(reg.l1_idx .* test_Y)))
-    end
+        data_features = [1,2,3,5]
+        l1_features = [[5],[5]]
+        nr = PM.NetworkL1Regularizer(data_features, edgelists, l1_features; epsilon=0.0)
+        @test length(nr.net_reg.AA) == 2
+        @test size(nr.net_reg.AA[1]) == (4,4)
+        @test dropzeros(nr.net_reg.AA[1]) == sparse([1. -1. 0.  0;
+                                            -1.  2. -1. 0;
+                                             0. -1. 2.  0;
+                                             0   0  0   0])
+        @test size(nr.net_reg.AB[1]) == (4,1)
+        @test nr.net_reg.AB[1] == sparse(reshape([0.;
+                                                  0.;
+                                                 -1.;
+                                                  0 ], (4,1)))
+        @test size(nr.net_reg.BB[1]) == (1,1)
+        @test nr.net_reg.BB[1] == sparse(ones(1,1))
+        @test size(nr.net_reg.net_virtual[1]) == (1,)
 
-    @testset "Group regularizers" begin
+        @test isapprox(nr.l1_reg.l1_idx[1,:], [false,false,false,true])
+
+        nr = PM.NetworkL1Regularizer(data_features, edgelists, [[2,5],[2,5]]; 
+                                     epsilon=0.0)
+        @test length(nr.net_reg.AA) == 2
+        @test size(nr.net_reg.AA[1]) == (4,4)
+        @test size(nr.net_reg.AB[1]) == (4,1)
+        @test size(nr.net_reg.BB[1]) == (1,1)
+        @test size(nr.net_reg.net_virtual[1]) == (1,)
+        @test nr.l1_reg.l1_idx[1,:] == [false,true,false,true] 
+
+        ##############################################
+        # Test on "real pathway"
+        model_features = collect(zip(feature_genes, feature_assays))
+        pwy_edgelists = PM.sifs_to_edgelists([test_sif_path])
+        prepped_pwys = PM.extend_pathways(pwy_edgelists, model_features)
+        pwy_nodes = Set()
+        for el in prepped_pwys
+            for edge in el
+                push!(pwy_nodes, edge[1])
+                push!(pwy_nodes, edge[2])
+            end
+        end
+        netreg = PM.NetworkL1Regularizer(model_features, prepped_pwys, [[("BRCA","mrnaseq"),("BRCA","methylation")]]; epsilon=0.0)
+        
+        n_unobs = length(setdiff(pwy_nodes, model_features))
+        n_obs = length(model_features)
+
+        @test length(netreg.net_reg.AA) == 1
+        @test size(netreg.net_reg.AA[1]) == (n_obs,n_obs)
+        @test size(netreg.net_reg.AB[1]) == (n_obs,n_unobs)
+        @test size(netreg.net_reg.BB[1]) == (n_unobs, n_unobs)
+
+        @test size(netreg.net_reg.net_virtual[1]) == (n_unobs,)
+        @test length(netreg.l1_reg.l1_idx[1,:]) == n_obs 
+        @test typeof(netreg.l1_reg.l1_idx[1,:]) <: AbstractVector{Bool}
 
     end
 
@@ -529,17 +557,44 @@ function reg_tests()
         grads = Zygote.gradient((r,ba)->r(ba), ba_reg, ba)
 
     end
+end
 
-    @testset "Composed regularizers" begin
 
+function assemble_model_tests()
+
+    test_sif_path = "test_pathway.sif"
+    test_pwy_name = "test_pathway"
+    feature_genes = ["PLK1","PLK1","PLK1", 
+                     "PAK1", "PAK1", "PAK1",
+                     "SGOL1", 
+                     "BRCA", "BRCA"]
+    feature_assays = ["cna", "mutation","mrnaseq", 
+                      "rppa", "mrnaseq", "mutation",
+                      "mrnaseq",
+                      "mrnaseq", "methylation"]
+    N = length(feature_genes)
+
+    sample_ids = [string("sample_",i) for i=1:20]
+    group_ids = repeat(["group_1","group_2"], inner=10)
+
+    pwy_sif_data = PM.read_sif_file(test_sif_path)
+    
+    @testset "Model Assembly" begin
+
+        # assemble_model
+        sample_batch_dict = Dict([k => copy(group_ids) for k in unique(feature_assays)])
+        model = MultiomicModel([test_sif_path, test_sif_path, test_sif_path],
+                               [string(test_pwy_name,"_",i) for i=1:3],
+                               sample_ids, group_ids,
+                               feature_genes, feature_assays,
+                               sample_batch_dict)
+
+        @test feature_genes == model.data_genes
+        @test feature_assays == model.data_assays
+        @test length(model.used_feature_idx) == length(feature_genes)
+        @test sum(model.matfac.Y_reg.l1_reg.l1_idx[1,:]) == 2
     end
 end
-
-
-function model_tests()
-
-end
-
 
 function score_tests()
 
@@ -557,8 +612,6 @@ function score_tests()
     end
 
 end
-
-
 
 function fit_tests()
     
@@ -596,7 +649,7 @@ function fit_tests()
    
     @testset "Fit CPU" begin
 
-        model = PathMatFacModel([test_sif_path, test_sif_path, test_sif_path],  
+        model = MultiomicModel([test_sif_path, test_sif_path, test_sif_path],  
                                [string(test_pwy_name,"_",i) for i=1:3],
                                sample_ids, sample_conditions,
                                feature_genes, feature_assays,
@@ -614,7 +667,7 @@ function fit_tests()
 
     @testset "Fit GPU" begin
 
-        model = PathMatFacModel([test_sif_path, test_sif_path, test_sif_path],  
+        model = MultiomicModel([test_sif_path, test_sif_path, test_sif_path],  
                                [string(test_pwy_name,"_",i) for i=1:3],
                                sample_ids, sample_conditions,
                                feature_genes, feature_assays,
@@ -638,7 +691,7 @@ function fit_tests()
 
     @testset "Fit Hyperparam" begin
 
-        model = PathMatFacModel([test_sif_path, test_sif_path, test_sif_path],  
+        model = MultiomicModel([test_sif_path, test_sif_path, test_sif_path],  
                                [string(test_pwy_name,"_",i) for i=1:3],
                                sample_ids, sample_conditions,
                                feature_genes, feature_assays,
@@ -659,7 +712,7 @@ function fit_tests()
     
     @testset "Fit hyperparam GPU" begin
 
-        model = PathMatFacModel([test_sif_path, test_sif_path, test_sif_path],  
+        model = MultiomicModel([test_sif_path, test_sif_path, test_sif_path],  
                                [string(test_pwy_name,"_",i) for i=1:3],
                                sample_ids, sample_conditions,
                                feature_genes, feature_assays,
@@ -710,7 +763,7 @@ function model_io_tests()
 
     @testset "Model IO" begin
 
-        model = PathMatFacModel([test_sif_path, test_sif_path, test_sif_path],  
+        model = MultiomicModel([test_sif_path, test_sif_path, test_sif_path],  
                                [string(test_pwy_name,"_",i) for i=1:3],
                                sample_ids, sample_conditions,
                                feature_genes, feature_assays,
@@ -770,16 +823,16 @@ end
 
 function main()
 
-    #util_tests()
-    #batch_array_tests()
-    #layers_tests()
-    #preprocess_tests()
+    util_tests()
+    batch_array_tests()
+    layers_tests()
+    preprocess_tests()
     reg_tests()
-    #score_tests()
-    #model_tests()
-    #fit_tests()
-    #model_io_tests()
-    #simulation_tests()
+    assemble_model_tests()
+    score_tests()
+    fit_tests()
+    model_io_tests()
+    simulation_tests()
 
 end
 

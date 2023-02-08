@@ -76,7 +76,7 @@ end
 # Generate the model parameters
 #######################################################
 
-function simulate_X!(model::MultiomicModel; within_var=0.25, between_var=0.75)
+function simulate_X!(model::PathMatFacModel; within_var=0.25, between_var=0.75)
 
     within_sigma = sqrt(within_var)
     between_sigma = sqrt(between_var)
@@ -128,7 +128,7 @@ end
 
 
 
-function simulate_Y!(model::MultiomicModel; average_non_pwy=0.0)
+function simulate_Y!(model::PathMatFacModel; average_non_pwy=0.0)
 
     K, N = size(model.matfac.Y)
 
@@ -193,7 +193,7 @@ ASSAY_SIGMA = Dict("mrnaseq" => 2.0,
                    "rppa" => 1.0)
 
 
-function simulate_col_params!(model::MultiomicModel, model_assays; std=0.01)
+function simulate_col_params!(model::PathMatFacModel, model_assays; std=0.01)
 
     # TODO: Allow assays to determine these parameters
     N = length(model.matfac.col_transform.cscale.logsigma)
@@ -214,7 +214,7 @@ function simulate_col_params!(model::MultiomicModel, model_assays; std=0.01)
 end
 
 
-function simulate_batch_params!(model::MultiomicModel; std=0.05)
+function simulate_batch_params!(model::PathMatFacModel; std=0.05)
 
     logdelta_v = model.matfac.col_transform.bscale.logdelta.values
     theta_v = model.matfac.col_transform.bshift.theta.values
@@ -241,7 +241,7 @@ function simulate_data(pathway_sif_data, pathway_names,
 
     # Construct the model object
     println("Constructing model...")
-    model = MultiomicModel(pathway_sif_data, pathway_names,
+    model = PathMatFacModel(pathway_sif_data, pathway_names,
                            sample_ids, sample_conditions,
                            data_genes, data_assays,
                            sample_batch_dict) 

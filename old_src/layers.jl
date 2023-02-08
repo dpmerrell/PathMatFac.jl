@@ -32,6 +32,7 @@ function ChainRulesCore.rrule(cs::ColScale, Z::AbstractMatrix)
     result = transpose(sigma).*Z
 
     function colscale_pullback(result_bar)
+        #logsigma_bar = vec(sum(result_bar; dims=1)) .* sigma
         Z_bar = transpose(sigma) .* result_bar
         logsigma_bar = vec(sum(Z_bar; dims=1))
 
@@ -168,67 +169,46 @@ function ChainRulesCore.rrule(bs::BatchShift, Z::AbstractMatrix)
     return result, batchshift_pullback
 end
 
-###########################################
-# COMPOSE THE LAYERS
-###########################################
 
-function construct_model_layers(feature_views, batch_dict)
+#########################################
+# Define a PMLayers functor
+#########################################
+mutable struct PMLayers
+    cscale::ColScale
+    cshift::ColShift
+    bscale::BatchScale
+    bshift::BatchShift
+end
 
-    N = length(feature_views)
-    layer_ls = [ColScale(N), ColShift(N)]
-    unq_views = unique(feature_views)
+@functor PMLayers
 
-    if batch_dict != nothing
-        row_batch_vecs = [batch_dict[uv] for uv in unq_views]
-        append!(layer_ls, [BatchScale(feature_views, row_batch_vecs),
-                           BatchShift(feature_views, row_batch_vecs)])
-    end
-    layer_obj = rec_compose(Tuple(layer_ls))
+function PMLayers(model_assays, sample_batch_ids)
 
-    return layer_obj
-end 
+    N = length(model_assays)
+
+    return PMLayers(ColScale(N),
+                    ColShift(N),
+                    BatchScale(model_assays, sample_batch_ids),
+                    BatchShift(model_assays, sample_batch_ids))
+end
+
+function (bmf::PMLayers)(Z::AbstractMatrix)
+    return bmf.bshift(
+            bmf.bscale(
+             bmf.cshift(
+              bmf.cscale(Z)
+             )
+            )
+           )
+end
+
+
+function view(l::PMLayers, idx1, idx2)
+    return PMLayers(view(l.cscale, idx1, idx2),
+                    view(l.cshift, idx1, idx2),
+                    view(l.bscale, idx1, idx2),
+                    view(l.bshift, idx1, idx2))
+end
 
 
 
-##########################################
-## Define a PMLayers functor
-##########################################
-#mutable struct PMLayers
-#    cscale::ColScale
-#    cshift::ColShift
-#    bscale::BatchScale
-#    bshift::BatchShift
-#end
-#
-#@functor PMLayers
-#
-#function PMLayers(model_assays, sample_batch_ids)
-#
-#    N = length(model_assays)
-#
-#    return PMLayers(ColScale(N),
-#                    ColShift(N),
-#                    BatchScale(model_assays, sample_batch_ids),
-#                    BatchShift(model_assays, sample_batch_ids))
-#end
-#
-#function (bmf::PMLayers)(Z::AbstractMatrix)
-#    return bmf.bshift(
-#            bmf.bscale(
-#             bmf.cshift(
-#              bmf.cscale(Z)
-#             )
-#            )
-#           )
-#end
-#
-#
-#function view(l::PMLayers, idx1, idx2)
-#    return PMLayers(view(l.cscale, idx1, idx2),
-#                    view(l.cshift, idx1, idx2),
-#                    view(l.bscale, idx1, idx2),
-#                    view(l.bshift, idx1, idx2))
-#end
-#
-#
-#

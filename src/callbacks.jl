@@ -36,7 +36,7 @@ function OuterCallback(; history_json="histories.json")
     return OuterCallback(Any[], history_json)
 end
 
-function (ocb::OuterCallback)(model::MultiomicModel, inner_callback)
+function (ocb::OuterCallback)(model::PathMatFacModel, inner_callback)
 
     pathway_av_precs = model_Y_average_precs(model) 
 

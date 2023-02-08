@@ -34,7 +34,7 @@ function impute(nm::MF.CompositeNoise, Z::AbstractMatrix)
     return X
 end
 
-function impute(model::MultiomicModel; include_batch_effects=false)
+function impute(model::PathMatFacModel; include_batch_effects=false)
 
     matfac = model.matfac
 

@@ -50,7 +50,7 @@ function average_precision(y_pred::AbstractVector, y_true::AbstractVector)
 end
 
 
-function model_Y_average_precs(model::MultiomicModel)
+function model_Y_average_precs(model::PathMatFacModel)
 
     Y_pred = cpu(abs.(model.matfac.Y))
     Y_true = cpu((!).(model.matfac.Y_reg.l1_reg.l1_idx))

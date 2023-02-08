@@ -1,6 +1,6 @@
 
 
-function remove_batch_effect(model::MultiomicModel, Z::AbstractMatrix)
+function remove_batch_effect(model::PathMatFacModel, Z::AbstractMatrix)
 
     # Apply the link functions
     tr_Z = MF.link(model.matfac.noise_model, Z)

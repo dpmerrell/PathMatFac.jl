@@ -1,7 +1,44 @@
 
 
-export DEFAULT_ASSAYS, sort_features
+export DEFAULT_ASSAYS 
 
+
+###################################################
+# Math operations
+###################################################
+
+function inv_logistic(x::T) where T <: Number
+    return log(0.5 + T(0.99)*(x/(1 - x) - T(0.5)))
+end
+
+function bernoulli_var_init(m::T, v::T) where T <: Number
+    if (m == 0) | (m==1)
+        return T(0)
+    else
+        denom = m*(1-m)
+        denom *= denom
+        var = v / denom
+        var = min(var, T(9.0))
+        return var
+    end
+end
+
+function nansum(x)
+    return sum(filter(!isnan, x))
+end
+
+function nanmean(x)
+    return mean(filter(!isnan, x))
+end
+
+function nanvar(x)
+    return var(filter(!isnan, x))
+end
+
+######################################################
+# Canonical relationships between 'omic assays,
+# pathway entities, and probability distributions
+######################################################
 
 DEFAULT_ASSAY_LOSSES = Dict("cna" => "ordinal3",
                             "mutation" => "bernoulli",
@@ -17,33 +54,17 @@ LOSS_ORDER = Dict("normal" => 1,
                   "noloss" => 5
                   )
 
-function inv_logistic(x::T) where T <: Number
-    return max(log(x / (1 - x)), T(-10.0))
-end
-
-function bernoulli_var_init(m::T, v::T) where T <: Number
-    if (m == 0) | (m==1)
-        return T(0)
-    else
-        denom = m*(1-m)
-        denom *= denom
-        var = v / denom
-        var = min(var, T(9.0))
-        return var
-    end
-end
-
 MEAN_INIT_MAP = Dict("normal" => (m,v) -> m,
                      "bernoulli" => (m,v) -> inv_logistic(m),
                      "ordinal3" => (m,v) -> m - 2.0,
                      "poisson" => (m,v) -> log(m)
                     )
+
 VAR_INIT_MAP = Dict("normal" => (m,v) -> v,
                     "bernoulli" => (m,v) -> bernoulli_var_init(m,v),
                     "ordinal3" => (m,v) -> v,
                     "poisson" => (m,v) -> v .* (log.(m).^2)
                    )
-
 
 DOGMA_ORDER = ["dna", "mrna", "protein", "activation"]
 DOGMA_TO_IDX = Dict([v => i for (i,v) in enumerate(DOGMA_ORDER)])
@@ -68,6 +89,10 @@ PWY_SIF_CODE = Dict("a" => "activation",
                    )
 
 
+###############################################
+# Index and ID utils
+###############################################
+
 """
 Check that the values in `vec` occur in contiguous blocks.
 I.e., the unique values are grouped together, with no intermingling.
@@ -89,6 +114,35 @@ function is_contiguous(vec::AbstractVector{T}) where T
     end
 
     return true
+end
+
+
+function value_to_idx(values::Vector{T}) where T
+    d = Dict{T,Int64}()
+    sizehint!(d, length(values))
+    for (i,v) in enumerate(values)
+        d[v] = i
+    end
+    return d
+end
+
+
+function keymatch(l_keys, r_keys)
+
+    rkey_to_idx = value_to_idx(r_keys) 
+    rkeys = Set(keys(rkey_to_idx))
+
+    l_idx = []
+    r_idx = []
+
+    for (i, lk) in enumerate(l_keys)
+        if lk in rkeys
+            push!(l_idx, i)
+            push!(r_idx, rkey_to_idx[lk])
+        end
+    end
+
+    return l_idx, r_idx
 end
 
 
@@ -149,76 +203,10 @@ function shift_range(rng, delta)
     return (rng.start + delta):(rng.stop + delta) 
 end
 
-function value_to_idx(values::Vector{T}) where T
-    d = Dict{T,Int64}()
-    sizehint!(d, length(values))
-    for (i,v) in enumerate(values)
-        d[v] = i
-    end
-    return d
-end
 
-function keymatch(l_keys, r_keys)
-
-    rkey_to_idx = value_to_idx(r_keys) 
-    rkeys = Set(keys(rkey_to_idx))
-
-    l_idx = []
-    r_idx = []
-
-    for (i, lk) in enumerate(l_keys)
-        if lk in rkeys
-            push!(l_idx, i)
-            push!(r_idx, rkey_to_idx[lk])
-        end
-    end
-
-    return l_idx, r_idx
-end
-
-function get_gene(feature)
-    return feature[1]
-end
-
-function get_assay(feature)
-    return feature[2] 
-end
-
-
-function get_loss(feature; assay_losses=DEFAULT_ASSAY_LOSSES)
-    assay = get_assay(feature)
-    return assay_losses[assay]
-end
-
-
-function srt_get_loss(feature; assay_losses=DEFAULT_ASSAY_LOSSES)
-    assay = get_assay(feature)
-    gene = get_gene(feature) 
-    return LOSS_ORDER[assay_losses[assay]], assay, gene 
-end
-
-
-function sort_features(features; assay_losses=DEFAULT_ASSAY_LOSSES)
-    tuple_list = [srt_get_loss(feat; assay_losses=assay_losses) for feat in features]
-    sort!(tuple_list)
-    return [(t[end], t[2]) for t in tuple_list]
-end
-
-
-function nansum(x)
-    return sum(filter(!isnan, x))
-end
-
-
-function nanmean(x)
-    return mean(filter(!isnan, x))
-end
-
-
-function nanvar(x)
-    return var(filter(!isnan, x))
-end
-
+################################################
+# Edgelist utils
+################################################
 
 function edgelist_to_spmat(edgelist, node_to_idx; epsilon=0.0)
 
@@ -352,6 +340,7 @@ function prune_leaves!(edgelist; except=nothing)
     edgelist = dict_to_edgelist(graph)
 end
 
+
 function get_all_nodes(edgelist)
 
     result = Set()
@@ -362,6 +351,28 @@ function get_all_nodes(edgelist)
     return result
 end
 
+
+"""
+    For each edgelist in `edgelist`, find the 
+    nodes in `nodes` that do not appear in it.
+    (I.e., a set difference) 
+"""
+function compute_nongraph_nodes(nodes, edgelists)
+
+    all_nodes = Set(nodes)
+    result = []
+    for el in edgelists
+        edgelist_nodes = get_all_nodes(el)
+        push!(result, setdiff(all_nodes, edgelist_nodes))
+    end
+
+    return result
+end
+
+
+################################################
+# Sparse matrix utils
+################################################
 
 function csc_to_coo(A)
     I = zero(A.rowval)
@@ -395,5 +406,17 @@ function csc_select(A, rng1::UnitRange, rng2::UnitRange)
     new_n = length(rng2)
     return sparse(coo_select(csc_to_coo(A)..., rng1, rng2)..., new_m, new_n) 
 end
+
+
+
+
+function rec_compose(layers::Tuple)
+    if length(layers) == 0
+        return identity
+    else
+        return x -> layers[end](rec_compose(layers[1:end-1])(x))
+    end
+end
+
 
 

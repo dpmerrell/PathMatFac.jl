@@ -20,7 +20,7 @@ function randn_like(A::AbstractMatrix)
 end
 
 
-function select_lambda_max(model::MultiomicModel, D::AbstractMatrix;
+function select_lambda_max(model::PathMatFacModel, D::AbstractMatrix;
                            capacity=Int(25e6), verbosity=1)
     
     verbose_print("Computing λ_Y max...\n"; verbosity=verbosity, level=1)
@@ -70,7 +70,7 @@ function scale_column_losses!(model, D; capacity=Int(25e6), verbosity=1)
 end
 
 
-function initialize_params!(model::MultiomicModel, D::AbstractMatrix;
+function initialize_params!(model::PathMatFacModel, D::AbstractMatrix;
                             capacity=Int(25e6), verbosity=1,
                             loss_map=DEFAULT_ASSAY_LOSSES,
                             mean_init_map=MEAN_INIT_MAP,
@@ -115,7 +115,7 @@ end
 
 
 """
-    fit!(model::MultiomicModel, D::AbstractMatrix;
+    fit!(model::PathMatFacModel, D::AbstractMatrix;
                                 fit_hyperparam=true,
                                 lambda_max=nothing,
                                 n_lambda=8,
@@ -127,7 +127,7 @@ end
     The regularizer weights are varied in a way that preserves
     the relative sizes of those specified in `model`.
 """
-function fit!(model::MultiomicModel, D::AbstractMatrix; 
+function fit!(model::PathMatFacModel, D::AbstractMatrix; 
               fit_hyperparam=true, capacity=Int(25e6), 
               verbosity=1, kwargs...)
 
@@ -225,7 +225,7 @@ function recenter_batch_effect!(fitted_model)
 end
 
 
-function fit_fixed_weight!(model::MultiomicModel, D::AbstractMatrix; lr=0.01, kwargs...)
+function fit_fixed_weight!(model::PathMatFacModel, D::AbstractMatrix; lr=0.01, kwargs...)
 
     # Initialize an optimizer. It applies
     # truncated updates to the L1-regularized
@@ -241,7 +241,7 @@ function fit_fixed_weight!(model::MultiomicModel, D::AbstractMatrix; lr=0.01, kw
 end
 
 
-function fit_reg_path!(model::MultiomicModel, D::AbstractMatrix; verbosity=1,
+function fit_reg_path!(model::PathMatFacModel, D::AbstractMatrix; verbosity=1,
                        lambda_max=nothing, lambda_min_ratio=1e-3,
                        n_lambda=8, update_criterion=precision_selection, 
                        inner_callback_type=MatFac.HistoryCallback,
