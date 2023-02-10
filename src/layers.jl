@@ -61,7 +61,7 @@ function (cs::ColShift)(Z::AbstractMatrix)
 end
 
 
-function view(cs::ColShift, idx1, idx2)
+function view(cs::ColShift, idx1::UnitRange, idx2::UnitRange)
     return ColShift(view(cs.mu, idx2))
 end
 
@@ -102,7 +102,7 @@ function (bs::BatchScale)(Z::AbstractMatrix)
 end
 
 
-function view(bs::BatchScale, idx1, idx2)
+function view(bs::BatchScale, idx1::UnitRange, idx2::UnitRange)
     if typeof(idx2) == Colon
         idx2 = 1:bs.logdelta.col_ranges[end].stop
     end
@@ -147,7 +147,7 @@ function (bs::BatchShift)(Z::AbstractMatrix)
 end
 
 
-function view(bs::BatchShift, idx1, idx2)
+function view(bs::BatchShift, idx1::UnitRange, idx2::UnitRange)
     if typeof(idx2) == Colon
         idx2 = 1:bs.theta.col_ranges[end].stop
     end
@@ -172,6 +172,22 @@ end
 # COMPOSE THE LAYERS
 ###########################################
 
+
+mutable struct ViewableComposition
+    layers::Tuple
+end
+
+@functor ViewableComposition
+
+function (vc::ViewableComposition)(Z::AbstractMatrix)
+    return reduce((f,g)->(x->g(f(x))), vc.layers)(Z)
+end
+
+function view(vc::ViewableComposition, idx1::UnitRange, idx2::UnitRange)
+    return ViewableComposition(map(layer->view(layer, idx1, idx2), vc.layers))
+end
+
+
 function construct_model_layers(feature_views, batch_dict)
 
     N = length(feature_views)
@@ -183,52 +199,9 @@ function construct_model_layers(feature_views, batch_dict)
         append!(layer_ls, [BatchScale(feature_views, row_batch_vecs),
                            BatchShift(feature_views, row_batch_vecs)])
     end
-    layer_obj = rec_compose(Tuple(layer_ls))
+    layer_obj = ViewableComposition(Tuple(layer_ls))
 
     return layer_obj
 end 
 
 
-
-##########################################
-## Define a PMLayers functor
-##########################################
-#mutable struct PMLayers
-#    cscale::ColScale
-#    cshift::ColShift
-#    bscale::BatchScale
-#    bshift::BatchShift
-#end
-#
-#@functor PMLayers
-#
-#function PMLayers(model_assays, sample_batch_ids)
-#
-#    N = length(model_assays)
-#
-#    return PMLayers(ColScale(N),
-#                    ColShift(N),
-#                    BatchScale(model_assays, sample_batch_ids),
-#                    BatchShift(model_assays, sample_batch_ids))
-#end
-#
-#function (bmf::PMLayers)(Z::AbstractMatrix)
-#    return bmf.bshift(
-#            bmf.bscale(
-#             bmf.cshift(
-#              bmf.cscale(Z)
-#             )
-#            )
-#           )
-#end
-#
-#
-#function view(l::PMLayers, idx1, idx2)
-#    return PMLayers(view(l.cscale, idx1, idx2),
-#                    view(l.cshift, idx1, idx2),
-#                    view(l.bscale, idx1, idx2),
-#                    view(l.bshift, idx1, idx2))
-#end
-#
-#
-#

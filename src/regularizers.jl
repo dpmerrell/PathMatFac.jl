@@ -208,12 +208,13 @@ end
 mutable struct L1Regularizer
     l1_idx::AbstractMatrix{Bool} # Boolean matrix indicates which entries
                                  # are L1-regularized
+    weight::Number
 end
 
 @functor L1Regularizer
 Flux.trainable(lr::L1Regularizer) = ()
 
-function L1Regularizer(feature_ids::Vector, edgelists::Vector)
+function L1Regularizer(feature_ids::Vector, edgelists::Vector; weight=1.0)
 
     l1_features = compute_nongraph_nodes(feature_ids, edgelists) 
     N = length(feature_ids)
@@ -225,13 +226,12 @@ function L1Regularizer(feature_ids::Vector, edgelists::Vector)
         l1_idx[k,:] .= map(x->in(x, l1_feat), feature_ids) 
     end
 
-    return L1Regularizer(l1_idx)
+    return L1Regularizer(l1_idx, weight)
 end
                         
 
 function (reg::L1Regularizer)(X::AbstractMatrix)
-    K, N = size(X)
-    return sum(abs.(reg.l1_idx .* X)) 
+    return reg.weight*sum(abs.(reg.l1_idx .* X)) 
 end
 
 
@@ -318,7 +318,7 @@ end
 ###########################################
 
 function construct_composite_reg(regularizers::Tuple)
-    return x -> sum(map(f->f(x), regs))
+    return x -> sum(map(f->f(x), regularizers))
 end
 
 ###########################################
@@ -395,7 +395,7 @@ end
 function BatchArrayReg(feature_views::AbstractVector, batch_dict; weight=1.0)
     row_batches = [batch_dict[uv] for uv in unique(feature_views)] 
     values = [Dict(urb => 0.0 for urb in unique(rbv)) for rbv in row_batches]
-    ba = BatchArray(col_batches, row_batches, values)
+    ba = BatchArray(feature_views, row_batches, values)
     return BatchArrayReg(ba; weight=weight)
 end
 
@@ -440,14 +440,14 @@ function construct_layer_reg(feature_views, batch_dict, lambda_layer)
 
     # Start with the regularizers for logsigma and mu
     # (the column parameters)
-    regs = [GroupRegularizer(feature_views; weight=lambda_layer),
-            GroupRegularizer(feature_views; weight=lambda_layer)]
+    regs = Any[GroupRegularizer(feature_views; weight=lambda_layer),
+               GroupRegularizer(feature_views; weight=lambda_layer)]
     
     # If a batch_dict is provided, add regularizers for
     # logdelta and theta (the batch parameters)
     if batch_dict != nothing
-        append!(regs,[BatchArrayReg(feature_views, batch_dict; weight=lambda_layer),
-                      BatchArrayReg(feature_views, batch_dict; weight=lambda_layer)])
+        append!(regs,Any[BatchArrayReg(feature_views, batch_dict; weight=lambda_layer),
+                         BatchArrayReg(feature_views, batch_dict; weight=lambda_layer)])
     end
 
     return SequenceReg(Tuple(regs))    

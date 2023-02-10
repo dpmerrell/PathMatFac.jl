@@ -35,6 +35,30 @@ function nanvar(x)
     return var(filter(!isnan, x))
 end
 
+
+######################################################
+# Hardware-agnostic, GPU-enabled functions
+######################################################
+
+function randn_like(A::AbstractMatrix)
+    M, N = size(A)
+    if isa(A, CuArray)
+        return CUDA.randn(M,N)
+    end
+    return randn(M,N)
+end
+
+
+#####################################################
+# I/O Utils
+#####################################################
+
+function verbose_print(args...; verbosity=1, level=1)
+    if verbosity >= level
+        print(string(args...))
+    end
+end
+
 ######################################################
 # Canonical relationships between 'omic assays,
 # pathway entities, and probability distributions
@@ -406,17 +430,4 @@ function csc_select(A, rng1::UnitRange, rng2::UnitRange)
     new_n = length(rng2)
     return sparse(coo_select(csc_to_coo(A)..., rng1, rng2)..., new_m, new_n) 
 end
-
-
-
-
-function rec_compose(layers::Tuple)
-    if length(layers) == 0
-        return identity
-    else
-        return x -> layers[end](rec_compose(layers[1:end-1])(x))
-    end
-end
-
-
 

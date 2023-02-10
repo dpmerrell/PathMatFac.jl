@@ -13,7 +13,7 @@ mutable struct PathMatFacModel
 
     # Information about data samples
     sample_ids::AbstractVector
-    sample_conditions::AbstractVector
+    sample_conditions::Union{<:AbstractVector,Nothing}
 
     # Information about data features
     feature_ids::AbstractVector
@@ -101,17 +101,24 @@ function PathMatFacModel(X::AbstractMatrix{<:Real};
                          lambda_Y_l1::Union{Real,Nothing}=nothing,
                          lambda_Y_selective_l1::Union{Real,Nothing}=nothing,
                          lambda_Y_graph::Union{Real,Nothing}=nothing, 
-                         lambda_layer::Union{Real,Nothing}=nothing)
+                         lambda_layer::Union{Real,Nothing}=1.0)
       
     ################################################
     # Validate input
     M, N = size(X)
 
-    # Latent dimension; Graph regularization
-    K_feature = (feature_graphs == nothing) ? K : length(feature_graphs)
-    K_sample = (sample_graphs == nothing) ? K : length(sample_graphs)
-    @assert K_feature == K_sample
-    K = K_feature
+    # Set the latent dimension from keyword args
+    if feature_graphs != nothing
+        K = length(feature_graphs)
+        if sample_graphs != nothing
+            K_sample = length(sample_graphs)
+            @assert K == K_sample "`sample_graphs` and `feature_graphs` must have equal length; or one of them must be nothing"
+        end
+    else
+        if sample_graphs != nothing
+            K = length(sample_graphs)
+        end
+    end
 
     # Sample IDs
     if sample_ids != nothing
@@ -128,10 +135,10 @@ function PathMatFacModel(X::AbstractMatrix{<:Real};
     
     # Feature IDs 
     if feature_ids != nothing
-        @assert length(feature_ids) == length(unique(feature_ids)) "`feature_ids` must be unique"
-        @assert length(feature_ids) == M "`sample_ids` must have length equal to dim(X,2)"
+        @assert length(feature_ids) == length(unique(feature_ids)) "`feature_ids` must be left default, or set to a vector of unique identifiers"
+        @assert length(feature_ids) == N "`feature_ids` must have length equal to dim(X,2)"
     else
-        feature_ids = ones(N)
+        feature_ids = collect(1:N)
     end
 
     # Batch Dictionary
@@ -144,10 +151,10 @@ function PathMatFacModel(X::AbstractMatrix{<:Real};
     end
 
     # Feature views
-    if feature_view != nothing
+    if feature_views != nothing
         @assert length(feature_views) == N "`feature_views` must be nothing or have length equal to size(X,2)"
     else
-        feature_views = ones(N)
+        feature_views = ones(Int64,N)
     end
 
     # Feature distributions

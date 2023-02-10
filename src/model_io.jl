@@ -6,7 +6,10 @@ export save_model, load_model
 ################################
 # Save/load BSON
 ################################
-function save_model(model::PathMatFacModel, filename)
+function save_model(model::PathMatFacModel, filename; save_data=false)
+    if !save_data
+        model.data = nothing
+    end
     BSON.@save filename model
 end
 
