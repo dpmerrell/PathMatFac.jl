@@ -61,7 +61,7 @@ function (cs::ColShift)(Z::AbstractMatrix)
 end
 
 
-function view(cs::ColShift, idx1::UnitRange, idx2::UnitRange)
+function view(cs::ColShift, idx1, idx2)
     return ColShift(view(cs.mu, idx2))
 end
 
@@ -102,7 +102,7 @@ function (bs::BatchScale)(Z::AbstractMatrix)
 end
 
 
-function view(bs::BatchScale, idx1::UnitRange, idx2::UnitRange)
+function view(bs::BatchScale, idx1, idx2)
     if typeof(idx2) == Colon
         idx2 = 1:bs.logdelta.col_ranges[end].stop
     end
@@ -147,7 +147,7 @@ function (bs::BatchShift)(Z::AbstractMatrix)
 end
 
 
-function view(bs::BatchShift, idx1::UnitRange, idx2::UnitRange)
+function view(bs::BatchShift, idx1, idx2)
     if typeof(idx2) == Colon
         idx2 = 1:bs.theta.col_ranges[end].stop
     end
@@ -183,7 +183,7 @@ function (vc::ViewableComposition)(Z::AbstractMatrix)
     return reduce((f,g)->(x->g(f(x))), vc.layers)(Z)
 end
 
-function view(vc::ViewableComposition, idx1::UnitRange, idx2::UnitRange)
+function view(vc::ViewableComposition, idx1, idx2)
     return ViewableComposition(map(layer->view(layer, idx1, idx2), vc.layers))
 end
 
@@ -204,4 +204,42 @@ function construct_model_layers(feature_views, batch_dict)
     return layer_obj
 end 
 
+
+#############################################
+# Selectively freeze a layer
+#############################################
+
+mutable struct FrozenLayer
+    layer
+end
+
+function (fl::FrozenLayer)(args...)
+    fl.layer(args...)
+end
+
+@functor FrozenLayer
+
+Flux.trainable(fl::FrozenLayer) = ()
+
+
+function view(fl::FrozenLayer, idx1, idx2)
+    return FrozenLayer(view(fl.layer, idx1, idx2))
+end
+
+
+function freeze_layer!(vc::ViewableComposition, idx)
+    if !isa(vc.layers[idx], FrozenLayer)
+        vc.layers = (vc.layers[1:idx-1]..., 
+                     FrozenLayer(vc.layers[idx]),
+                     vc.layers[idx+1:end]...)
+    end
+end
+
+function unfreeze_layer!(vc::ViewableComposition, idx)
+    if isa(vc.layers[idx], FrozenLayer)
+        vc.layers = (vc.layers[1:idx-1]..., 
+                     vc.layers[idx].layer,
+                     vc.layers[idx+1:end]...)
+    end
+end
 

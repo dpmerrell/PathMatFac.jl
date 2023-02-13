@@ -266,6 +266,18 @@ function (cr::GroupRegularizer)(x::AbstractVector)
     return 0.5*cr.weight*sum(diffs.*diffs)
 end
 
+function (cr::GroupRegularizer)(layer::ColScale)
+    return cr(layer.logsigma)
+end
+
+function (cr::GroupRegularizer)(layer::ColShift)
+    return cr(layer.mu)
+end
+
+function (cr::GroupRegularizer)(layer::FrozenLayer)
+    return 0.0
+end
+
 
 function ChainRulesCore.rrule(cr::GroupRegularizer, x::AbstractVector)
    
@@ -317,9 +329,23 @@ end
 # regularizers that all act on the same parameter.
 ###########################################
 
-function construct_composite_reg(regularizers::Tuple)
-    return x -> sum(map(f->f(x), regularizers))
+mutable struct CompositeRegularizer
+    regularizers::Tuple
 end
+
+@functor CompositeRegularizer
+
+function construct_composite_reg(regs::AbstractVector)
+    if length(regs) == 0
+        regs = [ x->0.0 ]
+    end
+    return CompositeRegularizer(Tuple(regs))
+end
+
+function (cr::CompositeRegularizer)(x)
+    return sum(map(f->f(x), cr.regularizers))
+end
+
 
 ###########################################
 # Construct regularizer for X matrix
@@ -340,7 +366,7 @@ function construct_X_reg(sample_ids, sample_conditions, sample_graphs,
         push!(regularizers, NetworkRegularizer(sample_ids, sample_graphs; weight=lambda_X_graph))
     end
 
-    return construct_composite_reg(Tuple(regularizers)) 
+    return construct_composite_reg(regularizers) 
 end
 
 
@@ -367,7 +393,7 @@ function construct_Y_reg(feature_ids, feature_graphs,
         end
     end
 
-    return construct_composite_reg(Tuple(regularizers)) 
+    return construct_composite_reg(regularizers) 
 end
 
 
@@ -404,6 +430,17 @@ function (reg::BatchArrayReg)(ba::BatchArray)
     return reg.weight*0.5*sum(map((c,v)->sum(c .* v .* v), reg.counts, ba.values))
 end
 
+function (reg::BatchArrayReg)(layer::BatchScale)
+    return reg(layer.logdelta)
+end
+
+function (reg::BatchArrayReg)(layer::BatchShift)
+    return reg(layer.theta)
+end
+
+function (cr::BatchArrayReg)(layer::FrozenLayer)
+    return 0.0
+end
 
 function ChainRulesCore.rrule(reg::BatchArrayReg, ba::BatchArray)
 
@@ -432,7 +469,7 @@ end
 @functor SequenceReg
 
 function (reg::SequenceReg)(seq)
-    return sum(map((f,x)->f(x), reg.layers, seq.layers))
+    return sum(map((f,x)->f(x), reg.regs, seq.layers))
 end
 
 
@@ -453,57 +490,6 @@ function construct_layer_reg(feature_views, batch_dict, lambda_layer)
     return SequenceReg(Tuple(regs))    
 end
 
-
-#
-#mutable struct PMLayerReg
-#    cscale_reg::GroupRegularizer
-#    cshift_reg::GroupRegularizer
-#    bscale_reg::BatchArrayReg
-#    bshift_reg::BatchArrayReg
-#end
-#
-#@functor PMLayerReg
-#
-#function (reg::PMLayerReg)(layers::PMLayers)
-#    return 0.25*(reg.cscale_reg(layers.cscale.logsigma) 
-#                + reg.cshift_reg(layers.cshift.mu)
-#                + reg.bscale_reg(layers.bscale.logdelta)
-#                + reg.bshift_reg(layers.bshift.theta))
-#end
-#
-#
-#function ChainRulesCore.rrule(reg::PMLayerReg, layers::PMLayers)
-#
-#    cscale_loss, 
-#    cscale_pullback = ChainRulesCore.rrule(reg.cscale_reg, layers.cscale.logsigma)
-#    
-#    cshift_loss, 
-#    cshift_pullback = ChainRulesCore.rrule(reg.cshift_reg, layers.cshift.mu)
-#    
-#    bscale_loss, 
-#    bscale_pullback = ChainRulesCore.rrule(reg.bscale_reg, layers.bscale.logdelta)
-#    
-#    bshift_loss, 
-#    bshift_pullback = ChainRulesCore.rrule(reg.bshift_reg, layers.bshift.theta)
-#   
-#    function pmlayer_reg_pullback(loss_bar)
-#        cscale_reg_bar, logsigma_bar = cscale_pullback(loss_bar)
-#        cshift_reg_bar, mu_bar = cshift_pullback(loss_bar)
-#
-#        bscale_reg_bar, logdelta_bar = bscale_pullback(loss_bar)
-#        bshift_reg_bar, theta_bar = bshift_pullback(loss_bar)
-#     
-#        return ChainRulesCore.NoTangent(),
-#               ChainRulesCore.Tangent{PMLayers}(cshift=ChainRules.Tangent{ColShift}(mu=map(v->0.25.*v, mu_bar)),
-#                                                cscale=ChainRules.Tangent{ColScale}(logsigma=map(v->0.25.*v, logsigma_bar)),
-#                                                bshift=ChainRules.Tangent{BatchShift}(theta=map(v->0.25.*v, theta_bar)),
-#                                                bscale=ChainRules.Tangent{BatchScale}(logdelta=map(v->0.25.*v, logdelta_bar)))
-#    end
-#
-#    result = 0.25*(cscale_loss + cshift_loss + bscale_loss + bshift_loss)
-#
-#    return result, pmlayer_reg_pullback
-#end
 
 
 

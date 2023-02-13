@@ -548,7 +548,7 @@ function reg_tests()
 
         l1_reg = PM.L1Regularizer(data_features, edgelists)
         net_reg = PM.NetworkRegularizer(data_features, edgelists)
-        composite_reg = PM.construct_composite_reg((l1_reg, net_reg))
+        composite_reg = PM.construct_composite_reg([l1_reg, net_reg])
 
         @test length(composite_reg.regularizers) == 2
         @test isapprox(composite_reg(test_Y), l1_reg(test_Y) + net_reg(test_Y))
@@ -611,14 +611,14 @@ function model_tests()
         model = PathMatFacModel(Z; feature_ids=feature_ids, feature_graphs=feature_graphs, lambda_Y_graph=1.0)
         @test size(model.matfac.Y) == (K,N)
         @test length(model.matfac.col_transform.layers) == 2 
-        @test length(model.matfac.X_reg.regularizers) == 0 
+        @test length(model.matfac.X_reg.regularizers) == 1 
         @test length(model.matfac.Y_reg.regularizers) == 1 
         @test typeof(model.matfac.Y_reg.regularizers[1]) <: PM.NetworkRegularizer
         
         # Vanilla L1-regularized model construction 
         model = PathMatFacModel(Z; K=7, lambda_Y_l1=3.14)
         @test size(model.matfac.Y) == (7,N)
-        @test length(model.matfac.X_reg.regularizers) == 0 
+        @test length(model.matfac.X_reg.regularizers) == 1 
         @test length(model.matfac.col_transform.layers) == 2 
         @test length(model.matfac.Y_reg.regularizers) == 1 
         @test typeof(model.matfac.Y_reg.regularizers[1]) <: Function 
@@ -627,7 +627,7 @@ function model_tests()
         # Selective L1-regularized model construction 
         model = PathMatFacModel(Z; feature_ids=feature_ids, feature_graphs=feature_graphs, lambda_Y_selective_l1=1.0)
         @test size(model.matfac.Y) == (K,N)
-        @test length(model.matfac.X_reg.regularizers) == 0 
+        @test length(model.matfac.X_reg.regularizers) == 1 
         @test length(model.matfac.col_transform.layers) == 2 
         @test length(model.matfac.Y_reg.regularizers) == 1 
         @test typeof(model.matfac.Y_reg.regularizers[1]) <: PM.L1Regularizer
@@ -636,7 +636,7 @@ function model_tests()
         model = PathMatFacModel(Z; feature_ids=feature_ids, feature_graphs=feature_graphs, lambda_Y_graph=1.0, lambda_Y_selective_l1=1.0)
         @test size(model.matfac.Y) == (K,N)
         @test length(model.matfac.col_transform.layers) == 2 
-        @test length(model.matfac.X_reg.regularizers) == 0 
+        @test length(model.matfac.X_reg.regularizers) == 1 
         @test length(model.matfac.Y_reg.regularizers) == 2 
         @test typeof(model.matfac.Y_reg.regularizers[1]) <: PM.L1Regularizer
         @test typeof(model.matfac.Y_reg.regularizers[2]) <: PM.NetworkRegularizer
@@ -725,126 +725,116 @@ end
 
 function fit_tests()
     
-    test_sif_path = "test_pathway.sif"
-    test_pwy_name = "test_pathway" 
-    feature_genes = ["PLK1","PLK1","PLK1", 
-                     "PAK1", "PAK1", "PAK1",
-                     "SGOL1", 
-                     "BRCA", "BRCA"]
-    feature_assays = ["cna", "mutation","mrnaseq", 
-                      "rppa", "mrnaseq", "mutation",
-                      "mrnaseq",
-                      "mrnaseq", "methylation"]
-    M = 10
-    N = length(feature_genes)
-    m_groups = 2
-    m_batches = 5
+    M = 20
+    N = 30
+    K = 4
 
-    sample_ids = [string("patient_",i) for i=1:M]
-    sample_conditions = repeat([string("group_",i) for i=1:m_groups], inner=div(M,m_groups))
-    sample_batches = repeat([string("batch_",i) for i=1:m_batches], inner=div(M,m_batches))
-        
-    sample_batch_dict = Dict([k => copy(sample_batches) for k in unique(feature_assays)])
+    n_col_batches = 2
+    n_row_batches = 4
 
-    omic_data = randn(M,N)
+    X = randn(K,M)
+    Y = randn(K,N)
+    Z = transpose(X)*Y
 
-    logistic_cols = Int[i for (i, a) in enumerate(feature_assays) if a in ("mutation","methylation")]
-    n_logistic = length(logistic_cols)
-    #omic_data[:,logistic_cols] .= rand([0.0,1.0], M, n_logistic)
-    omic_data[:,logistic_cols] .= zeros(M, n_logistic)
+    sample_ids = [string("sample_", i) for i=1:M]
+    sample_conditions = repeat(["condition_1", "condition_2"], inner=div(M,2))
 
-    ordinal_cols = Int[i for (i, a) in enumerate(feature_assays) if a in ("cna",)]
-    n_ordinal = length(ordinal_cols)
-    omic_data[:,ordinal_cols] .= rand([1.0, 2.0, 3.0], M, n_ordinal)
-   
+    sample_graph = [[s, "z", 1] for s in sample_ids]
+    sample_graphs = fill(sample_graph, K)
+
+    feature_ids = map(x->string("x_",x), 1:N)
+    feature_views = repeat(1:n_col_batches, inner=div(N,n_col_batches))
+    batch_dict = Dict(j => repeat([string("rowbatch",i) for i=1:n_row_batches], inner=div(M,n_row_batches)) for j=1:n_col_batches)
+
+    feature_graph = [[feat, "y", 1] for feat in feature_ids]
+    feature_graphs = fill(feature_graph, K)
+
     @testset "Fit CPU" begin
 
-        model = PathMatFacModel([test_sif_path, test_sif_path, test_sif_path],  
-                               [string(test_pwy_name,"_",i) for i=1:3],
-                               sample_ids, sample_conditions,
-                               feature_genes, feature_assays,
-                               sample_batch_dict;
-                               lambda_layer=0.1)
+        model = PathMatFacModel(Z; sample_conditions, feature_ids=feature_ids, feature_views=feature_views) 
+                                                      #feature_graphs=feature_graphs, batch_dict=batch_dict, 
+                                                      #lambda_Y_graph=1.0, lambda_Y_selective_l1=1.0)
+
         X_start = deepcopy(model.matfac.X)
         Y_start = deepcopy(model.matfac.Y)
         
-        fit!(model, omic_data; verbosity=1, lr=0.07, max_epochs=10, fit_hyperparam=false)
+        fit!(model; verbosity=1, lr=0.07, max_epochs=10)
 
         @test true
         @test !isapprox(model.matfac.X, X_start)
         @test !isapprox(model.matfac.Y, Y_start)
     end
 
-    @testset "Fit GPU" begin
+    #@testset "Fit GPU" begin
 
-        model = PathMatFacModel([test_sif_path, test_sif_path, test_sif_path],  
-                               [string(test_pwy_name,"_",i) for i=1:3],
-                               sample_ids, sample_conditions,
-                               feature_genes, feature_assays,
-                               sample_batch_dict;
-                               lambda_layer=0.1)
+    #    model = PathMatFacModel([test_sif_path, test_sif_path, test_sif_path],  
+    #                           [string(test_pwy_name,"_",i) for i=1:3],
+    #                           sample_ids, sample_conditions,
+    #                           feature_genes, feature_assays,
+    #                           sample_batch_dict;
+    #                           lambda_layer=0.1)
 
-        X_start = deepcopy(model.matfac.X)
-        Y_start = deepcopy(model.matfac.Y)
+    #    X_start = deepcopy(model.matfac.X)
+    #    Y_start = deepcopy(model.matfac.Y)
 
-        model_gpu = gpu(model)
-        omic_data_gpu = gpu(omic_data)
+    #    model_gpu = gpu(model)
+    #    omic_data_gpu = gpu(omic_data)
 
-        fit!(model_gpu, omic_data_gpu; verbosity=1, lr=0.07, max_epochs=10, fit_hyperparam=false)
+    #    fit!(model_gpu, omic_data_gpu; verbosity=1, lr=0.07, max_epochs=10, fit_hyperparam=false)
 
-        model = cpu(model_gpu)
+    #    model = cpu(model_gpu)
 
-        @test true
-        @test !isapprox(model.matfac.X, X_start)
-        @test !isapprox(model.matfac.Y, Y_start)
-    end
+    #    @test true
+    #    @test !isapprox(model.matfac.X, X_start)
+    #    @test !isapprox(model.matfac.Y, Y_start)
+    #end
 
-    @testset "Fit Hyperparam" begin
+    #@testset "Fit Hyperparam" begin
 
-        model = PathMatFacModel([test_sif_path, test_sif_path, test_sif_path],  
-                               [string(test_pwy_name,"_",i) for i=1:3],
-                               sample_ids, sample_conditions,
-                               feature_genes, feature_assays,
-                               sample_batch_dict;
-                               lambda_layer=0.1)
+    #    model = PathMatFacModel([test_sif_path, test_sif_path, test_sif_path],  
+    #                           [string(test_pwy_name,"_",i) for i=1:3],
+    #                           sample_ids, sample_conditions,
+    #                           feature_genes, feature_assays,
+    #                           sample_batch_dict;
+    #                           lambda_layer=0.1)
 
-        X_start = deepcopy(model.matfac.X)
-        Y_start = deepcopy(model.matfac.Y)
-        lambda_start = model.matfac.lambda_Y
+    #    X_start = deepcopy(model.matfac.X)
+    #    Y_start = deepcopy(model.matfac.Y)
+    #    lambda_start = model.matfac.lambda_Y
 
-        fit!(model, omic_data; fit_hyperparam=true, verbosity=1, 
-                               lr=0.01, max_epochs=10)
+    #    fit!(model, omic_data; fit_hyperparam=true, verbosity=1, 
+    #                           lr=0.01, max_epochs=10)
 
-        @test true
-        @test !isapprox(model.matfac.X, X_start)
-        @test !isapprox(model.matfac.Y, Y_start)
-    end
-    
-    @testset "Fit hyperparam GPU" begin
+    #    @test true
+    #    @test !isapprox(model.matfac.X, X_start)
+    #    @test !isapprox(model.matfac.Y, Y_start)
+    #end
+    #
+    #@testset "Fit hyperparam GPU" begin
 
-        model = PathMatFacModel([test_sif_path, test_sif_path, test_sif_path],  
-                               [string(test_pwy_name,"_",i) for i=1:3],
-                               sample_ids, sample_conditions,
-                               feature_genes, feature_assays,
-                               sample_batch_dict;
-                               lambda_layer=0.1)
+    #    model = PathMatFacModel([test_sif_path, test_sif_path, test_sif_path],  
+    #                           [string(test_pwy_name,"_",i) for i=1:3],
+    #                           sample_ids, sample_conditions,
+    #                           feature_genes, feature_assays,
+    #                           sample_batch_dict;
+    #                           lambda_layer=0.1)
 
-        X_start = deepcopy(model.matfac.X)
-        Y_start = deepcopy(model.matfac.Y)
-        lambda_start = model.matfac.lambda_Y
+    #    X_start = deepcopy(model.matfac.X)
+    #    Y_start = deepcopy(model.matfac.Y)
+    #    lambda_start = model.matfac.lambda_Y
 
-        model_gpu = gpu(model)
-        omic_data_gpu = gpu(omic_data)
+    #    model_gpu = gpu(model)
+    #    omic_data_gpu = gpu(omic_data)
 
-        fit!(model_gpu, omic_data_gpu; fit_hyperparam=true, verbosity=1, 
-                                       lr=0.01, max_epochs=10)
+    #    fit!(model_gpu, omic_data_gpu; fit_hyperparam=true, verbosity=1, 
+    #                                   lr=0.01, max_epochs=10)
 
-        model = cpu(model_gpu)
+    #    model = cpu(model_gpu)
 
-        @test true
-        @test !isapprox(model.matfac.X, X_start)
-        @test !isapprox(model.matfac.Y, Y_start)
-    end
+    #    @test true
+    #    @test !isapprox(model.matfac.X, X_start)
+    #    @test !isapprox(model.matfac.Y, Y_start)
+    #end
 
 end
 
@@ -940,7 +930,7 @@ function main()
     reg_tests()
     model_tests()
     score_tests()
-    #fit_tests()
+    fit_tests()
     #model_io_tests()
     #simulation_tests()
 
