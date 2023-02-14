@@ -25,11 +25,6 @@ mutable struct NetworkRegularizer{K}
 end
 
 
-@functor NetworkRegularizer
-
-Flux.trainable(nr::NetworkRegularizer) = (net_virtual=nr.net_virtual, )
-
-
 function NetworkRegularizer(feature_ids, edgelists; epsilon=0.0, weight=1.0)
 
     N = length(feature_ids)
@@ -227,10 +222,6 @@ function L1Regularizer(feature_ids::Vector, edgelists::Vector; weight=1.0)
     return L1Regularizer(l1_idx, weight)
 end
                         
-#@functor L1Regularizer
-
-Flux.trainable(lr::L1Regularizer) = ()
-
 function (reg::L1Regularizer)(X::AbstractArray)
     return reg.weight*sum(abs.(reg.l1_idx .* X)) 
 end
@@ -260,8 +251,6 @@ mutable struct GroupRegularizer
     weight::Number
 end
 
-@functor GroupRegularizer
-Flux.trainable(cr::GroupRegularizer) = ()
 
 function GroupRegularizer(group_labels::AbstractVector; weight=1.0)
     idx = ids_to_ind_mat(group_labels)
@@ -348,8 +337,6 @@ mutable struct CompositeRegularizer
     regularizers::Tuple
 end
 
-@functor CompositeRegularizer
-
 function construct_composite_reg(regs::AbstractVector)
     if length(regs) == 0
         regs = [ x->0.0 ]
@@ -421,10 +408,6 @@ mutable struct BatchArrayReg
     counts::Tuple
 end
 
-@functor BatchArrayReg
-
-Flux.trainable(bar::BatchArrayReg) = ()
-
 function BatchArrayReg(ba::BatchArray; weight=1.0)
     row_counts = map(mat->vec(sum(mat,dims=1)), ba.row_batches)
     col_counts = map(length, ba.col_ranges)
@@ -481,7 +464,6 @@ mutable struct SequenceReg
     regs::Tuple
 end
 
-@functor SequenceReg
 
 function (reg::SequenceReg)(seq)
     return sum(map((f,x)->f(x), reg.regs, seq.layers))

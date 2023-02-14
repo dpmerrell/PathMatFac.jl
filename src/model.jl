@@ -182,9 +182,10 @@ end
 ##########################################
 PMTypes = Union{PathMatFacModel, NetworkRegularizer, GroupRegularizer,
                 L1Regularizer, ColScale, ColShift, BatchScale, BatchShift,
-                BatchArray, BatchArrayReg}
+                BatchArray, BatchArrayReg, ViewableComposition, SequenceReg,
+                CompositeRegularizer}
 
-NoEqTypes = Function
+NoEqTypes = Union{Function,Tuple}
 
 function Base.:(==)(a::T, b::T) where T <: PMTypes
     for fn in fieldnames(T)

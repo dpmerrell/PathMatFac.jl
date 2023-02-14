@@ -286,7 +286,18 @@ function layers_tests()
         @test transform_grads[1].layers[2].mu != nothing
         @test transform_grads[1].layers[3].logdelta != nothing
         @test transform_grads[1].layers[4].theta != nothing
+        
+        ###################################
+        # FrozenLayer
+        PM.freeze_layer!(transform_w_batch, 1) 
+        @test isa(transform_w_batch.layers[1], PM.FrozenLayer)
+        transform_grads = Zygote.gradient((f,X)->sum(f(X)), transform_w_batch, xy)
+        @test transform_grads[1].layers[1] == nothing
 
+        PM.unfreeze_layer!(transform_w_batch, 1)
+        @test isa(transform_w_batch.layers[1], PM.ColScale)
+        transform_grads = Zygote.gradient((f,X)->sum(f(X)), transform_w_batch, xy)
+        @test isa(transform_grads[1].layers[1].logsigma, AbstractArray) 
     end
 end
 
@@ -764,12 +775,13 @@ function fit_tests()
 
         X_start = deepcopy(model.matfac.X)
         Y_start = deepcopy(model.matfac.Y)
-        
+        batch_scale = deepcopy(model.matfac.col_transform.layers[3]) 
         fit!(model; verbosity=1, lr=0.25, max_epochs=Inf, print_iter=1, rel_tol=1e-6, abs_tol=1e-6)
 
         @test !isapprox(model.matfac.X, X_start)
         @test !isapprox(model.matfac.Y, Y_start)
-        @test isapprox(model.matfac.col_transform.layers[3])
+        @test all(map(isapprox, batch_scale.logdelta.values,
+                                model.matfac.col_transform.layers[3].logdelta.values)) # This should not have changed
     end
 
     #@testset "Fit GPU" begin
@@ -848,37 +860,42 @@ end
 
 function model_io_tests()
 
-    test_sif_path = "test_pathway.sif"
-    test_pwy_name = "test_pathway" 
-    feature_genes = ["PLK1","PLK1","PLK1", 
-                     "PAK1", "PAK1", "PAK1",
-                     "SGOL1", 
-                     "BRCA", "BRCA"]
-    feature_assays = ["cna", "mutation","mrnaseq", 
-                      "rppa", "mrnaseq", "mutation",
-                      "mrnaseq",
-                      "mrnaseq", "methylation"]
-    M = 10
-    m_groups = 2
+    test_bson_path = "test.bson"
 
-    sample_ids = [string("patient_",i) for i=1:M]
-    sample_conditions = repeat([string("group_",i) for i=1:m_groups], inner=5)
-        
-    sample_batch_dict = Dict([k => copy(sample_conditions) for k in unique(feature_assays)])
+    M = 20
+    N = 30
+    K = 4
 
-    test_bson_path = "test_model.bson"
+    n_col_batches = 2
+    n_row_batches = 4
+
+    X = randn(K,M)
+    Y = randn(K,N)
+    Z = transpose(X)*Y
+
+    sample_ids = [string("sample_", i) for i=1:M]
+    sample_conditions = repeat(["condition_1", "condition_2"], inner=div(M,2))
+
+    sample_graph = [[s, "z", 1] for s in sample_ids]
+    sample_graphs = fill(sample_graph, K)
+
+    feature_ids = map(x->string("x_",x), 1:N)
+    feature_views = repeat(1:n_col_batches, inner=div(N,n_col_batches))
+    batch_dict = Dict(j => repeat([string("rowbatch",i) for i=1:n_row_batches], inner=div(M,n_row_batches)) for j=1:n_col_batches)
+
+    feature_graph = [[feat, "y", 1] for feat in feature_ids]
+    feature_graphs = fill(feature_graph, K)
 
     @testset "Model IO" begin
 
-        model = PathMatFacModel([test_sif_path, test_sif_path, test_sif_path],  
-                               [string(test_pwy_name,"_",i) for i=1:3],
-                               sample_ids, sample_conditions,
-                               feature_genes, feature_assays,
-                               sample_batch_dict)
+        model = PathMatFacModel(Z; sample_conditions, feature_ids=feature_ids,  feature_views=feature_views,
+                                                      lambda_X_l2=0.1,# lambda_Y_l1=0.05, 
+                                                      feature_graphs=feature_graphs, batch_dict=batch_dict, 
+                                                      lambda_Y_graph=0.1, lambda_Y_selective_l1=0.05)
 
-        save_model(model, test_bson_path)
+        PM.save_model(model, test_bson_path)
 
-        recovered_model = load_model(test_bson_path)
+        recovered_model = PM.load_model(test_bson_path)
 
         @test recovered_model == model
 
@@ -938,7 +955,7 @@ function main()
     model_tests()
     score_tests()
     fit_tests()
-    #model_io_tests()
+    model_io_tests()
     #simulation_tests()
 
 end

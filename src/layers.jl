@@ -10,7 +10,6 @@ mutable struct ColScale
     logsigma::AbstractVector
 end
 
-@functor ColScale
 
 function ColScale(N::Int)
     return ColScale(zeros(N))
@@ -49,7 +48,6 @@ mutable struct ColShift
     mu::AbstractVector
 end
 
-@functor ColShift
 
 function ColShift(N::Int)
     return ColShift(randn(N) .* 1e-4)
@@ -86,7 +84,6 @@ mutable struct BatchScale
     logdelta::BatchArray
 end
 
-@functor BatchScale
 
 function BatchScale(col_batches, row_batches)
 
@@ -131,7 +128,6 @@ mutable struct BatchShift
     theta::BatchArray
 end
 
-@functor BatchShift
 
 function BatchShift(col_batches, row_batches)
     
@@ -177,7 +173,6 @@ mutable struct ViewableComposition
     layers::Tuple
 end
 
-@functor ViewableComposition
 
 function (vc::ViewableComposition)(Z::AbstractMatrix)
     return reduce((f,g)->(x->g(f(x))), vc.layers)(Z)
@@ -217,9 +212,19 @@ function (fl::FrozenLayer)(args...)
     fl.layer(args...)
 end
 
-@functor FrozenLayer
 
-Flux.trainable(fl::FrozenLayer) = ()
+function ChainRulesCore.rrule(fl::FrozenLayer, args...)
+
+    # Treat the layer as a pure function; 
+    # do not differentiate w.r.t. it
+    res, pb = Zygote.pullback(fl.layer, args...)
+    function FrozenLayer_pullback(res_bar)
+        args_bar = pb(res_bar)
+        return NoTangent(), args_bar...
+    end
+
+    return res, FrozenLayer_pullback 
+end
 
 
 function view(fl::FrozenLayer, idx1, idx2)

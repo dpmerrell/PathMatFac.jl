@@ -90,7 +90,11 @@ function fit!(model::PathMatFacModel; capacity::Int=10^8, kwargs...)
     mf_fit!(model; capacity=capacity, update_X=true, update_Y=true,
                                       update_col_layers=true,
                                       kwargs...)
- 
+
+    unfreeze_layer!(model.matfac.col_transform,1) 
+    if length(model.matfac.col_transform.layers) > 2
+        unfreeze_layer!(model.matfac.col_transform,3) 
+    end 
 end
 
 
