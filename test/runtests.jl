@@ -769,9 +769,8 @@ function fit_tests()
     @testset "Fit CPU" begin
 
         model = PathMatFacModel(Z; sample_conditions, feature_ids=feature_ids,  feature_views=feature_views,
-                                                      lambda_X_l2=0.1,# lambda_Y_l1=0.05, 
                                                       feature_graphs=feature_graphs, batch_dict=batch_dict, 
-                                                      lambda_Y_graph=0.1, lambda_Y_selective_l1=0.05)
+                                                      lambda_X_l2=0.1, lambda_Y_graph=0.1, lambda_Y_selective_l1=0.05)
 
         X_start = deepcopy(model.matfac.X)
         Y_start = deepcopy(model.matfac.Y)
@@ -781,79 +780,9 @@ function fit_tests()
         @test !isapprox(model.matfac.X, X_start)
         @test !isapprox(model.matfac.Y, Y_start)
         @test all(map(isapprox, batch_scale.logdelta.values,
-                                model.matfac.col_transform.layers[3].logdelta.values)) # This should not have changed
+                                model.matfac.col_transform.layers[3].logdelta.values)
+                 ) # This should not have changed
     end
-
-    #@testset "Fit GPU" begin
-
-    #    model = PathMatFacModel([test_sif_path, test_sif_path, test_sif_path],  
-    #                           [string(test_pwy_name,"_",i) for i=1:3],
-    #                           sample_ids, sample_conditions,
-    #                           feature_genes, feature_assays,
-    #                           sample_batch_dict;
-    #                           lambda_layer=0.1)
-
-    #    X_start = deepcopy(model.matfac.X)
-    #    Y_start = deepcopy(model.matfac.Y)
-
-    #    model_gpu = gpu(model)
-    #    omic_data_gpu = gpu(omic_data)
-
-    #    fit!(model_gpu, omic_data_gpu; verbosity=1, lr=0.07, max_epochs=10, fit_hyperparam=false)
-
-    #    model = cpu(model_gpu)
-
-    #    @test true
-    #    @test !isapprox(model.matfac.X, X_start)
-    #    @test !isapprox(model.matfac.Y, Y_start)
-    #end
-
-    #@testset "Fit Hyperparam" begin
-
-    #    model = PathMatFacModel([test_sif_path, test_sif_path, test_sif_path],  
-    #                           [string(test_pwy_name,"_",i) for i=1:3],
-    #                           sample_ids, sample_conditions,
-    #                           feature_genes, feature_assays,
-    #                           sample_batch_dict;
-    #                           lambda_layer=0.1)
-
-    #    X_start = deepcopy(model.matfac.X)
-    #    Y_start = deepcopy(model.matfac.Y)
-    #    lambda_start = model.matfac.lambda_Y
-
-    #    fit!(model, omic_data; fit_hyperparam=true, verbosity=1, 
-    #                           lr=0.01, max_epochs=10)
-
-    #    @test true
-    #    @test !isapprox(model.matfac.X, X_start)
-    #    @test !isapprox(model.matfac.Y, Y_start)
-    #end
-    #
-    #@testset "Fit hyperparam GPU" begin
-
-    #    model = PathMatFacModel([test_sif_path, test_sif_path, test_sif_path],  
-    #                           [string(test_pwy_name,"_",i) for i=1:3],
-    #                           sample_ids, sample_conditions,
-    #                           feature_genes, feature_assays,
-    #                           sample_batch_dict;
-    #                           lambda_layer=0.1)
-
-    #    X_start = deepcopy(model.matfac.X)
-    #    Y_start = deepcopy(model.matfac.Y)
-    #    lambda_start = model.matfac.lambda_Y
-
-    #    model_gpu = gpu(model)
-    #    omic_data_gpu = gpu(omic_data)
-
-    #    fit!(model_gpu, omic_data_gpu; fit_hyperparam=true, verbosity=1, 
-    #                                   lr=0.01, max_epochs=10)
-
-    #    model = cpu(model_gpu)
-
-    #    @test true
-    #    @test !isapprox(model.matfac.X, X_start)
-    #    @test !isapprox(model.matfac.Y, Y_start)
-    #end
 
 end
 

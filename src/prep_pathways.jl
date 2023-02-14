@@ -1,4 +1,5 @@
 
+export prep_pathway_graphs
 
 
 ######################################################
@@ -60,7 +61,7 @@ function sifs_to_edgelists(pwy_sifs::Vector{<:Vector{<:Vector}})
 end
 
 
-function sifs_to_edgelists(sif_files::Vector{<:AbstractString})
+function load_sif_files(sif_files::Vector{<:AbstractString})
     sif_data = read_all_sif_files(sif_files)
     return sifs_to_edgelists(sif_data)
 end
@@ -184,6 +185,52 @@ function extend_pathways(pwy_edgelists::Vector{Vector{T}} where T,
     end
 
     return ext_edgelists
+end
+
+
+function construct_pwy_feature_ids(feature_genes, feature_dogmas)
+    
+    counter = Dict()
+    N = length(feature_genes)
+    feature_ids = Vector{String}(undef, N)
+
+    for (i, (g, dog)) in enumerate(zip(feature_genes, feature_dogmas))
+        g_dog = string(g, "_", dog)
+        count = get!(counter, g_dog, 0) + 1
+        feature_ids[i] = string(g_dog, "_", count)
+    end
+
+    return feature_ids 
+end
+
+
+"""
+    prep_pathway_graphs(pwy_edgelists, feature_genes, feature_dogmas;
+                        feature_weights=nothing)
+
+    Given (1) a vector of pathway edgelists; 
+    (2) a vector of feature genes; and
+    (3) a vector of feature dogmas; 
+    map the features into the pathways and construct 
+    a vector of updated edgelists that include the features.
+
+    Returns (1) a vector of new, augmented edgelists; and 
+    (2) a new vector of feature IDs.
+
+    `feature_genes`: a vector of gene ID strings.
+    `feature_dogmas`: a vector of strings belonging to
+                      {"dna", "mrna", "prot"}
+    `feature_weights`: a vector of weights indicating
+                       the sign/magnitude of the feature's
+                       relationship to its dogma entity.
+                       E.g., +1 -> a promoter relationship
+                       and -1 -> a suppressor relationship. 
+"""
+function prep_pathway_graphs(pwy_edgelists::Vector{Vector{T}} where T,
+                             feature_genes::Vector, feature_dogmas::Vector;
+                             feature_weights::Union{Nothing,Vector}=nothing)
+    
+    return pathway_graphs, feature_ids
 end
 
 
