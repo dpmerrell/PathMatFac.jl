@@ -490,7 +490,7 @@ function reg_tests()
         @test loss == 1.5
         @test isapprox(grads[1], transpose([1.0, 1.0, 1.0]))
         @test isapprox(grads[2].net_virtual[1], [-3.0])
-
+        
     end
     
     @testset "Selective L1 regularizers" begin
@@ -507,6 +507,12 @@ function reg_tests()
         @test isapprox(reg.l1_idx, [0 0 0 0 1;
                                     0 0 0 0 1])
         @test isapprox(reg(test_Y), sum(abs.(reg.l1_idx .* test_Y)))
+        
+        loss, grads = Flux.withgradient((r,x) -> r(x), reg, ones(2,5)) 
+        @test grads[1] == nothing
+        test_grad = zeros(2,5)
+        test_grad[:,5] .= 1
+        @test isapprox(grads[2], test_grad)                                                     
     end
 
     @testset "Group regularizers" begin
@@ -751,18 +757,19 @@ function fit_tests()
 
     @testset "Fit CPU" begin
 
-        model = PathMatFacModel(Z; sample_conditions, feature_ids=feature_ids, feature_views=feature_views) 
-                                                      #feature_graphs=feature_graphs, batch_dict=batch_dict, 
-                                                      #lambda_Y_graph=1.0, lambda_Y_selective_l1=1.0)
+        model = PathMatFacModel(Z; sample_conditions, feature_ids=feature_ids,  feature_views=feature_views,
+                                                      lambda_X_l2=0.1,# lambda_Y_l1=0.05, 
+                                                      feature_graphs=feature_graphs, batch_dict=batch_dict, 
+                                                      lambda_Y_graph=0.1, lambda_Y_selective_l1=0.05)
 
         X_start = deepcopy(model.matfac.X)
         Y_start = deepcopy(model.matfac.Y)
         
-        fit!(model; verbosity=1, lr=0.07, max_epochs=10)
+        fit!(model; verbosity=1, lr=0.25, max_epochs=Inf, print_iter=1, rel_tol=1e-6, abs_tol=1e-6)
 
-        @test true
         @test !isapprox(model.matfac.X, X_start)
         @test !isapprox(model.matfac.Y, Y_start)
+        @test isapprox(model.matfac.col_transform.layers[3])
     end
 
     #@testset "Fit GPU" begin

@@ -26,6 +26,7 @@ end
 
 
 @functor NetworkRegularizer
+
 Flux.trainable(nr::NetworkRegularizer) = (net_virtual=nr.net_virtual, )
 
 
@@ -211,9 +212,6 @@ mutable struct L1Regularizer
     weight::Number
 end
 
-@functor L1Regularizer
-Flux.trainable(lr::L1Regularizer) = ()
-
 function L1Regularizer(feature_ids::Vector, edgelists::Vector; weight=1.0)
 
     l1_features = compute_nongraph_nodes(feature_ids, edgelists) 
@@ -229,9 +227,26 @@ function L1Regularizer(feature_ids::Vector, edgelists::Vector; weight=1.0)
     return L1Regularizer(l1_idx, weight)
 end
                         
+#@functor L1Regularizer
 
-function (reg::L1Regularizer)(X::AbstractMatrix)
+Flux.trainable(lr::L1Regularizer) = ()
+
+function (reg::L1Regularizer)(X::AbstractArray)
     return reg.weight*sum(abs.(reg.l1_idx .* X)) 
+end
+
+
+function ChainRulesCore.rrule(reg::L1Regularizer, X::AbstractArray)
+
+    sel_X = reg.l1_idx .* X
+    lss = reg.weight*sum(abs.(sel_X))
+
+    function L1Regularizer_pullback(loss_bar)
+        X_bar = (loss_bar*reg.weight).*sign.(sel_X)
+        return ChainRulesCore.NoTangent(), X_bar
+    end    
+
+    return lss, L1Regularizer_pullback
 end
 
 
