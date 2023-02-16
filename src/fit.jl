@@ -28,14 +28,15 @@ end
 
 
 
-function fit!(model::PathMatFacModel; capacity::Int=10^8, kwargs...)
+function fit!(model::PathMatFacModel; capacity::Int=10^8, verbosity=1, 
+                                      kwargs...)
 
     K,N = size(model.matfac.Y)
 
     # Compute the column M-estimates.
     println("Computing column M-estimates...") 
     M_estimates = MF.compute_M_estimates(model.matfac, model.data; 
-                                         capacity=capacity, verbosity=-1, 
+                                         capacity=capacity, verbosity=verbosity-2, 
                                          lr=1.0, max_epochs=500, rel_tol=1e-9)
 
     # Choose column scales in a way that encourages
@@ -72,13 +73,14 @@ function fit!(model::PathMatFacModel; capacity::Int=10^8, kwargs...)
         # Fit the batch shift parameters.
         println("Fitting batch parameters...")
         mf_fit!(model; capacity=capacity, update_col_layers=true, 
-                       lr=0.1, max_epochs=500, verbosity=-1)
+                       lr=0.1, max_epochs=500, verbosity=verbosity-1)
     end
 
     # Fit the factors (X,Y), and their regularizers.
     println("Fitting linear factors.")
     mf_fit!(model; capacity=capacity, update_X=true, update_Y=true,
                                       update_X_reg=true, update_Y_reg=true,
+                                      verbosity=verbosity,
                                       kwargs...)
 
     # Finally: jointly fit X, Y, column shifts, and batch shifts
@@ -89,6 +91,7 @@ function fit!(model::PathMatFacModel; capacity::Int=10^8, kwargs...)
     println("Jointly adjusting parameters.")
     mf_fit!(model; capacity=capacity, update_X=true, update_Y=true,
                                       update_col_layers=true,
+                                      verbosity=verbosity,
                                       kwargs...)
 
     unfreeze_layer!(model.matfac.col_transform,1) 

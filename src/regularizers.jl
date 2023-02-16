@@ -474,7 +474,7 @@ function construct_layer_reg(feature_views, batch_dict, lambda_layer)
 
     # Start with the regularizers for logsigma and mu
     # (the column parameters)
-    regs = [x->0.0, x->0.0]
+    regs = Any[x->0.0, x->0.0]
  
     # If a batch_dict is provided, add regularizers for
     # logdelta and theta (the batch parameters)

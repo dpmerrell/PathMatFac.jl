@@ -1,7 +1,5 @@
 
 
-export DEFAULT_ASSAYS 
-
 
 ###################################################
 # Math operations
@@ -64,44 +62,9 @@ end
 # pathway entities, and probability distributions
 ######################################################
 
-DEFAULT_ASSAY_LOSSES = Dict("cna" => "ordinal3",
-                            "mutation" => "bernoulli",
-                            "methylation" => "bernoulli",
-                            "mrnaseq" => "normal", 
-                            "rppa" => "normal",
-                            )
-
-LOSS_ORDER = Dict("normal" => 1,
-                  "poisson" => 2,
-                  "bernoulli" => 3,
-                  "ordinal3" => 4,
-                  "noloss" => 5
-                  )
-
-MEAN_INIT_MAP = Dict("normal" => (m,v) -> m,
-                     "bernoulli" => (m,v) -> inv_logistic(m),
-                     "ordinal3" => (m,v) -> m - 2.0,
-                     "poisson" => (m,v) -> log(m)
-                    )
-
-VAR_INIT_MAP = Dict("normal" => (m,v) -> v,
-                    "bernoulli" => (m,v) -> bernoulli_var_init(m,v),
-                    "ordinal3" => (m,v) -> v,
-                    "poisson" => (m,v) -> v .* (log.(m).^2)
-                   )
 
 DOGMA_ORDER = ["dna", "mrna", "protein", "activation"]
 DOGMA_TO_IDX = Dict([v => i for (i,v) in enumerate(DOGMA_ORDER)])
-
-DEFAULT_ASSAYS = collect(keys(DEFAULT_ASSAY_LOSSES))
-DEFAULT_ASSAY_SET = Set(DEFAULT_ASSAYS)
-
-DEFAULT_ASSAY_MAP = Dict("cna" => ("dna", 1),
-                         "mutation" => ("dna", -1),
-                         "methylation" => ("mrna", -1),
-                         "mrnaseq" => ("mrna", 1),
-                         "rppa" => ("protein", 1)
-                        )
 
 
 PWY_SIF_CODE = Dict("a" => "activation",
@@ -339,8 +302,9 @@ function prune_leaves!(edgelist; except=nothing)
     graph = edgelist_to_dict(edgelist)
 
     # Initialize the frontier set with the leaves
-    frontier = Set([node for (node, neighbors) in graph if 
-                  ((length(neighbors) < 2) & !in(node, except_set))])
+    frontier = Set(node for (node, neighbors) in graph if 
+                   ((length(neighbors) < 2) & !in(node, except_set))
+                  )
 
     # Continue until the frontier is empty
     while length(frontier) > 0
@@ -350,7 +314,7 @@ function prune_leaves!(edgelist; except=nothing)
         if length(graph[maybe_leaf]) < 2 
             # Add the leaf's neighbor (if any) to the frontier
             for neighbor in keys(graph[maybe_leaf])
-                if !in(neighbor, except_set)
+                if !in(neighbor, except_set) & (neighbor != maybe_leaf)
                     push!(frontier, neighbor)
                 end
                 # Remove the leaf from the neighbor's neighbors
@@ -371,6 +335,19 @@ function get_all_nodes(edgelist)
     for edge in edgelist
         push!(result, edge[1])
         push!(result, edge[2])
+    end
+    return result
+end
+
+
+function get_all_entities(edgelist)
+
+    result = Set()
+    for edge in edgelist
+        u = split(edge[1], "_")[1]
+        v = split(edge[2], "_")[1]
+        push!(result, u)
+        push!(result, v)
     end
     return result
 end

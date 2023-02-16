@@ -306,6 +306,7 @@ function preprocess_tests()
 
     test_sif_path = "test_pathway.sif"
 
+    # Contents of a SIF file
     test_sif_contents = [["MOL:GTP",   "a>", "GRASP65/GM130/RAB1/GTP/PLK1"],
                          ["METAPHASE", "a>", "PLK1"],
                          ["PAK1",      "a>", "PLK1"],
@@ -315,6 +316,8 @@ function preprocess_tests()
                          ["PP2A-ALPHA B56", "a|", "SGOL1"]
                         ]
 
+    # After loading a SIF file, we have an edgelist
+    # whose entries are tagged by "_activation"
     test_pwy_edges = [["MOL:GTP", "GRASP65/GM130/RAB1/GTP/PLK1", 1],
                       ["METAPHASE", "PLK1", 1],
                       ["PAK1", "PLK1", 1],
@@ -323,9 +326,16 @@ function preprocess_tests()
                       ["PLK1", "GRASP65/GM130/RAB1/GTP/PLK1", 1],
                       ["PP2A-ALPHA B56", "SGOL1", -1]
                      ]
-    tuplify = edge -> [(edge[1],"activation"),(edge[2],"activation"),edge[3]]
-    test_pwy_edges = map(tuplify, test_pwy_edges)
-        
+    test_pwy_genes = PM.get_all_nodes(test_pwy_edges)
+    tag_edge = edge -> [string(edge[1],"_activation"),
+                        string(edge[2],"_activation"), edge[3]]
+    test_pwy_edges = map(tag_edge, test_pwy_edges)
+    test_pwy_nodes = PM.get_all_nodes(test_pwy_edges)
+ 
+    # Our data may contain features that are not
+    # involved in the pathway.
+    # Establish the gene, "dogma level", and 
+    # weight for each feature.
     feature_genes = ["PLK1","PLK1","PLK1", 
                      "PAK1", "PAK1", "PAK1",
                      "SGOL1", 
@@ -334,38 +344,53 @@ function preprocess_tests()
                       "rppa", "methylation", "mutation",
                       "mrnaseq",
                       "mrnaseq", "methylation"]
-    full_geneset = Set(feature_genes)
+    ASSAY_TO_DOGMA = Dict("cna" => "dna",
+                          "mutation" => "dna",
+                          "mrnaseq" => "mrna",
+                          "methylation" => "mrna",
+                          "rppa" => "protein")
+    ASSAY_TO_WEIGHT = Dict("cna" => 1.0,
+                           "mutation" => -1.0,
+                           "mrnaseq" => 1.0,
+                           "methylation" => -1.0,
+                           "rppa" => 1.0)
+    feature_dogmas = map(x->ASSAY_TO_DOGMA[x], feature_assays)
+    feature_weights = map(x->ASSAY_TO_WEIGHT[x], feature_assays)
+    feature_ids = PM.construct_pwy_feature_ids(feature_genes, feature_dogmas)
 
+    # Find the data genes that overlap with the pathway.
+    # And collect the corresponding features.
+    relevant_genes = intersect(test_pwy_genes, Set(feature_genes))
+    relevant_feature_idx = map(x -> in(x, relevant_genes), feature_genes)
+    relevant_features = feature_ids[relevant_feature_idx]
+    relevant_weights = feature_weights[relevant_feature_idx]
 
-    test_dogma_edges = [[("PLK1","dna"), ("PLK1","mrna"), 1],
-                        [("PAK1","dna"), ("PAK1","mrna"), 1],
-                        [("PAK1","mrna"), ("PAK1","protein"), 1],
+    # The "central dogma-related" edges should look like this
+    test_dogma_edges = [["PLK1_dna", "PLK1_mrna", 1.],
+                        ["PLK1_mrna", "PLK1_protein", 1.],
+                        ["PLK1_protein", "PLK1_activation", 1.],
+                        ["PAK1_dna", "PAK1_mrna", 1.],
+                        ["PAK1_mrna", "PAK1_protein", 1.],
+                        ["PAK1_protein", "PAK1_activation", 1.],
+                        ["SGOL1_dna", "SGOL1_mrna", 1.],
+                        ["SGOL1_mrna", "SGOL1_protein", 1.],
+                        ["SGOL1_protein", "SGOL1_activation", 1.],
                        ]
-    #test_dogma_edges = map(tuplify, test_dogma_edges)
 
-    test_data_edges = [[("PLK1","dna"), ("PLK1","cna"), 1],
-                       [("PLK1","dna"), ("PLK1","mutation"), -1],
-                       [("PLK1","mrna"), ("PLK1","mrnaseq"),  1],
-                       [("PAK1","dna"), ("PAK1","mutation"),  -1],
-                       [("PAK1","mrna"),("PAK1","methylation"),  -1],
-                       [("PAK1","protein"), ("PAK1","rppa"),  1],
-                       [("SGOL1","mrna"), ("SGOL1","mrnaseq"),  1],
-                       [("BRCA","mrna"),("BRCA","mrnaseq"),  1],
-                       [("BRCA","mrna"),("BRCA","methylation"),  -1]
+    # The edges connecting data to the central dogma should look like this
+    test_data_edges = [["PLK1_dna", "PLK1_dna_1", 1.],
+                       ["PLK1_dna", "PLK1_dna_2", -1.],
+                       ["PLK1_mrna", "PLK1_mrna_1",  1.],
+                       ["PAK1_dna", "PAK1_dna_1",  -1.],
+                       ["PAK1_mrna","PAK1_mrna_1",  -1.],
+                       ["PAK1_protein", "PAK1_protein_1",  1.],
+                       ["SGOL1_mrna", "SGOL1_mrna_1",  1.]
                       ]
-   
-    test_all_edges = vcat(test_data_edges, test_dogma_edges)
-    tuplify2 = edge -> [Tuple(split(edge[1], "_")), Tuple(split(edge[2],"_")), edge[3]]
-    test_all_edges = vcat(test_all_edges, map(tuplify2, [["PLK1_mrna", "PLK1_protein", 1],
-                                                         ["PLK1_protein", "PLK1_activation", 1],
-                                                         ["PAK1_protein", "PAK1_activation", 1],
-                                                         ["SGOL1_mrna", "SGOL1_protein", 1],
-                                                         ["SGOL1_protein", "SGOL1_activation", 1]
-                                                       ]),
-                          test_pwy_edges
-                          )
+  
+    # The final set of edges should look like this. 
+    test_all_edges = vcat(test_data_edges, test_dogma_edges, test_pwy_edges)
+    PM.prune_leaves!(test_all_edges; except=relevant_features)
     test_all_edge_set = Set(map(Set, test_all_edges))
-                        
 
     @testset "Prep Pathways" begin
 
@@ -376,31 +401,25 @@ function preprocess_tests()
         el = PM.sif_to_edgelist(sif_data)
         @test Set(el) == Set(test_pwy_edges) 
 
-        features = collect(zip(feature_genes, feature_assays))
-     
         # construct_dogma_edges
-        dogma_edges, dogmax = PM.construct_dogma_edges(features)
+        dogma_edges = PM.construct_dogma_edges(relevant_genes)
         @test Set(dogma_edges) == Set(test_dogma_edges)
 
         # construct_data_edges
-        data_edges = PM.construct_data_edges(features)
+        data_edges = PM.construct_data_edges(relevant_features, relevant_weights)
         @test Set(map(Set, data_edges)) == Set(map(Set, test_data_edges))
         
-        # connect_pwy_to_dogma
-        dogma_edges = vcat(dogma_edges, data_edges)
-        all_edges = PM.connect_pwy_to_dogma(dogma_edges, el, dogmax, full_geneset)
-        all_edge_set = Set(map(Set, all_edges))
-        @test all_edge_set == test_all_edge_set
-
         # prep pathways
-        pwy_edgelists = PM.sifs_to_edgelists([sif_data])
-        prepped_pwy = PM.extend_pathways(pwy_edgelists, features)[1]
+        prepped_pwys, new_ids = prep_pathway_graphs([sif_data], feature_genes, feature_dogmas;
+                                                   feature_weights=feature_weights)
+        prepped_pwy = prepped_pwys[1]
         all_edge_set = Set(map(Set, prepped_pwy))
         @test all_edge_set == test_all_edge_set 
 
         # load_pathway_sifs
-        pwy_edgelists = PM.sifs_to_edgelists([test_sif_path])
-        prepped_pwy = PM.extend_pathways(pwy_edgelists, features)[1]
+        prepped_pwys, new_ids = prep_pathway_graphs([test_sif_path], feature_genes, feature_dogmas;
+                                          feature_weights=feature_weights)
+        prepped_pwy = prepped_pwys[1]
         all_edge_set = Set(map(Set, prepped_pwy))
         @test all_edge_set == test_all_edge_set 
 
@@ -420,6 +439,10 @@ function reg_tests()
                       "rppa", "methylation", "mutation",
                       "mrnaseq",
                       "mrnaseq", "methylation"]
+    feature_dogmas = ["dna", "dna", "mrna",
+                      "protein", "mrna", "dna",
+                      "mrna",
+                      "mrna", "mrna"]
 
     @testset "Network regularizers" begin
 
@@ -456,9 +479,9 @@ function reg_tests()
 
         ##############################################
         # Test on "real pathway"
-        model_features = collect(zip(feature_genes, feature_assays))
-        pwy_edgelists = PM.sifs_to_edgelists([test_sif_path])
-        prepped_pwys = PM.extend_pathways(pwy_edgelists, model_features)
+        prepped_pwys, model_features = PM.prep_pathway_graphs([test_sif_path], 
+                                                               feature_genes,
+                                                               feature_dogmas)
         pwy_nodes = Set()
         for el in prepped_pwys
             for edge in el
@@ -469,7 +492,7 @@ function reg_tests()
         netreg = PM.NetworkRegularizer(model_features, prepped_pwys)
       
         n_obs = length(model_features) 
-        n_unobs = length(pwy_nodes) - n_obs
+        n_unobs = length(setdiff(pwy_nodes, Set(model_features)))
         @test length(netreg.AA) == 1
         @test size(netreg.AA[1]) == (n_obs,n_obs)
         @test size(netreg.AB[1]) == (n_obs,n_unobs)
