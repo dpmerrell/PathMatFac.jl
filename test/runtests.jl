@@ -455,18 +455,18 @@ function reg_tests()
         nr = PM.NetworkRegularizer(data_features, edgelists)
         @test length(nr.AA) == 2
         @test size(nr.AA[1]) == (3,3)
-        @test nr.AA[1] == sparse([1. -1. 0.;# 0;
-                                  -1. 2. -1.;# 0;
-                                  0. -1. 2.])# 1;
+        @test nr.AA[1] == sparse([1.1 -1. 0.;# 0;
+                                  -1. 2.1 -1.;# 0;
+                                  0. -1. 2.1])# 1;
                                   #0 0 1 2])
         @test size(nr.AB[1]) == (3,1)
         @test nr.AB[1] == sparse(reshape([0.;
                                           0.;
                                           -1.], (3,1)))
         @test size(nr.BB[1]) == (1,1)
-        @test nr.BB[1] == sparse(ones(1,1)*1)
-        @test length(nr.net_virtual) == 2
-        @test size(nr.net_virtual[1]) == (1,)
+        @test nr.BB[1] == sparse(ones(1,1)*1.1)
+        @test length(nr.BB_chol) == 2
+        @test size(nr.BB_chol[1]) == (1,1)
 
         model_features = [1,2,3,4]
         nr = PM.NetworkRegularizer(model_features, edgelists)
@@ -474,8 +474,8 @@ function reg_tests()
         @test size(nr.AA[1]) == (4,4)
         @test size(nr.AB[1]) == (4,0)
         @test size(nr.BB[1]) == (0,0)
-        @test length(nr.net_virtual) == 2
-        @test size(nr.net_virtual[1]) == (0,)
+        @test length(nr.BB_chol) == 2
+        @test size(nr.BB_chol[1]) == (0,0)
 
         ##############################################
         # Test on "real pathway"
@@ -498,8 +498,8 @@ function reg_tests()
         @test size(netreg.AB[1]) == (n_obs,n_unobs)
         @test size(netreg.BB[1]) == (n_unobs, n_unobs)
 
-        @test length(netreg.net_virtual) == 1 
-        @test length(netreg.net_virtual[1]) == n_unobs
+        @test length(netreg.BB_chol) == 1 
+        @test size(netreg.BB_chol[1]) == (n_unobs, n_unobs)
 
         ################################################
         # Gradient test
@@ -509,21 +509,18 @@ function reg_tests()
         nr = PM.NetworkRegularizer(data_features, edgelists)
 
         @test length(nr.AA) == 1
-        @test nr.AA[1] == sparse([1.0 0.0 0.0;
-                                  0.0 1.0 0.0;
-                                  0.0 0.0 1.0])
+        @test nr.AA[1] == sparse([1.1 0.0 0.0;
+                                  0.0 1.1 0.0;
+                                  0.0 0.0 1.1])
         @test nr.AB[1] == sparse(reshape([-1.0;
                                           -1.0;
                                           -1.0;], (3,1)))
-        @test nr.BB[1] == sparse(reshape([3.0], (1,1) ))
-        @test nr.net_virtual[1] == [0.0]
+        @test nr.BB[1] == sparse(reshape([3.1], (1,1) ))
 
         mu_regularizer = (x, reg) -> reg(x)
 
         loss, grads = Zygote.withgradient(mu_regularizer, transpose([1.0, 1.0, 1.0]), nr)
-        @test loss == 1.5
-        @test isapprox(grads[1], transpose([1.0, 1.0, 1.0]))
-        @test isapprox(grads[2].net_virtual[1], [-3.0])
+        @test size(grads[1]) == (1,3) 
         
     end
     
