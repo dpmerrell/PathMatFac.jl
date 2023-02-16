@@ -795,7 +795,7 @@ function fit_tests()
         X_start = deepcopy(model.matfac.X)
         Y_start = deepcopy(model.matfac.Y)
         batch_scale = deepcopy(model.matfac.col_transform.layers[3]) 
-        fit!(model; verbosity=1, lr=0.25, max_epochs=Inf, print_iter=1, rel_tol=1e-6, abs_tol=1e-6)
+        fit!(model; verbosity=1, lr=0.25, max_epochs=Inf, print_iter=100, rel_tol=1e-6, abs_tol=1e-6)
 
         @test !isapprox(model.matfac.X, X_start)
         @test !isapprox(model.matfac.Y, Y_start)
@@ -804,6 +804,26 @@ function fit_tests()
                  ) # This should not have changed
     end
 
+    @testset "Fit GPU" begin
+
+        model = PathMatFacModel(Z; sample_conditions, feature_ids=feature_ids,  feature_views=feature_views,
+                                                      feature_graphs=feature_graphs, batch_dict=batch_dict, 
+                                                      lambda_X_l2=0.1, lambda_Y_graph=0.1, lambda_Y_selective_l1=0.05)
+
+        X_start = deepcopy(model.matfac.X)
+        Y_start = deepcopy(model.matfac.Y)
+        batch_scale = deepcopy(model.matfac.col_transform.layers[3])
+
+        model = gpu(model) 
+        fit!(model; verbosity=1, lr=0.25, max_epochs=Inf, print_iter=100, rel_tol=1e-6, abs_tol=1e-6)
+        model = cpu(model)
+
+        @test !isapprox(model.matfac.X, X_start)
+        @test !isapprox(model.matfac.Y, Y_start)
+        @test all(map(isapprox, batch_scale.logdelta.values,
+                                model.matfac.col_transform.layers[3].logdelta.values)
+                 ) # This should not have changed
+    end
 end
 
 
