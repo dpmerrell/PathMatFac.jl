@@ -3,6 +3,26 @@ using HDF5, StatsBase, PathwayMultiomics
 
 PM = PathwayMultiomics
 
+
+DISTRIBUTION_MAP = Dict("mrnaseq" => "normal",
+                        "methylation" => "normal",
+                        "mutation" => "bernoulli",
+                        "cna" => "ordinal",
+                        "rppa" => "normal")
+
+DOGMA_MAP = Dict("mrnaseq" => "mrna",
+                 "methylation" => "mrna",
+                 "mutation" => "dna",
+                 "cna" => "dna",
+                 "rppa" => "protein")
+
+WEIGHT_MAP = Dict("mrnaseq" => 1.0,
+                  "methylation" => -1.0,
+                  "mutation" => -1.0,
+                  "cna" => 1.0,
+                  "rppa" => 1.0)
+
+
 function get_omic_feature_genes(omic_hdf)
 
     genes = h5open(omic_hdf, "r") do file
@@ -103,7 +123,7 @@ function parse_opts!(defaults, opt_list)
     opts_k = [Symbol(split(opt,"=")[1]) for opt in opt_list]
     opts_v = [join(split(opt,"=")[2:end],"=") for opt in opt_list]
 
-    parsed_v = []
+    parsed_v = Any[]
     for v in opts_v
         new_v = v
         try
@@ -126,7 +146,6 @@ function parse_opts!(defaults, opt_list)
     end
 
     return defaults
-
 end
 
 nanmean(x) = mean(filter(!isnan, x))
