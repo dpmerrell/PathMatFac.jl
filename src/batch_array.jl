@@ -4,11 +4,13 @@ import Flux: gpu, trainable
 
 mutable struct BatchArray
     col_ranges::Tuple # UnitRanges
+    col_range_ids::Vector  # Names of the column ranges
     row_idx::UnitRange # Stores "view-like" information
     row_batches::Tuple # boolean matrices;
                        # each column is an indicator
                        # vector for a batch. Should
                        # balance space-efficiency and performance
+    row_batch_ids::Tuple  # Names of row batches, for each column range
     values::Tuple # vectors of numbers
 end
 
@@ -22,12 +24,18 @@ function BatchArray(col_batch_ids::Vector, row_batch_ids,
     n_rows = length(row_batch_ids[1])
     
     col_ranges = ids_to_ranges(col_batch_ids)
+    col_range_ids = unique(col_ranges)
+
     row_batches = [ids_to_ind_mat(rbv) for rbv in row_batch_ids]
+    unq_row_batch_ids = [unique(rbv) for rbv in row_batch_ids]
+
     values = [[vd[ub] for ub in unique(rbi)] for (vd,rbi) in zip(value_dicts,row_batch_ids)]
 
-    return BatchArray(Tuple(col_ranges), 
+    return BatchArray(Tuple(col_ranges),
+                      col_range_ids, 
                       1:n_rows,
                       Tuple(row_batches), 
+                      Tuple(unq_row_batch_ids),
                       Tuple(values))
 end
 
@@ -36,22 +44,27 @@ function view(ba::BatchArray, idx1, idx2::UnitRange)
 
     new_col_ranges, r_min, r_max = subset_ranges(ba.col_ranges, idx2)
     new_col_ranges = shift_range.(new_col_ranges, 1 - new_col_ranges[1].start)
+    new_col_range_ids = ba.col_range_ids[r_min:r_max]
 
     new_row_idx = ba.row_idx[idx1]
 
     new_row_batches = ba.row_batches[r_min:r_max]
+    new_row_batch_ids = ba.row_batch_ids[r_min:r_max]
     new_values = ba.values[r_min:r_max]
 
-    return BatchArray(new_col_ranges, new_row_idx, 
-                      new_row_batches, new_values)
+    return BatchArray(new_col_ranges, new_col_range_ids, new_row_idx, 
+                      new_row_batches, new_row_batch_ids,
+                      new_values)
 end
 
 
 function zero(ba::BatchArray)
     cvalues = map(zero, ba.values)
     return BatchArray(deepcopy(ba.col_ranges),
+                      deepcopy(ba.col_range_ids),
                       deepcopy(ba.row_idx),
                       deepcopy(ba.row_batches), 
+                      deepcopy(ba.row_batch_ids),
                       cvalues) 
 end
 
@@ -159,8 +172,10 @@ end
 # Exponentiation
 function exp(ba::BatchArray)
     return BatchArray(deepcopy(ba.col_ranges),
+                      deepcopy(ba.col_range_ids),
                       deepcopy(ba.row_idx),
                       deepcopy(ba.row_batches),
+                      deepcopy(ba.row_batch_ids),
                       map(v->exp.(v), ba.values))
 end
 
@@ -181,8 +196,10 @@ end
 # Logarithm
 function log(ba::BatchArray)
     return BatchArray(deepcopy(ba.col_ranges),
+                      deepcopy(ba.col_range_ids),
                       deepcopy(ba.row_idx),
                       deepcopy(ba.row_batches),
+                      deepcopy(ba.row_batch_ids),
                       map(v->log.(v), ba.values))
 end
 
@@ -190,55 +207,13 @@ end
 # Deepcopy
 function deepcopy(ba::BatchArray)
     return BatchArray(deepcopy(ba.col_ranges),
+                      deepcopy(ba.col_range_ids),
                       deepcopy(ba.row_idx),
                       deepcopy(ba.row_batches),
+                      deepcopy(ba.row_batch_ids),
                       deepcopy(ba.values))
 end
 
 
-###########################################
-# Median
-
-mutable struct BatchMedian
-    values::Tuple
-    col_ranges::Tuple
-end
-
-function StatsBase.median(B::BatchArray)
-    return BatchMedian(Tuple([median(v) for v in B.values]),
-                       deepcopy(B.col_ranges)) 
-end
-
-function Base.:(*)(A::BatchArray, M::BatchMedian)
-    result = deepcopy(A)
-    for (i,v) in enumerate(A.values)
-        result.values[i] .= (v .* M.values[i])
-    end
-    return result
-end
-
-function Base.:(/)(A::BatchArray, M::BatchMedian)
-    result = deepcopy(A)
-    for (i,v) in enumerate(A.values)
-        result.values[i] .= (v ./ M.values[i])
-    end
-    return result
-end
-
-function Base.:(*)(M::BatchMedian, v::AbstractVector)
-    result = similar(v)
-    for (i, cr) in enumerate(M.col_ranges)
-        result[cr] .= M.values[i] .* v[cr]
-    end
-    return result
-end
-
-function Base.:(+)(M::BatchMedian, v::AbstractVector)
-    result = similar(v)
-    for (i, cr) in enumerate(M.col_ranges)
-        result[cr] .= M.values[i] .+ v[cr]
-    end
-    return result
-end
 
 

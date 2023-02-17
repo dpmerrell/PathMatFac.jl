@@ -27,7 +27,6 @@ mutable struct PathMatFacModel
 
 end
 
-#@functor PathMatFacModel (matfac, data)
 @functor PathMatFacModel 
 
 
@@ -36,7 +35,7 @@ end
 # Model assembly internals
 #############################################################
 
-function assemble_model(X, K, sample_ids, sample_conditions,
+function assemble_model(D, K, sample_ids, sample_conditions,
                               feature_ids, feature_views, feature_distributions,
                               batch_dict,
                               feature_graphs, sample_graphs,
@@ -49,13 +48,13 @@ function assemble_model(X, K, sample_ids, sample_conditions,
     layer_reg = construct_layer_reg(feature_views, batch_dict, lambda_layer) 
 
     # Construct regularizers for X and Y
-    X_reg = construct_X_reg(sample_ids, sample_conditions, sample_graphs, 
+    X_reg = construct_X_reg(K, sample_ids, sample_conditions, sample_graphs, 
                             lambda_X_l2, lambda_X_condition, lambda_X_graph)
     Y_reg = construct_Y_reg(feature_ids, feature_graphs,
                             lambda_Y_l1, lambda_Y_selective_l1, lambda_Y_graph)
 
     # Construct MatFacModel
-    M,N = size(X)
+    M,N = size(D)
     matfac = MatFacModel(M, N, K, feature_distributions;
                          col_transform=col_layers,
                          X_reg=X_reg, Y_reg=Y_reg, 
@@ -66,10 +65,10 @@ function assemble_model(X, K, sample_ids, sample_conditions,
     data_idx = sortperm(collect(zip(feature_distributions, feature_views)))
     feature_ids .= feature_ids[data_idx]
     feature_views .= feature_views[data_idx]
-    X .= X[:,data_idx]
+    D .= D[:,data_idx]
 
     # Construct the PathMatFacModel
-    model = PathMatFacModel(matfac, X, 
+    model = PathMatFacModel(matfac, D, 
                             sample_ids, sample_conditions, 
                             feature_ids, feature_views,
                             data_idx)
@@ -82,11 +81,11 @@ end
 # Main constructor
 ######################################################
 """
-    PathMatFacModel(X; K=10)
+    PathMatFacModel(D; K=10)
 
-    Construct a PathMatFacModel matrix factorization model for dataset X.
+    Construct a PathMatFacModel matrix factorization model for dataset D.
 """
-function PathMatFacModel(X::AbstractMatrix{<:Real};
+function PathMatFacModel(D::AbstractMatrix{<:Real};
                          K::Integer=10,
                          sample_ids::Union{<:AbstractVector,Nothing}=nothing, 
                          sample_conditions::Union{<:AbstractVector,Nothing}=nothing,
@@ -106,7 +105,7 @@ function PathMatFacModel(X::AbstractMatrix{<:Real};
       
     ################################################
     # Validate input
-    M, N = size(X)
+    M, N = size(D)
 
     # Set the latent dimension from keyword args
     if feature_graphs != nothing
@@ -124,20 +123,20 @@ function PathMatFacModel(X::AbstractMatrix{<:Real};
     # Sample IDs
     if sample_ids != nothing
         @assert length(sample_ids) == length(unique(sample_ids)) "`sample_ids` must be unique"
-        @assert length(sample_ids) == M "`sample_ids` must be nothing or have length equal to size(X,1)"
+        @assert length(sample_ids) == M "`sample_ids` must be nothing or have length equal to size(D,1)"
     else
         sample_ids = collect(1:M)
     end
 
     # Sample conditions
     if sample_conditions != nothing
-        @assert length(sample_conditions) == M "`sample_conditions` must be nothing or have length equal to size(X,1)"
+        @assert length(sample_conditions) == M "`sample_conditions` must be nothing or have length equal to size(D,1)"
     end
     
     # Feature IDs 
     if feature_ids != nothing
         @assert length(feature_ids) == length(unique(feature_ids)) "`feature_ids` must be left default, or set to a vector of unique identifiers"
-        @assert length(feature_ids) == N "`feature_ids` must have length equal to dim(X,2)"
+        @assert length(feature_ids) == N "`feature_ids` must have length equal to dim(D,2)"
     else
         feature_ids = collect(1:N)
     end
@@ -147,20 +146,20 @@ function PathMatFacModel(X::AbstractMatrix{<:Real};
         @assert feature_views != nothing "`feature_views` must be provided whenever `batch_dict` is provided"
         @assert Set(keys(batch_dict)) == Set(unique(feature_views)) "The `batch_dict` keys must match the set of `feature_views`"
         for v in values(batch_dict)
-            @assert length(v) == M "Each value of `batch_dict` must be a vector of length size(X,1)"
+            @assert length(v) == M "Each value of `batch_dict` must be a vector of length size(D,1)"
         end
     end
 
     # Feature views
     if feature_views != nothing
-        @assert length(feature_views) == N "`feature_views` must be nothing or have length equal to size(X,2)"
+        @assert length(feature_views) == N "`feature_views` must be nothing or have length equal to size(D,2)"
     else
         feature_views = ones(Int64,N)
     end
 
     # Feature distributions
     if feature_distributions != nothing
-        @assert length(feature_distributions) == N "`feature_distributions` must (a) be nothing or have length equal to size(X,2)"
+        @assert length(feature_distributions) == N "`feature_distributions` must (a) be nothing or have length equal to size(D,2)"
         all_distributions = set(keys(LOSS_ORDER))
         @assert all(map(x->in(x,all_distributions), feature_distributions)) string("Each entry of `feature_distributions` must be one of ", all_distributions)
     else
@@ -169,7 +168,7 @@ function PathMatFacModel(X::AbstractMatrix{<:Real};
 
     ###############################
     # Assemble the model
-    return assemble_model(X, K, sample_ids, sample_conditions, 
+    return assemble_model(D, K, sample_ids, sample_conditions, 
                           feature_ids, feature_views, feature_distributions,
                           batch_dict, feature_graphs, sample_graphs,
                           lambda_X_l2, lambda_X_condition, lambda_X_graph,

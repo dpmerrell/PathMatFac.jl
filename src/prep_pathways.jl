@@ -172,20 +172,8 @@ function extend_pathways(pwy_edgelists::Vector{Vector{T}} where T,
 end
 
 
-function construct_pwy_feature_ids(feature_genes, feature_dogmas)
-    
-    counter = Dict()
-    N = length(feature_genes)
-    feature_ids = Vector{String}(undef, N)
-
-    for (i, (g, dog)) in enumerate(zip(feature_genes, feature_dogmas))
-        g_dog = string(g, "_", dog)
-        count = get!(counter, g_dog, 0) + 1
-        feature_ids[i] = string(g_dog, "_", count)
-        counter[g_dog] += 1
-    end
-
-    return feature_ids 
+function construct_pwy_feature_ids(feature_genes, feature_dogmas, feature_ids)
+    return collect(string(g,"_",d,"_",i) for (g,d,i) in zip(feature_genes, feature_dogmas, feature_ids)) 
 end
 
 
@@ -214,6 +202,7 @@ end
                        and -1 -> a suppressor relationship. 
 """
 function prep_pathway_graphs(pwy_sifs::Vector, feature_genes::Vector, feature_dogmas::Vector;
+                             feature_ids::Union{Nothing,Vector}=nothing,
                              feature_weights::Union{Nothing,Vector}=nothing)
 
     valid_dogmas = Set(DOGMA_ORDER) 
@@ -224,18 +213,21 @@ function prep_pathway_graphs(pwy_sifs::Vector, feature_genes::Vector, feature_do
     @assert all(map(x->in(x, valid_dogmas), feature_dogmas))
     if feature_weights == nothing
         feature_weights = ones(N)
-    end    
+    end
+    if feature_ids == nothing
+        feature_ids = collect(1:N)
+    end 
    
     # Convert (genes, dogma-levels) to unique feature IDs 
-    feature_ids = construct_pwy_feature_ids(feature_genes, feature_dogmas) 
+    new_feature_ids = construct_pwy_feature_ids(feature_genes, feature_dogmas, feature_ids) 
     
     # Read the SIFs and translate to weighted graphs (edgelists)
     pwy_edgelists = sifs_to_edgelists(pwy_sifs) 
 
     # Use the central dogma to connect data features to the pathways
-    pathway_graphs = extend_pathways(pwy_edgelists, feature_ids, feature_weights)    
+    pathway_graphs = extend_pathways(pwy_edgelists, new_feature_ids, feature_weights)    
 
-    return pathway_graphs, feature_ids
+    return pathway_graphs, new_feature_ids
 end
 
 

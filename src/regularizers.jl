@@ -243,16 +243,23 @@ end
 mutable struct GroupRegularizer 
     group_idx::AbstractMatrix{Float32}
     group_sizes::AbstractVector{Int32}
+    biases::AbstractMatrix{Float32}
+    bias_sizes::AbstractVector{Int32}
     weight::Number
 end
 
 @functor GroupRegularizer
 
-function GroupRegularizer(group_labels::AbstractVector; weight=1.0)
+function GroupRegularizer(group_labels::AbstractVector; weight=1.0, K=1)
     idx = ids_to_ind_mat(group_labels)
     sizes = vec(sum(idx, dims=1))
+    
+    n_groups = size(idx, 2)
+    biases = zeros(Float32, K, n_groups)
+    bias_sizes = zeros(Int32, n_groups)
+ 
     idx = sparse(idx)
-    return GroupRegularizer(idx, sizes, weight)
+    return GroupRegularizer(idx, sizes, biases, bias_sizes, weight)
 end
 
 
@@ -260,7 +267,7 @@ end
 # regularize a vector
 function (cr::GroupRegularizer)(x::AbstractVector)
 
-    means = (transpose(cr.group_idx) * x) ./ cr.group_sizes
+    means = (transpose(cr.biases) .+ transpose(cr.group_idx)*x)./(cr.bias_sizes .+ cr.group_sizes)
     mean_vec = cr.group_idx * means
     diffs = x .- mean_vec
     return 0.5*cr.weight*sum(diffs.*diffs)
@@ -281,7 +288,7 @@ end
 
 function ChainRulesCore.rrule(cr::GroupRegularizer, x::AbstractVector)
    
-    means = (transpose(cr.group_idx) * x) ./ cr.group_sizes
+    means = (transpose(cr.biases) .+ transpose(cr.group_idx)*x)./(cr.bias_sizes .+ cr.group_sizes)
     mean_vec = cr.group_idx * means
     diffs = x .- mean_vec
 
@@ -299,7 +306,8 @@ end
 # Regularize rows of a matrix
 function (cr::GroupRegularizer)(X::AbstractMatrix)
 
-    means = (transpose(cr.group_idx) * transpose(X)) ./ cr.group_sizes
+    means = (transpose(cr.biases) .+ transpose(cr.group_idx)*transpose(X))./(cr.bias_sizes .+ cr.group_sizes)
+
     mean_rows = transpose(cr.group_idx * means)
     diffs = X .- mean_rows
 
@@ -309,7 +317,9 @@ end
 
 function ChainRulesCore.rrule(cr::GroupRegularizer, X::AbstractMatrix)
 
-    means = (transpose(cr.group_idx) * transpose(X)) ./ cr.group_sizes
+    #means = (transpose(cr.bias_sizes).*cr.biases .+ transpose(cr.group_sizes).*(transpose(cr.group_idx) * transpose(X)))./
+    #        (cr.bias_sizes .+ cr.group_sizes)
+    means = (transpose(cr.biases) .+ transpose(cr.group_idx)*transpose(X))./(cr.bias_sizes .+ cr.group_sizes)
     mean_rows = transpose(cr.group_idx * means)
     diffs = X .- mean_rows
 
@@ -351,7 +361,7 @@ end
 # Construct regularizer for X matrix
 ###########################################
 
-function construct_X_reg(sample_ids, sample_conditions, sample_graphs, 
+function construct_X_reg(K, sample_ids, sample_conditions, sample_graphs, 
                          lambda_X_l2, lambda_X_condition, lambda_X_graph)
     regularizers = []
     if lambda_X_l2 != nothing
@@ -359,7 +369,7 @@ function construct_X_reg(sample_ids, sample_conditions, sample_graphs,
     end
 
     if sample_conditions != nothing
-        push!(regularizers, GroupRegularizer(sample_conditions; weight=lambda_X_condition))
+        push!(regularizers, GroupRegularizer(sample_conditions; weight=lambda_X_condition, K=K))
     end
 
     if sample_graphs != nothing

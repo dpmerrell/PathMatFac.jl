@@ -326,7 +326,7 @@ function preprocess_tests()
                       ["PLK1", "GRASP65/GM130/RAB1/GTP/PLK1", 1],
                       ["PP2A-ALPHA B56", "SGOL1", -1]
                      ]
-    test_pwy_genes = PM.get_all_nodes(test_pwy_edges)
+    test_pwy_genes = PM.get_all_entities(test_pwy_edges)
     tag_edge = edge -> [string(edge[1],"_activation"),
                         string(edge[2],"_activation"), edge[3]]
     test_pwy_edges = map(tag_edge, test_pwy_edges)
@@ -356,7 +356,7 @@ function preprocess_tests()
                            "rppa" => 1.0)
     feature_dogmas = map(x->ASSAY_TO_DOGMA[x], feature_assays)
     feature_weights = map(x->ASSAY_TO_WEIGHT[x], feature_assays)
-    feature_ids = PM.construct_pwy_feature_ids(feature_genes, feature_dogmas)
+    feature_ids = PM.construct_pwy_feature_ids(feature_genes, feature_dogmas, collect(1:9))
 
     # Find the data genes that overlap with the pathway.
     # And collect the corresponding features.
@@ -380,11 +380,11 @@ function preprocess_tests()
     # The edges connecting data to the central dogma should look like this
     test_data_edges = [["PLK1_dna", "PLK1_dna_1", 1.],
                        ["PLK1_dna", "PLK1_dna_2", -1.],
-                       ["PLK1_mrna", "PLK1_mrna_1",  1.],
-                       ["PAK1_dna", "PAK1_dna_1",  -1.],
-                       ["PAK1_mrna","PAK1_mrna_1",  -1.],
-                       ["PAK1_protein", "PAK1_protein_1",  1.],
-                       ["SGOL1_mrna", "SGOL1_mrna_1",  1.]
+                       ["PLK1_mrna", "PLK1_mrna_3",  1.],
+                       ["PAK1_protein", "PAK1_protein_4",  1.],
+                       ["PAK1_mrna","PAK1_mrna_5",  -1.],
+                       ["PAK1_dna", "PAK1_dna_6",  -1.],
+                       ["SGOL1_mrna", "SGOL1_mrna_7",  1.]
                       ]
   
     # The final set of edges should look like this. 
@@ -551,12 +551,14 @@ function reg_tests()
         K = 2
         N = 5
         data_groups = [1,1,1,2,2]
-        test_Y = randn(2,5)
-        reg = PM.GroupRegularizer(data_groups)
+        test_Y = randn(3,5)
+        reg = PM.GroupRegularizer(data_groups; K=size(test_Y, 1))
         means = [mean(test_Y[1,1:3]) mean(test_Y[1,4:5]);
-                 mean(test_Y[2,1:3]) mean(test_Y[2,4:5])] 
+                 mean(test_Y[2,1:3]) mean(test_Y[2,4:5]);
+                 mean(test_Y[3,1:3]) mean(test_Y[3,4:5])] 
         @test isapprox(reg(test_Y), 0.5*sum([sum((test_Y[1,1:3] .- means[1,1]).^2) sum((test_Y[1,4:5] .- means[1,2]).^2);
-                                             sum((test_Y[2,1:3] .- means[2,1]).^2) sum((test_Y[2,4:5] .- means[2,2]).^2)]))
+                                             sum((test_Y[2,1:3] .- means[2,1]).^2) sum((test_Y[2,4:5] .- means[2,2]).^2);
+                                             sum((test_Y[3,1:3] .- means[3,1]).^2) sum((test_Y[3,4:5] .- means[3,2]).^2)]))
 
     end
 
@@ -795,7 +797,7 @@ function fit_tests()
         X_start = deepcopy(model.matfac.X)
         Y_start = deepcopy(model.matfac.Y)
         batch_scale = deepcopy(model.matfac.col_transform.layers[3]) 
-        fit!(model; verbosity=2, lr=0.25, max_epochs=1000, print_iter=1, rel_tol=1e-5, abs_tol=1e-5)
+        fit!(model; verbosity=2, lr=0.25, max_epochs=1000, print_iter=1, rel_tol=1e-7, abs_tol=1e-7)
 
         @test !isapprox(model.matfac.X, X_start)
         @test !isapprox(model.matfac.Y, Y_start)
@@ -815,7 +817,7 @@ function fit_tests()
         batch_scale = deepcopy(model.matfac.col_transform.layers[3])
 
         model = gpu(model) 
-        fit!(model; verbosity=2, lr=0.25, max_epochs=1000, print_iter=1, rel_tol=1e-5, abs_tol=1e-5)
+        fit!(model; verbosity=2, lr=0.25, max_epochs=1000, print_iter=1, rel_tol=1e-7, abs_tol=1e-7)
         model = cpu(model)
 
         @test !isapprox(model.matfac.X, X_start)
