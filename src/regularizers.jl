@@ -17,11 +17,12 @@ mutable struct NetworkRegularizer{K}
     BB::NTuple{K, <:AbstractMatrix} # Tuple of K matrices encoding relationships
                                     # between *unobserved* features
 
-    BB_chol::NTuple # Tuple of K cholesky factorizations 
+    x_virtual::NTuple{K, <:AbstractVector}
 
     weight::Number
 end
 
+@functor NetworkRegularizer
 
 function NetworkRegularizer(feature_ids, edgelists; epsilon=0.1, weight=1.0)
 
@@ -31,7 +32,7 @@ function NetworkRegularizer(feature_ids, edgelists; epsilon=0.1, weight=1.0)
     AA = Vector{SparseMatrixCSC}(undef, K) 
     AB = Vector{SparseMatrixCSC}(undef, K)
     BB = Vector{SparseMatrixCSC}(undef, K)
-    BB_chol = Vector{Any}(undef, K)
+    x_virtual = Vector{Vector{Float64}}(undef, K)
 
     # For each of the networks
     for k=1:K
@@ -61,14 +62,14 @@ function NetworkRegularizer(feature_ids, edgelists; epsilon=0.1, weight=1.0)
         AB[k] = csc_select(spmat, 1:N, (N+1):N_total)
         BB[k] = csc_select(spmat, (N+1):N_total, (N+1):N_total)
 
-        # Pre-factorize the BB blocks
-        BB_chol[k] = cholesky(BB[k]) 
+        # Initialize values of virtual features
+        x_virtual[k] = zeros(size(BB[k],1))
 
     end
 
     return NetworkRegularizer(Tuple(AA), Tuple(AB), 
                                          Tuple(BB), 
-                                         Tuple(BB_chol),
+                                         Tuple(x_virtual),
                                          weight)
 end
 
@@ -89,12 +90,12 @@ function (nr::NetworkRegularizer)(X::AbstractMatrix)
     for k=1:K
         # Network-regularization
         xAB = transpose(transpose(X[k,:])*nr.AB[k])
-        u = -(nr.BB_chol[k]\xAB)
+        nr.x_virtual[k] .= - cg(nr.BB[k], xAB, nr.x_virtual[k])[1]
 
         net_loss = 0.0
         net_loss += quadratic(nr.AA[k], X[k,:])
-        net_loss += 2*dot(xAB,u)
-        net_loss += quadratic(nr.BB[k], u)
+        net_loss += 2*dot(xAB, nr.x_virtual[k])
+        net_loss += quadratic(nr.BB[k], nr.x_virtual[k])
         net_loss *= 0.5
         loss += net_loss
     end
@@ -118,15 +119,15 @@ function ChainRules.rrule(nr::NetworkRegularizer, X::AbstractMatrix)
         # Parts of the gradients
         xAA[k,:] .= vec(transpose(X[k,:])*nr.AA[k])
         xAB = vec(transpose(X[k,:])*nr.AB[k])
-        u = -(nr.BB_chol[k]\xAB)
-        ABu[:,k] .= nr.AB[k]*u
-        BBu = nr.BB[k]*u
+        nr.x_virtual[k] .= - cg(nr.BB[k], xAB, nr.x_virtual[k])[1]
+        ABu[:,k] .= nr.AB[k]*nr.x_virtual[k]
+        BBu = nr.BB[k]*nr.x_virtual[k]
 
         # Full loss computation
         net_loss = 0.0
         net_loss += 0.5*dot(xAA[k,:], X[k,:])
         net_loss += dot(X[k,:], ABu[:,k])
-        net_loss += 0.5*dot(u, BBu)
+        net_loss += 0.5*dot(nr.x_virtual[k], BBu)
         loss += net_loss 
     end
     loss *= nr.weight
@@ -152,11 +153,11 @@ end
 function (nr::NetworkRegularizer)(x::AbstractVector)
 
     xAB = vec(transpose(x)*nr.AB[1])
-    u = -(nr.BB_chol[1]\xAB)
+    nr.x_virtual[1] .= - cg(nr.BB[k], xAB, nr.x_virtual[1])[1]
     loss = 0.0
     loss += quadratic(nr.AA[1], x)
-    loss += 2*dot(xAB, u)
-    loss += quadratic(nr.BB[1], u)
+    loss += 2*dot(xAB, nr.x_virtual[k])
+    loss += quadratic(nr.BB[1], nr.x_virtual[k])
     loss *= (0.5*nr.weight)
 
     return loss
@@ -169,7 +170,7 @@ function ChainRules.rrule(nr::NetworkRegularizer, x::AbstractVector)
 
     xAA = transpose(x)*nr.AA[1]
     xAB = transpose(x)*nr.AB[1]
-    u = -(nr.BB_chol[1]\xAB)
+    nr.x_virtual[1] .= - cg(nr.BB[k], xAB, nr.x_virtual[1])[1]
     ABu = nr.AB[1]*u
     BBu = nr.BB[1]*u
 
@@ -198,6 +199,8 @@ mutable struct L1Regularizer
                                  # are L1-regularized
     weight::Number
 end
+
+@functor L1Regularizer
 
 function L1Regularizer(feature_ids::Vector, edgelists::Vector; weight=1.0)
 
@@ -243,6 +246,7 @@ mutable struct GroupRegularizer
     weight::Number
 end
 
+@functor GroupRegularizer
 
 function GroupRegularizer(group_labels::AbstractVector; weight=1.0)
     idx = ids_to_ind_mat(group_labels)
@@ -329,6 +333,8 @@ mutable struct CompositeRegularizer
     regularizers::Tuple
 end
 
+@functor CompositeRegularizer
+
 function construct_composite_reg(regs::AbstractVector)
     if length(regs) == 0
         regs = [ x->0.0 ]
@@ -400,6 +406,8 @@ mutable struct BatchArrayReg
     counts::Tuple
 end
 
+@functor BatchArrayReg 
+
 function BatchArrayReg(ba::BatchArray; weight=1.0)
     row_counts = map(mat->vec(sum(mat,dims=1)), ba.row_batches)
     col_counts = map(length, ba.col_ranges)
@@ -456,6 +464,7 @@ mutable struct SequenceReg
     regs::Tuple
 end
 
+@functor SequenceReg
 
 function (reg::SequenceReg)(seq)
     return sum(map((f,x)->f(x), reg.regs, seq.layers))

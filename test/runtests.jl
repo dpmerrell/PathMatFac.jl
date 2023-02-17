@@ -465,8 +465,8 @@ function reg_tests()
                                           -1.], (3,1)))
         @test size(nr.BB[1]) == (1,1)
         @test nr.BB[1] == sparse(ones(1,1)*1.1)
-        @test length(nr.BB_chol) == 2
-        @test size(nr.BB_chol[1]) == (1,1)
+        #@test length(nr.BB_chol) == 2
+        #@test size(nr.BB_chol[1]) == (1,1)
 
         model_features = [1,2,3,4]
         nr = PM.NetworkRegularizer(model_features, edgelists)
@@ -474,8 +474,8 @@ function reg_tests()
         @test size(nr.AA[1]) == (4,4)
         @test size(nr.AB[1]) == (4,0)
         @test size(nr.BB[1]) == (0,0)
-        @test length(nr.BB_chol) == 2
-        @test size(nr.BB_chol[1]) == (0,0)
+        #@test length(nr.BB_chol) == 2
+        #@test size(nr.BB_chol[1]) == (0,0)
 
         ##############################################
         # Test on "real pathway"
@@ -498,8 +498,8 @@ function reg_tests()
         @test size(netreg.AB[1]) == (n_obs,n_unobs)
         @test size(netreg.BB[1]) == (n_unobs, n_unobs)
 
-        @test length(netreg.BB_chol) == 1 
-        @test size(netreg.BB_chol[1]) == (n_unobs, n_unobs)
+        #@test length(netreg.BB_chol) == 1 
+        #@test size(netreg.BB_chol[1]) == (n_unobs, n_unobs)
 
         ################################################
         # Gradient test
@@ -795,7 +795,7 @@ function fit_tests()
         X_start = deepcopy(model.matfac.X)
         Y_start = deepcopy(model.matfac.Y)
         batch_scale = deepcopy(model.matfac.col_transform.layers[3]) 
-        fit!(model; verbosity=1, lr=0.25, max_epochs=Inf, print_iter=100, rel_tol=1e-6, abs_tol=1e-6)
+        fit!(model; verbosity=2, lr=0.25, max_epochs=1000, print_iter=1, rel_tol=1e-5, abs_tol=1e-5)
 
         @test !isapprox(model.matfac.X, X_start)
         @test !isapprox(model.matfac.Y, Y_start)
@@ -815,7 +815,7 @@ function fit_tests()
         batch_scale = deepcopy(model.matfac.col_transform.layers[3])
 
         model = gpu(model) 
-        fit!(model; verbosity=1, lr=0.25, max_epochs=Inf, print_iter=100, rel_tol=1e-6, abs_tol=1e-6)
+        fit!(model; verbosity=2, lr=0.25, max_epochs=1000, print_iter=1, rel_tol=1e-5, abs_tol=1e-5)
         model = cpu(model)
 
         @test !isapprox(model.matfac.X, X_start)

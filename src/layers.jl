@@ -10,6 +10,7 @@ mutable struct ColScale
     logsigma::AbstractVector
 end
 
+@functor ColScale
 
 function ColScale(N::Int)
     return ColScale(zeros(N))
@@ -48,6 +49,7 @@ mutable struct ColShift
     mu::AbstractVector
 end
 
+@functor ColShift
 
 function ColShift(N::Int)
     return ColShift(randn(N) .* 1e-4)
@@ -84,6 +86,7 @@ mutable struct BatchScale
     logdelta::BatchArray
 end
 
+@functor BatchScale
 
 function BatchScale(col_batches, row_batches)
 
@@ -128,6 +131,7 @@ mutable struct BatchShift
     theta::BatchArray
 end
 
+@functor BatchShift
 
 function BatchShift(col_batches, row_batches)
     
@@ -173,6 +177,7 @@ mutable struct ViewableComposition
     layers::Tuple
 end
 
+@functor ViewableComposition
 
 function (vc::ViewableComposition)(Z::AbstractMatrix)
     return reduce((f,g)->(x->g(f(x))), vc.layers)(Z)
@@ -207,6 +212,8 @@ end
 mutable struct FrozenLayer
     layer
 end
+
+@functor FrozenLayer
 
 function (fl::FrozenLayer)(args...)
     fl.layer(args...)

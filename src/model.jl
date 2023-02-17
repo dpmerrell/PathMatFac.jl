@@ -27,7 +27,8 @@ mutable struct PathMatFacModel
 
 end
 
-@functor PathMatFacModel (matfac,)
+#@functor PathMatFacModel (matfac, data)
+@functor PathMatFacModel 
 
 
 
