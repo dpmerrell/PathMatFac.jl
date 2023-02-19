@@ -27,6 +27,10 @@ function mf_fit!(model::PathMatFacModel; scale_column_losses=false,
 end
 
 
+function construct_optimizer(model, lr)
+    return Flux.Optimise.AdaGrad(lr)
+end
+
 
 function fit!(model::PathMatFacModel; capacity::Int=10^8, verbosity=1, 
                                       kwargs...)
@@ -63,7 +67,11 @@ function fit!(model::PathMatFacModel; capacity::Int=10^8, verbosity=1,
     # Freeze the column shifts
     model.matfac.col_transform.layers[2].mu .= vec(M_estimates)
     freeze_layer!(model.matfac.col_transform, 2)
- 
+
+    # Construct an optimizer. Its state will
+    # persist between calls to `mf_fit!`
+    opt = construct_optimizer(model, lr) 
+
     # If the model has batch parameters:
     if length(model.matfac.col_transform.layers) > 2
         # Freeze the batch scale parameters... 
@@ -73,13 +81,15 @@ function fit!(model::PathMatFacModel; capacity::Int=10^8, verbosity=1,
         # Fit the batch shift parameters.
         println("Fitting batch parameters...")
         mf_fit!(model; capacity=capacity, update_col_layers=true, 
-                       lr=0.1, max_epochs=500, verbosity=verbosity-1)
+                       lr=0.1, max_epochs=500, verbosity=verbosity-1,
+                       opt=opt)
     end
 
     # Fit the factors (X,Y), and their regularizers.
     println("Fitting linear factors.")
     mf_fit!(model; capacity=capacity, update_X=true, update_Y=true,
                                       update_X_reg=true, update_Y_reg=true,
+                                      opt=opt,
                                       verbosity=verbosity,
                                       kwargs...)
 
@@ -91,6 +101,7 @@ function fit!(model::PathMatFacModel; capacity::Int=10^8, verbosity=1,
     println("Jointly adjusting parameters.")
     mf_fit!(model; capacity=capacity, update_X=true, update_Y=true,
                                       update_col_layers=true,
+                                      opt=opt,
                                       verbosity=verbosity,
                                       kwargs...)
 

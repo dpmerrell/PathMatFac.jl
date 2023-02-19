@@ -239,7 +239,7 @@ function view(fl::FrozenLayer, idx1, idx2)
 end
 
 
-function freeze_layer!(vc::ViewableComposition, idx)
+function freeze_layer!(vc::ViewableComposition, idx::Integer)
     if !isa(vc.layers[idx], FrozenLayer)
         vc.layers = (vc.layers[1:idx-1]..., 
                      FrozenLayer(vc.layers[idx]),
@@ -247,11 +247,24 @@ function freeze_layer!(vc::ViewableComposition, idx)
     end
 end
 
-function unfreeze_layer!(vc::ViewableComposition, idx)
+function freeze_layer!(vc::ViewableComposition, idx::AbstractRange)
+    for i in idx
+        freeze_layer!(vc, i)
+    end
+end
+
+function unfreeze_layer!(vc::ViewableComposition, idx::Integer)
     if isa(vc.layers[idx], FrozenLayer)
         vc.layers = (vc.layers[1:idx-1]..., 
                      vc.layers[idx].layer,
                      vc.layers[idx+1:end]...)
     end
 end
+
+function unfreeze_layer!(vc::ViewableComposition, idx::AbstractRange)
+    for i in idx
+        unfreeze_layer!(vc, i)
+    end
+end
+
 
