@@ -269,9 +269,9 @@ function (cr::GroupRegularizer)(x::AbstractVector)
 
     means = (transpose(cr.biases) .+ transpose(cr.group_idx)*x)./(cr.bias_sizes .+ cr.group_sizes)
     mean_vec = cr.group_idx * means
-    w_vec = cr.group_idx * (cr.weight .+ cr.bias_sizes)
+    #w_vec = cr.group_idx * (cr.weight .+ cr.bias_sizes)
     diffs = x .- mean_vec
-    return 0.5*sum(w_vec .* diffs.*diffs)
+    return 0.5*cr.weight*sum(diffs.*diffs)
 end
 
 function (cr::GroupRegularizer)(layer::ColScale)
@@ -291,14 +291,14 @@ function ChainRulesCore.rrule(cr::GroupRegularizer, x::AbstractVector)
    
     means = (transpose(cr.biases) .+ transpose(cr.group_idx)*x)./(cr.bias_sizes .+ cr.group_sizes)
     mean_vec = cr.group_idx * means
-    w_vec = cr.group_idx * (cr.weight .+ cr.bias_sizes)
+    #w_vec = cr.group_idx * (cr.weight .+ cr.bias_sizes)
     diffs = x .- mean_vec
 
     function group_reg_pullback(loss_bar)
         return ChainRulesCore.NoTangent(), 
-               w_vec .* diffs 
+               cr.weight .* diffs 
     end
-    loss = 0.5*sum(w_vec .* diffs.*diffs)
+    loss = 0.5*cr.weight*sum(diffs.*diffs)
 
     return loss, group_reg_pullback
 end
