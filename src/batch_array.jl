@@ -18,8 +18,11 @@ end
 
 Flux.trainable(ba::BatchArray) = (values=ba.values,)
 
-function BatchArray(col_batch_ids::Vector, row_batch_ids, 
+function BatchArray(col_batch_ids::Vector, row_batch_dict::AbstractDict, 
                     value_dicts::Vector{<:AbstractDict})
+
+    unq_cbi = unique(col_batch_ids)
+    row_batch_ids = [row_batch_dict[b] for b in unq_cbi]
 
     n_rows = length(row_batch_ids[1])
     

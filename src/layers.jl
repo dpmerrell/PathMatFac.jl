@@ -88,10 +88,11 @@ end
 
 @functor BatchScale
 
-function BatchScale(col_batches, row_batches)
+function BatchScale(col_batches, batch_dict)
 
-    values = [Dict(urb => 0.0 for urb in unique(rbv)) for rbv in row_batches]
-    logdelta = BatchArray(col_batches, row_batches, values)
+    unq_cbi = unique(col_batches)
+    values = [Dict(urb => 0.0 for urb in unique(batch_dict[k])) for k in unq_cbi]
+    logdelta = BatchArray(col_batches, batch_dict, values)
 
     return BatchScale(logdelta)
 end
@@ -133,10 +134,11 @@ end
 
 @functor BatchShift
 
-function BatchShift(col_batches, row_batches)
+function BatchShift(col_batches, batch_dict)
     
-    values = [Dict(urb => 0.0 for urb in unique(rbv)) for rbv in row_batches]
-    theta = BatchArray(col_batches, row_batches, values)
+    unq_cbi = unique(col_batches)
+    values = [Dict(urb => 0.0 for urb in unique(batch_dict[k])) for k in unq_cbi]
+    theta = BatchArray(col_batches, batch_dict, values)
 
     return BatchShift(theta)
 end
@@ -191,13 +193,12 @@ end
 function construct_model_layers(feature_views, batch_dict)
 
     N = length(feature_views)
-    layer_ls = [ColScale(N), ColShift(N)]
+    layer_ls = [ColScale(N), ColShift(N), x->x, x->x]
     unq_views = unique(feature_views)
 
     if batch_dict != nothing
-        row_batch_vecs = [batch_dict[uv] for uv in unq_views]
-        append!(layer_ls, [BatchScale(feature_views, row_batch_vecs),
-                           BatchShift(feature_views, row_batch_vecs)])
+        layer_ls[3] = BatchScale(feature_views, batch_dict)
+        layer_ls[4] = BatchShift(feature_views, batch_dict)
     end
     layer_obj = ViewableComposition(Tuple(layer_ls))
 
@@ -247,7 +248,7 @@ function freeze_layer!(vc::ViewableComposition, idx::Integer)
     end
 end
 
-function freeze_layer!(vc::ViewableComposition, idx::AbstractRange)
+function freeze_layer!(vc::ViewableComposition, idx::AbstractVector)
     for i in idx
         freeze_layer!(vc, i)
     end
@@ -261,7 +262,7 @@ function unfreeze_layer!(vc::ViewableComposition, idx::Integer)
     end
 end
 
-function unfreeze_layer!(vc::ViewableComposition, idx::AbstractRange)
+function unfreeze_layer!(vc::ViewableComposition, idx::AbstractVector)
     for i in idx
         unfreeze_layer!(vc, i)
     end

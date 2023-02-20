@@ -93,7 +93,7 @@ function batch_array_tests()
     @testset "Batch Arrays" begin
 
         col_batches = ["cat", "cat", "cat", "dog", "dog", "fish"]
-        row_batches = [[1,1,1,2,2], [1,1,2,2,2], [1,1,1,1,2]]
+        row_batches = Dict("cat"=>[1,1,1,2,2], "dog"=>[1,1,2,2,2], "fish"=>[1,1,1,1,2])
         values = [Dict(1=>3.14, 2=>2.7), Dict(1=>0.0, 2=>0.5), Dict(1=>-1.0, 2=>1.0)]
         A = zeros(5,6)
 
@@ -245,7 +245,7 @@ function layers_tests()
         row_batches = [repeat([string("rowbatch",i) for i=1:n_row_batches], inner=div(M,n_row_batches)) for j=1:n_col_batches]
         batch_dict = Dict(zip(unique(col_batches), row_batches))
 
-        bscale = PM.BatchScale(col_batches, row_batches)
+        bscale = PM.BatchScale(col_batches, batch_dict)
         @test length(bscale.logdelta.values) == n_col_batches
         @test size(bscale.logdelta.values[1]) == (n_row_batches,)
         @test bscale(xy)[1:div(M,n_row_batches),1:div(N,n_col_batches)] == xy[1:div(M,n_row_batches),1:div(N,n_col_batches)] .* exp(bscale.logdelta.values[1][1])
@@ -256,7 +256,7 @@ function layers_tests()
 
         ##################################
         # Batch Shift
-        bshift = PM.BatchShift(col_batches, row_batches)
+        bshift = PM.BatchShift(col_batches, batch_dict)
         @test length(bshift.theta.values) == n_col_batches
         @test size(bshift.theta.values[1]) == (n_row_batches,)
         @test bshift(xy)[1:div(M,n_row_batches),1:div(N,n_col_batches)] == xy[1:div(M,n_row_batches),1:div(N,n_col_batches)] .+ bshift.theta.values[1][1]
@@ -268,12 +268,16 @@ function layers_tests()
         ###################################
         # Layer composition
         transform_nobatch = PM.construct_model_layers(col_batches, nothing)
-        @test length(transform_nobatch.layers) == 2 
+        @test length(transform_nobatch.layers) == 4 
         @test typeof(transform_nobatch.layers[1]) <: PM.ColScale 
         @test typeof(transform_nobatch.layers[2]) <: PM.ColShift
+        @test typeof(transform_nobatch.layers[3]) <: Function
+        @test typeof(transform_nobatch.layers[4]) <: Function
         transform_grads = Zygote.gradient((f,x)->sum(f(x)), transform_nobatch, xy)
         @test transform_grads[1].layers[1].logsigma != nothing
         @test transform_grads[1].layers[2].mu != nothing
+        @test transform_grads[1].layers[3] == nothing
+        @test transform_grads[1].layers[4] == nothing
  
         transform_w_batch = PM.construct_model_layers(col_batches, batch_dict) 
         @test length(transform_w_batch.layers) == 4 
@@ -564,7 +568,7 @@ function reg_tests()
 
     @testset "BatchArray regularizers" begin
         col_batches = ["cat", "cat", "cat", "dog", "dog", "fish"]
-        row_batches = [[1,1,1,2,2], [1,1,2,2,2], [1,1,1,1,2]]
+        row_batches = Dict("cat"=>[1,1,1,2,2], "dog"=>[1,1,2,2,2], "fish"=>[1,1,1,1,2])
         values = [Dict(1=>3.14, 2=>2.7), Dict(1=>0.0, 2=>0.5), Dict(1=>-1.0, 2=>1.0)]
         
         ba = PM.BatchArray(col_batches, row_batches, values)
@@ -649,7 +653,7 @@ function model_tests()
         # Graph regularized model construction 
         model = PathMatFacModel(Z; feature_ids=feature_ids, feature_graphs=feature_graphs, lambda_Y_graph=1.0)
         @test size(model.matfac.Y) == (K,N)
-        @test length(model.matfac.col_transform.layers) == 2 
+        @test length(model.matfac.col_transform.layers) == 4 
         @test length(model.matfac.X_reg.regularizers) == 1 
         @test length(model.matfac.Y_reg.regularizers) == 1 
         @test typeof(model.matfac.Y_reg.regularizers[1]) <: PM.NetworkRegularizer
@@ -658,7 +662,7 @@ function model_tests()
         model = PathMatFacModel(Z; K=7, lambda_Y_l1=3.14)
         @test size(model.matfac.Y) == (7,N)
         @test length(model.matfac.X_reg.regularizers) == 1 
-        @test length(model.matfac.col_transform.layers) == 2 
+        @test length(model.matfac.col_transform.layers) == 4 
         @test length(model.matfac.Y_reg.regularizers) == 1 
         @test typeof(model.matfac.Y_reg.regularizers[1]) <: Function 
         @test isapprox(model.matfac.Y_reg(model.matfac.Y), 3.14*sum(abs.(model.matfac.Y)))
@@ -667,14 +671,14 @@ function model_tests()
         model = PathMatFacModel(Z; feature_ids=feature_ids, feature_graphs=feature_graphs, lambda_Y_selective_l1=1.0)
         @test size(model.matfac.Y) == (K,N)
         @test length(model.matfac.X_reg.regularizers) == 1 
-        @test length(model.matfac.col_transform.layers) == 2 
+        @test length(model.matfac.col_transform.layers) == 4 
         @test length(model.matfac.Y_reg.regularizers) == 1 
         @test typeof(model.matfac.Y_reg.regularizers[1]) <: PM.L1Regularizer
         
         # Both, at the same time! 
         model = PathMatFacModel(Z; feature_ids=feature_ids, feature_graphs=feature_graphs, lambda_Y_graph=1.0, lambda_Y_selective_l1=1.0)
         @test size(model.matfac.Y) == (K,N)
-        @test length(model.matfac.col_transform.layers) == 2 
+        @test length(model.matfac.col_transform.layers) == 4 
         @test length(model.matfac.X_reg.regularizers) == 1 
         @test length(model.matfac.Y_reg.regularizers) == 2 
         @test typeof(model.matfac.Y_reg.regularizers[1]) <: PM.L1Regularizer
@@ -687,7 +691,7 @@ function model_tests()
         # Vanilla L2-regularized model construction 
         model = PathMatFacModel(Z; K=8, lambda_X_l2=3.14)
         @test size(model.matfac.X) == (8,M)
-        @test length(model.matfac.col_transform.layers) == 2 
+        @test length(model.matfac.col_transform.layers) == 4 
         @test length(model.matfac.X_reg.regularizers) == 1 
         @test typeof(model.matfac.X_reg.regularizers[1]) <: Function 
         @test isapprox(model.matfac.X_reg(model.matfac.X), 0.5*3.14*sum(model.matfac.X .* model.matfac.X))
@@ -695,14 +699,14 @@ function model_tests()
         # Group-based X regularization 
         model = PathMatFacModel(Z; K=6, sample_conditions=sample_conditions, lambda_X_condition=3.14)
         @test size(model.matfac.X) == (6,M)
-        @test length(model.matfac.col_transform.layers) == 2 
+        @test length(model.matfac.col_transform.layers) == 4 
         @test length(model.matfac.X_reg.regularizers) == 1 
         @test typeof(model.matfac.X_reg.regularizers[1]) <: PM.GroupRegularizer
         
         # Graph-based X regularization 
         model = PathMatFacModel(Z; sample_ids=sample_ids, sample_graphs=sample_graphs)
         @test size(model.matfac.X) == (K,M)
-        @test length(model.matfac.col_transform.layers) == 2 
+        @test length(model.matfac.col_transform.layers) == 4 
         @test length(model.matfac.X_reg.regularizers) == 1 
         @test typeof(model.matfac.X_reg.regularizers[1]) <: PM.NetworkRegularizer
         @test model.matfac.X_reg.regularizers[1].weight == 1.0
@@ -711,7 +715,7 @@ function model_tests()
         model = PathMatFacModel(Z; sample_ids=sample_ids, sample_conditions=sample_conditions,
                                    sample_graphs=sample_graphs, lambda_X_graph=1.234, lambda_X_condition=5.678)
         @test size(model.matfac.X) == (K,M)
-        @test length(model.matfac.col_transform.layers) == 2 
+        @test length(model.matfac.col_transform.layers) == 4 
         @test length(model.matfac.X_reg.regularizers) == 2 
         @test typeof(model.matfac.X_reg.regularizers[1]) <: PM.GroupRegularizer
         @test typeof(model.matfac.X_reg.regularizers[2]) <: PM.NetworkRegularizer

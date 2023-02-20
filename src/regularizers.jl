@@ -240,7 +240,8 @@ end
 # Group Regularizer
 ##########################################################
 
-mutable struct GroupRegularizer 
+mutable struct GroupRegularizer
+    group_labels::AbstractVector
     group_idx::AbstractMatrix{Float32}
     group_sizes::AbstractVector{Int32}
     biases::AbstractMatrix{Float32}
@@ -251,6 +252,7 @@ end
 @functor GroupRegularizer
 
 function GroupRegularizer(group_labels::AbstractVector; weight=1.0, K=1)
+    unq_labels = unique(group_labels)
     idx = ids_to_ind_mat(group_labels)
     sizes = vec(sum(idx, dims=1))
     
@@ -259,8 +261,34 @@ function GroupRegularizer(group_labels::AbstractVector; weight=1.0, K=1)
     bias_sizes = zeros(Int32, n_groups)
  
     idx = sparse(idx)
-    return GroupRegularizer(idx, sizes, biases, bias_sizes, weight)
+    return GroupRegularizer(unq_labels, idx, sizes, biases, bias_sizes, weight)
 end
+
+
+function construct_new_group_reg(new_group_labels::AbstractVector,
+                                 old_regularizer::GroupRegularizer, 
+                                 old_array::AbstractMatrix)
+    
+    K = size(old_array,1)
+    weight = old_regularizer.weight
+
+    # Construct the new regularizer
+    new_regularizer = GroupRegularizer(new_group_labels; weight=weight, K=K)
+    
+    # Collect the biases and bias sizes for the new regularizer,
+    # whenever the new groups intersect the old groups
+    old_intersect_idx, new_intersect_idx = keymatch(old_regularizer.group_labels,
+                                                    new_regularizer.group_labels)
+
+    old_means = transpose(old_array * old_regularizer.group_idx) ./ old_regularizer.group_sizes 
+    old_intersect_means = old_means[old_intersect_idx,:]
+
+    new_regularizer.biases[new_intersect_idx,:] .= old_intersect_means
+    new_regularizer.bias_sizes[new_intersect_idx] .= old_regularizer.group_sizes[old_intersect_idx]
+
+    return new_regularizer
+end
+
 
 
 #####################################
@@ -269,7 +297,6 @@ function (cr::GroupRegularizer)(x::AbstractVector)
 
     means = (transpose(cr.biases) .+ transpose(cr.group_idx)*x)./(cr.bias_sizes .+ cr.group_sizes)
     mean_vec = cr.group_idx * means
-    #w_vec = cr.group_idx * (cr.weight .+ cr.bias_sizes)
     diffs = x .- mean_vec
     return 0.5*cr.weight*sum(diffs.*diffs)
 end
@@ -291,7 +318,6 @@ function ChainRulesCore.rrule(cr::GroupRegularizer, x::AbstractVector)
    
     means = (transpose(cr.biases) .+ transpose(cr.group_idx)*x)./(cr.bias_sizes .+ cr.group_sizes)
     mean_vec = cr.group_idx * means
-    #w_vec = cr.group_idx * (cr.weight .+ cr.bias_sizes)
     diffs = x .- mean_vec
 
     function group_reg_pullback(loss_bar)
@@ -431,17 +457,46 @@ function BatchArrayReg(ba::BatchArray; weight=1.0)
     return BatchArrayReg(weight, counts, biases, bias_counts) 
 end
 
+
 function BatchArrayReg(feature_views::AbstractVector, batch_dict; weight=1.0)
     row_batches = [batch_dict[uv] for uv in unique(feature_views)] 
     values = [Dict(urb => 0.0 for urb in unique(rbv)) for rbv in row_batches]
-    ba = BatchArray(feature_views, row_batches, values)
+    ba = BatchArray(feature_views, batch_dict, values)
     return BatchArrayReg(ba; weight=weight)
 end
 
+
+# Construct a new BatchArrayReg for the `new_batch_array`;
+# but let its biases be informed by an `old_batch_array`.
+# And mutate `new_batch_array`'s values to agree with those biases.
+function construct_new_batch_reg!(new_batch_array, 
+                                  old_batch_array_reg::BatchArrayReg,
+                                  old_batch_array)
+   
+    new_reg = BatchArrayReg(new_batch_array; weight=old_batch_array_reg.weight)
+
+    # Select the column ranges shared between the old and the new    
+    old_col_intersect, new_col_intersect = keymatch(old_batch_array.col_range_ids,
+                                                    new_batch_array.col_range_ids)
+
+    # For each shared column range, set the new regularizer's
+    # values, biases, and bias counts. 
+    for (i_old, i_new) in zip(old_value_intersect, new_value_intersect)
+        old_batch_intersect, new_batch_intersect = keymatch(old_batch_array.row_batch_ids[i_old],
+                                                            new_batch_array.row_batch_ids[i_new])
+        new_reg.biases[i_new][new_batch_intersect] .= old_batch_array.values[i_old][old_batch_intersect]
+        new_reg.bias_counts[i_new][new_batch_intersect] .= old_batch_array_reg.counts[i_old][old_batch_intersect]
+        new_batch_array.values[i_new][new_batch_intersect] .= old_batch_array.values[i_old][old_batch_intersect]
+    end
+
+    return new_reg 
+end
+
+
 function (reg::BatchArrayReg)(ba::BatchArray)
     diffs = ba.values .- reg.biases
-    weights = reg.counts .+ reg.bias_counts
-    return reg.weight*0.5*sum(map((w,d)->sum(w .* d .* d), weights, diffs))
+    weights = map(v -> reg.weight .+ v, reg.bias_counts)
+    return 0.5*sum(map((w,d)->sum(w .* d .* d), weights, diffs))
 end
 
 function (reg::BatchArrayReg)(layer::BatchScale)
@@ -458,9 +513,9 @@ end
 
 function ChainRulesCore.rrule(reg::BatchArrayReg, ba::BatchArray)
 
-    weights = reg.counts .+ reg.bias_counts
+    weights = map(v -> reg.weight .+ v, reg.bias_counts)
     diffs = ba.values .- reg.biases
-    wd = (reg.weight*0.5).* map((w,d)->w.*d, weights, diffs)
+    wd = 0.5.* map((w,d)->w.*d, weights, diffs)
 
     function batcharray_reg_pullback(loss_bar)
         val_bar = loss_bar .* wd
@@ -493,13 +548,13 @@ function construct_layer_reg(feature_views, batch_dict, lambda_layer)
 
     # Start with the regularizers for logsigma and mu
     # (the column parameters)
-    regs = Any[x->0.0, x->0.0]
+    regs = Any[x->0.0, x->0.0, x->0.0, x->0.0]
  
     # If a batch_dict is provided, add regularizers for
     # logdelta and theta (the batch parameters)
     if batch_dict != nothing
-        append!(regs,Any[BatchArrayReg(feature_views, batch_dict; weight=lambda_layer),
-                         BatchArrayReg(feature_views, batch_dict; weight=lambda_layer)])
+        regs[3] = BatchArrayReg(feature_views, batch_dict; weight=lambda_layer)
+        regs[4] = BatchArrayReg(feature_views, batch_dict; weight=lambda_layer)
     end
 
     return SequenceReg(Tuple(regs))    

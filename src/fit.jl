@@ -73,7 +73,7 @@ function fit!(model::PathMatFacModel; capacity::Int=10^8, verbosity=1,
     opt = construct_optimizer(model, lr) 
 
     # If the model has batch parameters:
-    if length(model.matfac.col_transform.layers) > 2
+    if isa(model.matfac.col_transform.layers[4], BatchShift)
         # Freeze the batch scale parameters... 
         # not sure if they're even necessary
         freeze_layer!(model.matfac.col_transform, 3)
@@ -88,16 +88,13 @@ function fit!(model::PathMatFacModel; capacity::Int=10^8, verbosity=1,
     # Fit the factors (X,Y), and their regularizers.
     println("Fitting linear factors.")
     mf_fit!(model; capacity=capacity, update_X=true, update_Y=true,
-                                      update_X_reg=true, update_Y_reg=true,
+                                      update_Y_reg=true,
                                       opt=opt,
                                       verbosity=verbosity,
                                       kwargs...)
 
     # Finally: jointly fit X, Y, column shifts, and batch shifts
     unfreeze_layer!(model.matfac.col_transform, 2) # Col shifts
-    if length(model.matfac.col_transform.layers) > 2
-        unfreeze_layer!(model.matfac.col_transform, 4) # Batch shifts
-    end
     println("Jointly adjusting parameters.")
     mf_fit!(model; capacity=capacity, update_X=true, update_Y=true,
                                       update_col_layers=true,
@@ -105,10 +102,7 @@ function fit!(model::PathMatFacModel; capacity::Int=10^8, verbosity=1,
                                       verbosity=verbosity,
                                       kwargs...)
 
-    unfreeze_layer!(model.matfac.col_transform,1) 
-    if length(model.matfac.col_transform.layers) > 2
-        unfreeze_layer!(model.matfac.col_transform,3) 
-    end 
+    unfreeze_layer!(model.matfac.col_transform,1:4) 
 end
 
 

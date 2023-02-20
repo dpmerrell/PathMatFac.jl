@@ -4,6 +4,7 @@ export transform
 
 
 function transform(model::PathMatFacModel, D::AbstractMatrix;
+                   use_gpu::Bool=true,
                    feature_ids::Union{<:AbstractVector,Nothing}=nothing,
                    sample_ids::Union{<:AbstractVector,Nothing}=nothing,
                    sample_conditions::Union{<:AbstractVector,Nothing}=nothing,
@@ -60,92 +61,66 @@ function transform(model::PathMatFacModel, D::AbstractMatrix;
     # Construct a model to transform the new data
     ##################################################
 
+    # Construct a new model around the new dataset
+    old_data = model.data
+    model.data = nothing
     new_model = model[:,old_idx]
     new_data = D[:, new_idx]
+    new_model.data = new_data
+    new_model.feature_ids = feature_ids[new_idx]
+    new_model.feature_views = feature_views[new_idx]
 
     new_model.matfac.X = similar(model.matfac.X, K, M_new) 
     new_model.matfac.X .= 0 
-    #new_model = PathMatFacModel()
-    #
+    
+    # Construct a new BatchShift layer and BatchArrayReg (if applicable).
+    if batch_dict != nothing
+        new_layer = BatchShift(feature_views, batch_dict)
+        new_reg = construct_new_batch_reg!(model.matfac.col_transform.layers[end],
+                                           model.matfac.col_trans_reg.regs[end])
+        new_model.matfac.col_trans_reg.regs = (new_model.matfac.col_trans_reg.regs[1:end-1]...,
+                                              )
+    end
 
-    ## Put the new data into the model
-    #model.data = new_data
-    #model.feature_ids = feature_ids
-    ## Swap out the model's X for a new X
-    #X_old = model.matfac.X
-    #model.matfac.X = similar(X_old, K, M_new)
-    #model.matfac.X .= 0
-
-    ## If a batch_dict is provided then match the incoming batches
-    ## with those in the model (whenever possible).
-    #old_batch = nothing 
-    #if length(model.matfac.col_transform.layers) > 2
-    #    old_batch = model.matfac.col_transform.layers[end]
-    #end
-    # Collect the relevant values of the batch parameters. 
-    #
-    # Construct a new BatchShift layer from them.
-     
-
-    # If sample conditions are provided, then construct 
-    # a new group regularizer for the new X.
-    #
-    # If the model already contains batch parameters, then match the incoming
-    # conditions with those in the model (whenever possible).
-    #
-    # Collect the relevant means from the condition regularizers.
-    # 
+    # Construct a new GroupRegularizer for sample conditions
+    # (if applicable)
+    if sample_conditions != nothing
+        new_model.matfac.X_reg = construct_new_group_reg(sample_conditions,
+                                                         model.matfac.X_reg,
+                                                         model.matfac.X)
+    end
 
     ##################################################
     # Fit the model to the new data.
     ##################################################
-    opt = construct_optimizer(model, lr)
+    new_model = gpu(new_model)
+    opt = construct_optimizer(new_model, lr)
 
     # Fit the new BatchShift, in isolation
     if batch_dict != nothing
         # Freeze the other layers
-        freeze_layer!(model.matfac.col_transform, 
-                      1:(length(model.matfac.col_transform.layers)-1))
-        mf_fit!(model; opt=opt, max_epochs=500, update_col_transform=true)
+        freeze_layer!(new_model.matfac.col_transform, 1:3)
+        mf_fit!(new_model; opt=opt, max_epochs=500, update_col_transform=true)
     end
 
     # Update the new X 
-    mf_fit!(model; update_X=true, opt=opt, fit_kwargs...)
+    mf_fit!(new_model; update_X=true, opt=opt, fit_kwargs...)
 
     # Finally: update them both, jointly 
-    mf_fit!(model; update_X=true, update_col_transform=true,
-                   opt=opt, fit_kwargs...)
+    mf_fit!(new_model; update_X=true, update_col_transform=true,
+                       opt=opt, fit_kwargs...)
+
+    new_model = cpu(new_model)
+    unfreeze_layer!(new_model.matfac.col_transform, 1:3)
 
     #############################################################
     # Restore the model as it was, and assemble the return values
     #############################################################
-    return_values = Any[]
 
-    # Restore the original X 
-    X_new = model.matfac.X
-    push!(return_values, X_new)
-    model.matfac.X = X_old
+    # Restore the original data to the original model
+    model.data = old_data
 
-    # Restore the original X_reg
-    if sample_conditions != nothing
-        new_X_reg = model.matfac.X_reg
-        push!(return_values, new_X_reg)
-        if old_X_reg != nothing
-            model.matfac.X_reg = old_X_reg
-        end
-    end
-
-    # If applicable, restore the original batch shift.
-    if batch_dict != nothing
-        new_batch = model.matfac.col_transform.layers[end]
-        push!(return_values, new_batch)
-        if old_batch != nothing
-            model.matfac.col_transform.layers = (model.matfac.col_transform.layers[1:end-1]..., 
-                                                 old_batch) 
-        end
-    end
-
-    return Tuple(return_values) 
+    return new_model 
 end
 
 
