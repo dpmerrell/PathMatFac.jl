@@ -33,7 +33,7 @@ end
 
 
 function fit!(model::PathMatFacModel; capacity::Int=10^8, verbosity=1, 
-                                      kwargs...)
+                                      lr=0.25, kwargs...)
 
     K,N = size(model.matfac.Y)
 

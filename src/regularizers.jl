@@ -269,8 +269,9 @@ function (cr::GroupRegularizer)(x::AbstractVector)
 
     means = (transpose(cr.biases) .+ transpose(cr.group_idx)*x)./(cr.bias_sizes .+ cr.group_sizes)
     mean_vec = cr.group_idx * means
+    w_vec = cr.group_idx * (cr.weight .+ cr.bias_sizes)
     diffs = x .- mean_vec
-    return 0.5*cr.weight*sum(diffs.*diffs)
+    return 0.5*sum(w_vec .* diffs.*diffs)
 end
 
 function (cr::GroupRegularizer)(layer::ColScale)
@@ -290,13 +291,14 @@ function ChainRulesCore.rrule(cr::GroupRegularizer, x::AbstractVector)
    
     means = (transpose(cr.biases) .+ transpose(cr.group_idx)*x)./(cr.bias_sizes .+ cr.group_sizes)
     mean_vec = cr.group_idx * means
+    w_vec = cr.group_idx * (cr.weight .+ cr.bias_sizes)
     diffs = x .- mean_vec
 
     function group_reg_pullback(loss_bar)
         return ChainRulesCore.NoTangent(), 
-               (cr.weight*loss_bar) .* diffs 
+               w_vec .* diffs 
     end
-    loss = 0.5*cr.weight*sum(diffs.*diffs)
+    loss = 0.5*sum(w_vec .* diffs.*diffs)
 
     return loss, group_reg_pullback
 end
@@ -309,25 +311,25 @@ function (cr::GroupRegularizer)(X::AbstractMatrix)
     means = (transpose(cr.biases) .+ transpose(cr.group_idx)*transpose(X))./(cr.bias_sizes .+ cr.group_sizes)
 
     mean_rows = transpose(cr.group_idx * means)
+    w_vec = cr.group_idx * (cr.weight .+ cr.bias_sizes)
     diffs = X .- mean_rows
 
-    return (0.5*cr.weight)*sum(diffs.*diffs) 
+    return 0.5*sum(transpose(w_vec) .* diffs.*diffs) 
 end
 
 
 function ChainRulesCore.rrule(cr::GroupRegularizer, X::AbstractMatrix)
 
-    #means = (transpose(cr.bias_sizes).*cr.biases .+ transpose(cr.group_sizes).*(transpose(cr.group_idx) * transpose(X)))./
-    #        (cr.bias_sizes .+ cr.group_sizes)
     means = (transpose(cr.biases) .+ transpose(cr.group_idx)*transpose(X))./(cr.bias_sizes .+ cr.group_sizes)
     mean_rows = transpose(cr.group_idx * means)
+    w_vec = cr.group_idx * (cr.weight .+ cr.bias_sizes)
     diffs = X .- mean_rows
 
     function group_reg_pullback(loss_bar)
         return ChainRulesCore.NoTangent(), 
-               (cr.weight*loss_bar) .* diffs
+               loss_bar .* (transpose(w_vec) .* diffs)
     end
-    loss = 0.5*cr.weight*sum(diffs.*diffs)
+    loss = 0.5*sum(transpose(w_vec) .* diffs.*diffs)
 
     return loss, group_reg_pullback
 end
@@ -414,6 +416,8 @@ end
 mutable struct BatchArrayReg 
     weight::Number
     counts::Tuple
+    biases::Tuple
+    bias_counts::Tuple
 end
 
 @functor BatchArrayReg 
@@ -422,9 +426,10 @@ function BatchArrayReg(ba::BatchArray; weight=1.0)
     row_counts = map(mat->vec(sum(mat,dims=1)), ba.row_batches)
     col_counts = map(length, ba.col_ranges)
     counts = row_counts .* col_counts
-    return BatchArrayReg(weight, counts) 
+    biases = map(zero, ba.values)
+    bias_counts = map(zero, counts)
+    return BatchArrayReg(weight, counts, biases, bias_counts) 
 end
-
 
 function BatchArrayReg(feature_views::AbstractVector, batch_dict; weight=1.0)
     row_batches = [batch_dict[uv] for uv in unique(feature_views)] 
@@ -433,9 +438,10 @@ function BatchArrayReg(feature_views::AbstractVector, batch_dict; weight=1.0)
     return BatchArrayReg(ba; weight=weight)
 end
 
-
 function (reg::BatchArrayReg)(ba::BatchArray)
-    return reg.weight*0.5*sum(map((c,v)->sum(c .* v .* v), reg.counts, ba.values))
+    diffs = ba.values .- reg.biases
+    weights = reg.counts .+ reg.bias_counts
+    return reg.weight*0.5*sum(map((w,d)->sum(w .* d .* d), weights, diffs))
 end
 
 function (reg::BatchArrayReg)(layer::BatchScale)
@@ -452,17 +458,19 @@ end
 
 function ChainRulesCore.rrule(reg::BatchArrayReg, ba::BatchArray)
 
-    result = reg(ba)
+    weights = reg.counts .+ reg.bias_counts
+    diffs = ba.values .- reg.biases
+    wd = (reg.weight*0.5).* map((w,d)->w.*d, weights, diffs)
 
-    function batcharray_reg_pullback(result_bar)
-        factor = result_bar*reg.weight
-        val_bar = map((c,v) -> c.*v, reg.counts, ba.values) .* factor 
+    function batcharray_reg_pullback(loss_bar)
+        val_bar = loss_bar .* wd
         return ChainRulesCore.NoTangent(),
                ChainRulesCore.Tangent{BatchArray}(values=val_bar)
 
     end
+    lss = sum(map((w,d) -> sum(w .* d), wd, diffs))
 
-    return result, batcharray_reg_pullback
+    return lss, batcharray_reg_pullback
 end
 
 
