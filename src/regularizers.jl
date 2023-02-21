@@ -243,9 +243,9 @@ end
 mutable struct GroupRegularizer
     group_labels::AbstractVector
     group_idx::AbstractMatrix{Float32}
-    group_sizes::AbstractVector{Int32}
+    group_sizes::AbstractVector{Float32}
     biases::AbstractMatrix{Float32}
-    bias_sizes::AbstractVector{Int32}
+    bias_sizes::AbstractVector{Float32}
     weight::Number
 end
 
@@ -322,7 +322,7 @@ function ChainRulesCore.rrule(cr::GroupRegularizer, x::AbstractVector)
 
     function group_reg_pullback(loss_bar)
         return ChainRulesCore.NoTangent(), 
-               cr.weight .* diffs 
+               Float32(cr.weight) .* diffs 
     end
     loss = 0.5*cr.weight*sum(diffs.*diffs)
 
@@ -337,7 +337,7 @@ function (cr::GroupRegularizer)(X::AbstractMatrix)
     means = (transpose(cr.biases) .+ transpose(cr.group_idx)*transpose(X))./(cr.bias_sizes .+ cr.group_sizes)
 
     mean_rows = transpose(cr.group_idx * means)
-    w_vec = cr.group_idx * (cr.weight .+ cr.bias_sizes)
+    w_vec = cr.group_idx * (Float32(cr.weight) .+ cr.bias_sizes)
     diffs = X .- mean_rows
 
     return 0.5*sum(transpose(w_vec) .* diffs.*diffs) 
@@ -348,7 +348,7 @@ function ChainRulesCore.rrule(cr::GroupRegularizer, X::AbstractMatrix)
 
     means = (transpose(cr.biases) .+ transpose(cr.group_idx)*transpose(X))./(cr.bias_sizes .+ cr.group_sizes)
     mean_rows = transpose(cr.group_idx * means)
-    w_vec = cr.group_idx * (cr.weight .+ cr.bias_sizes)
+    w_vec = cr.group_idx * (Float32(cr.weight) .+ cr.bias_sizes)
     diffs = X .- mean_rows
 
     function group_reg_pullback(loss_bar)

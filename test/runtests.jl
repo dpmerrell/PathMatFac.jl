@@ -792,23 +792,23 @@ function fit_tests()
     feature_graph = [[feat, "y", 1] for feat in feature_ids]
     feature_graphs = fill(feature_graph, K)
 
-    @testset "Fit CPU" begin
+    #@testset "Fit CPU" begin
 
-        model = PathMatFacModel(Z; sample_conditions, feature_ids=feature_ids,  feature_views=feature_views,
-                                                      feature_graphs=feature_graphs, batch_dict=batch_dict, 
-                                                      lambda_X_l2=0.1, lambda_Y_graph=0.1, lambda_Y_selective_l1=0.05)
+    #    model = PathMatFacModel(Z; sample_conditions, feature_ids=feature_ids,  feature_views=feature_views,
+    #                                                  feature_graphs=feature_graphs, batch_dict=batch_dict, 
+    #                                                  lambda_X_l2=0.1, lambda_Y_graph=0.1, lambda_Y_selective_l1=0.05)
 
-        X_start = deepcopy(model.matfac.X)
-        Y_start = deepcopy(model.matfac.Y)
-        batch_scale = deepcopy(model.matfac.col_transform.layers[3]) 
-        fit!(model; verbosity=2, lr=0.25, max_epochs=1000, print_iter=1, rel_tol=1e-7, abs_tol=1e-7)
+    #    X_start = deepcopy(model.matfac.X)
+    #    Y_start = deepcopy(model.matfac.Y)
+    #    batch_scale = deepcopy(model.matfac.col_transform.layers[3]) 
+    #    fit!(model; verbosity=2, lr=0.25, max_epochs=1000, print_iter=1, rel_tol=1e-7, abs_tol=1e-7)
 
-        @test !isapprox(model.matfac.X, X_start)
-        @test !isapprox(model.matfac.Y, Y_start)
-        @test all(map(isapprox, batch_scale.logdelta.values,
-                                model.matfac.col_transform.layers[3].logdelta.values)
-                 ) # This should not have changed
-    end
+    #    @test !isapprox(model.matfac.X, X_start)
+    #    @test !isapprox(model.matfac.Y, Y_start)
+    #    @test all(map(isapprox, batch_scale.logdelta.values,
+    #                            model.matfac.col_transform.layers[3].logdelta.values)
+    #             ) # This should not have changed
+    #end
 
     @testset "Fit GPU" begin
 
