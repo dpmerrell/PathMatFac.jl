@@ -43,7 +43,7 @@ function BatchArray(col_batch_ids::Vector, row_batch_dict::AbstractDict,
 end
 
 
-function view(ba::BatchArray, idx1, idx2::UnitRange)
+function view(ba::BatchArray, idx1, idx2::AbstractRange)
 
     new_col_ranges, r_min, r_max = subset_ranges(ba.col_ranges, idx2)
     new_col_ranges = shift_range.(new_col_ranges, 1 - new_col_ranges[1].start)

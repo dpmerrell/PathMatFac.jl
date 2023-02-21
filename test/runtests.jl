@@ -654,35 +654,35 @@ function model_tests()
         model = PathMatFacModel(Z; feature_ids=feature_ids, feature_graphs=feature_graphs, lambda_Y_graph=1.0)
         @test size(model.matfac.Y) == (K,N)
         @test length(model.matfac.col_transform.layers) == 4 
-        @test length(model.matfac.X_reg.regularizers) == 1 
-        @test length(model.matfac.Y_reg.regularizers) == 1 
-        @test typeof(model.matfac.Y_reg.regularizers[1]) <: PM.NetworkRegularizer
+        @test length(model.matfac.X_reg.regularizers) == 3 
+        @test length(model.matfac.Y_reg.regularizers) == 3 
+        @test typeof(model.matfac.Y_reg.regularizers[3]) <: PM.NetworkRegularizer
         
         # Vanilla L1-regularized model construction 
         model = PathMatFacModel(Z; K=7, lambda_Y_l1=3.14)
         @test size(model.matfac.Y) == (7,N)
-        @test length(model.matfac.X_reg.regularizers) == 1 
+        @test length(model.matfac.X_reg.regularizers) == 3 
         @test length(model.matfac.col_transform.layers) == 4 
-        @test length(model.matfac.Y_reg.regularizers) == 1 
+        @test length(model.matfac.Y_reg.regularizers) == 3 
         @test typeof(model.matfac.Y_reg.regularizers[1]) <: Function 
         @test isapprox(model.matfac.Y_reg(model.matfac.Y), 3.14*sum(abs.(model.matfac.Y)))
 
         # Selective L1-regularized model construction 
         model = PathMatFacModel(Z; feature_ids=feature_ids, feature_graphs=feature_graphs, lambda_Y_selective_l1=1.0)
         @test size(model.matfac.Y) == (K,N)
-        @test length(model.matfac.X_reg.regularizers) == 1 
+        @test length(model.matfac.X_reg.regularizers) == 3 
         @test length(model.matfac.col_transform.layers) == 4 
-        @test length(model.matfac.Y_reg.regularizers) == 1 
-        @test typeof(model.matfac.Y_reg.regularizers[1]) <: PM.L1Regularizer
+        @test length(model.matfac.Y_reg.regularizers) == 3 
+        @test typeof(model.matfac.Y_reg.regularizers[2]) <: PM.L1Regularizer
         
         # Both, at the same time! 
         model = PathMatFacModel(Z; feature_ids=feature_ids, feature_graphs=feature_graphs, lambda_Y_graph=1.0, lambda_Y_selective_l1=1.0)
         @test size(model.matfac.Y) == (K,N)
         @test length(model.matfac.col_transform.layers) == 4 
-        @test length(model.matfac.X_reg.regularizers) == 1 
-        @test length(model.matfac.Y_reg.regularizers) == 2 
-        @test typeof(model.matfac.Y_reg.regularizers[1]) <: PM.L1Regularizer
-        @test typeof(model.matfac.Y_reg.regularizers[2]) <: PM.NetworkRegularizer
+        @test length(model.matfac.X_reg.regularizers) == 3 
+        @test length(model.matfac.Y_reg.regularizers) == 3 
+        @test typeof(model.matfac.Y_reg.regularizers[2]) <: PM.L1Regularizer
+        @test typeof(model.matfac.Y_reg.regularizers[3]) <: PM.NetworkRegularizer
 
     end
 
@@ -692,7 +692,7 @@ function model_tests()
         model = PathMatFacModel(Z; K=8, lambda_X_l2=3.14)
         @test size(model.matfac.X) == (8,M)
         @test length(model.matfac.col_transform.layers) == 4 
-        @test length(model.matfac.X_reg.regularizers) == 1 
+        @test length(model.matfac.X_reg.regularizers) == 3 
         @test typeof(model.matfac.X_reg.regularizers[1]) <: Function 
         @test isapprox(model.matfac.X_reg(model.matfac.X), 0.5*3.14*sum(model.matfac.X .* model.matfac.X))
        
@@ -700,27 +700,27 @@ function model_tests()
         model = PathMatFacModel(Z; K=6, sample_conditions=sample_conditions, lambda_X_condition=3.14)
         @test size(model.matfac.X) == (6,M)
         @test length(model.matfac.col_transform.layers) == 4 
-        @test length(model.matfac.X_reg.regularizers) == 1 
-        @test typeof(model.matfac.X_reg.regularizers[1]) <: PM.GroupRegularizer
+        @test length(model.matfac.X_reg.regularizers) == 3 
+        @test typeof(model.matfac.X_reg.regularizers[2]) <: PM.GroupRegularizer
         
         # Graph-based X regularization 
         model = PathMatFacModel(Z; sample_ids=sample_ids, sample_graphs=sample_graphs)
         @test size(model.matfac.X) == (K,M)
         @test length(model.matfac.col_transform.layers) == 4 
-        @test length(model.matfac.X_reg.regularizers) == 1 
-        @test typeof(model.matfac.X_reg.regularizers[1]) <: PM.NetworkRegularizer
-        @test model.matfac.X_reg.regularizers[1].weight == 1.0
+        @test length(model.matfac.X_reg.regularizers) == 3 
+        @test typeof(model.matfac.X_reg.regularizers[3]) <: PM.NetworkRegularizer
+        @test model.matfac.X_reg.regularizers[3].weight == 1.0
         
         # Combined X regularization 
         model = PathMatFacModel(Z; sample_ids=sample_ids, sample_conditions=sample_conditions,
                                    sample_graphs=sample_graphs, lambda_X_graph=1.234, lambda_X_condition=5.678)
         @test size(model.matfac.X) == (K,M)
         @test length(model.matfac.col_transform.layers) == 4 
-        @test length(model.matfac.X_reg.regularizers) == 2 
-        @test typeof(model.matfac.X_reg.regularizers[1]) <: PM.GroupRegularizer
-        @test typeof(model.matfac.X_reg.regularizers[2]) <: PM.NetworkRegularizer
-        @test model.matfac.X_reg.regularizers[1].weight == 5.678 
-        @test model.matfac.X_reg.regularizers[2].weight == 1.234
+        @test length(model.matfac.X_reg.regularizers) == 3 
+        @test typeof(model.matfac.X_reg.regularizers[2]) <: PM.GroupRegularizer
+        @test typeof(model.matfac.X_reg.regularizers[3]) <: PM.NetworkRegularizer
+        @test model.matfac.X_reg.regularizers[2].weight == 5.678 
+        @test model.matfac.X_reg.regularizers[3].weight == 1.234
     end
 
     @testset "Full-featured model constructor" begin
@@ -731,17 +731,17 @@ function model_tests()
                                    lambda_Y_graph=1.0, lambda_Y_selective_l1=1.0)
         @test size(model.matfac.X) == (K,M)
         @test length(model.matfac.col_transform.layers) == 4 
-        @test length(model.matfac.X_reg.regularizers) == 2 
-        @test typeof(model.matfac.X_reg.regularizers[1]) <: PM.GroupRegularizer
-        @test typeof(model.matfac.X_reg.regularizers[2]) <: PM.NetworkRegularizer
-        @test model.matfac.X_reg.regularizers[1].weight == 5.678 
-        @test model.matfac.X_reg.regularizers[2].weight == 1.234
+        @test length(model.matfac.X_reg.regularizers) == 3 
+        @test typeof(model.matfac.X_reg.regularizers[2]) <: PM.GroupRegularizer
+        @test typeof(model.matfac.X_reg.regularizers[3]) <: PM.NetworkRegularizer
+        @test model.matfac.X_reg.regularizers[2].weight == 5.678 
+        @test model.matfac.X_reg.regularizers[3].weight == 1.234
         @test size(model.matfac.Y) == (K,N)
-        @test length(model.matfac.Y_reg.regularizers) == 2 
-        @test typeof(model.matfac.Y_reg.regularizers[1]) <: PM.L1Regularizer
-        @test typeof(model.matfac.Y_reg.regularizers[2]) <: PM.NetworkRegularizer
-        @test model.matfac.Y_reg.regularizers[1].weight == 1.0 
-        @test model.matfac.Y_reg.regularizers[2].weight == 1.0
+        @test length(model.matfac.Y_reg.regularizers) == 3 
+        @test typeof(model.matfac.Y_reg.regularizers[2]) <: PM.L1Regularizer
+        @test typeof(model.matfac.Y_reg.regularizers[3]) <: PM.NetworkRegularizer
+        @test model.matfac.Y_reg.regularizers[2].weight == 1.0 
+        @test model.matfac.Y_reg.regularizers[3].weight == 1.0
     end
 
 end
@@ -829,6 +829,82 @@ function fit_tests()
         @test all(map(isapprox, batch_scale.logdelta.values,
                                 model.matfac.col_transform.layers[3].logdelta.values)
                  ) # This should not have changed
+    end
+end
+
+
+function transform_tests()
+    
+    ###################################
+    # Build the training set
+    M = 20
+    N = 40
+    K = 4
+
+    n_col_batches = 4
+    n_row_batches = 4
+
+    X = randn(K,M)
+    Y = randn(K,N)
+    Z = transpose(X)*Y
+
+    sample_ids = [string("sample_", i) for i=1:M]
+    sample_conditions = repeat(["condition_1", "condition_2"], inner=div(M,2))
+
+    sample_graph = [[s, "z", 1] for s in sample_ids]
+    sample_graphs = fill(sample_graph, K)
+
+    feature_ids = map(x->string("x_",x), 1:N)
+    feature_views = repeat(1:n_col_batches, inner=div(N,n_col_batches))
+    batch_dict = Dict(j => repeat([string("rowbatch",i) for i=1:n_row_batches], inner=div(M,n_row_batches)) for j in unique(feature_views))
+
+    feature_graph = [[feat, "y", 1] for feat in feature_ids]
+    feature_graphs = fill(feature_graph, K)
+
+    ########################################
+    # Fit the model on the training set
+    model = PathMatFacModel(Z; sample_conditions, feature_ids=feature_ids,  feature_views=feature_views,
+                                                  feature_graphs=feature_graphs, batch_dict=batch_dict, 
+                                                  lambda_X_condition=0.1, lambda_Y_graph=0.1, lambda_Y_selective_l1=0.05)
+
+    fit!(model; verbosity=-1, lr=0.25, max_epochs=1000, print_iter=1, rel_tol=1e-7, abs_tol=1e-7)
+
+    ###################################
+    # Build the test set
+    M_new = 20
+    N_new = 40
+    new_sample_conditions = repeat(["condition_2","condition_3"], inner=div(M_new,2)) # partially-overlapping sample conditions
+    new_feature_ids = map(x->string("x_",x+10), 1:N_new) # Partially-overlapping features
+    new_feature_views = repeat((1:n_col_batches) .+ 1, inner=div(N_new,n_col_batches)) # partially-overlapping feature views
+    new_batch_dict = Dict(j => repeat([string("rowbatch",i) for i=((1:n_row_batches) .+ 2)], inner=div(M,n_row_batches)) for j in unique(new_feature_views))
+    D_new = randn(M_new, N_new) 
+
+    @testset "Transform CPU" begin
+
+        result = transform(model, D_new; feature_ids=new_feature_ids, feature_views=new_feature_views,
+                                         sample_conditions=new_sample_conditions,
+                                         verbosity=2, lr=0.25, max_epochs=1000, print_iter=1, rel_tol=1e-7, abs_tol=1e-7,
+                                         use_gpu=false)
+        
+        @test size(result.matfac.X) == (K, M_new) 
+        @test size(result.matfac.Y) == (K, 30) 
+        @test all(result.sample_ids .== collect(1:M_new)) 
+        @test all(result.sample_conditions .== new_sample_conditions) 
+              
+    end
+
+    @testset "Transform GPU" begin
+        
+        result = transform(model, D_new; feature_ids=new_feature_ids, feature_views=new_feature_views,
+                                         sample_conditions=new_sample_conditions,
+                                         verbosity=2, lr=0.25, max_epochs=1000, print_iter=1, rel_tol=1e-7, abs_tol=1e-7,
+                                         use_gpu=true)
+        
+        @test size(result.matfac.X) == (K, M_new) 
+        @test size(result.matfac.Y) == (K, 30) 
+        @test all(result.sample_ids .== collect(1:M_new)) 
+        @test all(result.sample_conditions .== new_sample_conditions) 
+
     end
 end
 
@@ -930,6 +1006,7 @@ function main()
     model_tests()
     score_tests()
     fit_tests()
+    transform_tests()
     model_io_tests()
     #simulation_tests()
 

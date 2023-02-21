@@ -280,10 +280,10 @@ function construct_new_group_reg(new_group_labels::AbstractVector,
     old_intersect_idx, new_intersect_idx = keymatch(old_regularizer.group_labels,
                                                     new_regularizer.group_labels)
 
-    old_means = transpose(old_array * old_regularizer.group_idx) ./ old_regularizer.group_sizes 
-    old_intersect_means = old_means[old_intersect_idx,:]
+    old_means = (old_array * old_regularizer.group_idx) ./ transpose(old_regularizer.group_sizes) 
+    old_intersect_means = old_means[:,old_intersect_idx]
 
-    new_regularizer.biases[new_intersect_idx,:] .= old_intersect_means
+    new_regularizer.biases[:,new_intersect_idx] .= old_intersect_means
     new_regularizer.bias_sizes[new_intersect_idx] .= old_regularizer.group_sizes[old_intersect_idx]
 
     return new_regularizer
@@ -391,17 +391,17 @@ end
 
 function construct_X_reg(K, sample_ids, sample_conditions, sample_graphs, 
                          lambda_X_l2, lambda_X_condition, lambda_X_graph)
-    regularizers = []
+    regularizers = Any[x->0.0, x->0.0, x->0.0]
     if lambda_X_l2 != nothing
-        push!(regularizers, x->(lambda_X_l2*0.5)*sum(x.*x))
+        regularizers[1] = x->(lambda_X_l2*0.5)*sum(x.*x)
     end
 
     if sample_conditions != nothing
-        push!(regularizers, GroupRegularizer(sample_conditions; weight=lambda_X_condition, K=K))
+        regularizers[2] = GroupRegularizer(sample_conditions; weight=lambda_X_condition, K=K)
     end
 
     if sample_graphs != nothing
-        push!(regularizers, NetworkRegularizer(sample_ids, sample_graphs; weight=lambda_X_graph))
+        regularizers[3] = NetworkRegularizer(sample_ids, sample_graphs; weight=lambda_X_graph)
     end
 
     return construct_composite_reg(regularizers) 
@@ -415,19 +415,19 @@ end
 function construct_Y_reg(feature_ids, feature_graphs,
                          lambda_Y_l1, lambda_Y_selective_l1, lambda_Y_graph)
 
-    regularizers = []
+    regularizers = Any[x->0.0, x->0.0, x->0.0]
     if lambda_Y_l1 != nothing
-        push!(regularizers, y->(lambda_Y_l1*sum(abs.(y))))
+        regularizers[1] =  y->(lambda_Y_l1*sum(abs.(y)))
     end
 
     if (feature_ids != nothing) & (feature_graphs != nothing)
         if lambda_Y_selective_l1 != nothing
-            push!(regularizers, L1Regularizer(feature_ids, feature_graphs; 
-                                              weight=lambda_Y_selective_l1))
+            regularizers[2] = L1Regularizer(feature_ids, feature_graphs; 
+                                            weight=lambda_Y_selective_l1)
         end
         if lambda_Y_graph != nothing
-            push!(regularizers, NetworkRegularizer(feature_ids, feature_graphs;
-                                                   weight=lambda_Y_graph))
+            regularizers[3] = NetworkRegularizer(feature_ids, feature_graphs;
+                                                 weight=lambda_Y_graph)
         end
     end
 

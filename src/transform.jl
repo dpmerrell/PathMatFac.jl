@@ -10,11 +10,13 @@ function transform(model::PathMatFacModel, D::AbstractMatrix;
                    sample_conditions::Union{<:AbstractVector,Nothing}=nothing,
                    feature_views::Union{<:AbstractVector,Nothing}=nothing,
                    batch_dict::Union{<:AbstractDict,Nothing}=nothing,
-                   lr=0.25, fit_kwargs...)
+                   verbosity=1, lr=0.25, fit_kwargs...)
 
     K, N = size(model.matfac.Y)
     M_new, N_new = size(D)
-    
+
+    println("Transforming new data...")
+
     ###################################################
     ## Validate input
     ###################################################
@@ -35,17 +37,21 @@ function transform(model::PathMatFacModel, D::AbstractMatrix;
     # of the original training data. If `feature_views` are also provided, then
     # they must match the provided feature_views
     else
-        data = similar(D, M_new, N)
-        new_data .= NaN
-        old_idx, new_idx = keymatch(model.feature_ids, feature_ids)
         if feature_views != nothing
             @assert length(feature_views) == length(feature_ids) "`feature_views` must have same length as `feature_ids`."
         end
+        old_idx, new_idx = keymatch(model.feature_ids, feature_ids)
     end
 
     # By default, ignore the sample conditions
     if sample_conditions != nothing
         @assert length(sample_conditions) == M_new "`sample_conditions` must have length == size(D,1)"
+    end
+
+    if sample_ids != nothing
+        @assert length(sample_ids) == M_new "`sample_ids` must have length == size(D,1)"
+    else
+        sample_ids = collect(1:M_new)
     end
 
     # By default, ignore batch effects in the new data.
@@ -61,33 +67,51 @@ function transform(model::PathMatFacModel, D::AbstractMatrix;
     # Construct a model to transform the new data
     ##################################################
 
-    # Construct a new model around the new dataset
+    # Construct a model around the new dataset
+    
+    # Data & model
     old_data = model.data
     model.data = nothing
-    new_model = model[:,old_idx]
+    new_model = deepcopy(model)
     new_data = D[:, new_idx]
     new_model.data = new_data
+
+    # Construct "feature attributes"
+    new_model.matfac.Y = new_model.matfac.Y[:,old_idx]
+    new_model.matfac.noise_model = model.matfac.noise_model[old_idx]
     new_model.feature_ids = feature_ids[new_idx]
     new_model.feature_views = feature_views[new_idx]
 
+    # Construct "sample attributes"
     new_model.matfac.X = similar(model.matfac.X, K, M_new) 
     new_model.matfac.X .= 0 
+    new_model.sample_ids = sample_ids
+    new_model.sample_conditions = sample_conditions
     
-    # Construct a new BatchShift layer and BatchArrayReg (if applicable).
+    # If batch info is provided, construct a 
+    # new BatchShift layer and BatchArrayReg.
     if batch_dict != nothing
         new_layer = BatchShift(feature_views, batch_dict)
-        new_reg = construct_new_batch_reg!(model.matfac.col_transform.layers[end],
-                                           model.matfac.col_trans_reg.regs[end])
+        new_model.matfac.col_trans.layers = (new_model.matfac.col_trans.layers[1:end-1]...,
+                                             new_layer)
+
+        # The new regularizer should be informed by the values of the
+        # fitted model's batch shift.
+        new_reg = construct_new_batch_reg!(new_layer.theta,
+                                           model.matfac.col_trans_reg.regs[end],
+                                           model.matfac.col_transform.layers[end].theta)
         new_model.matfac.col_trans_reg.regs = (new_model.matfac.col_trans_reg.regs[1:end-1]...,
-                                              )
+                                               new_reg)
     end
 
-    # Construct a new GroupRegularizer for sample conditions
-    # (if applicable)
+    # If sample conditions are provided,
+    # construct a new GroupRegularizer for sample conditions
     if sample_conditions != nothing
-        new_model.matfac.X_reg = construct_new_group_reg(sample_conditions,
-                                                         model.matfac.X_reg,
-                                                         model.matfac.X)
+        new_model.matfac.X_reg.regularizers = (new_model.matfac.X_reg.regularizers[1],
+                                               construct_new_group_reg(sample_conditions,
+                                                                       model.matfac.X_reg.regularizers[2],
+                                                                       model.matfac.X),
+                                               new_model.matfac.X_reg.regularizers[3])
     end
 
     ##################################################
@@ -100,15 +124,17 @@ function transform(model::PathMatFacModel, D::AbstractMatrix;
     if batch_dict != nothing
         # Freeze the other layers
         freeze_layer!(new_model.matfac.col_transform, 1:3)
-        mf_fit!(new_model; opt=opt, max_epochs=500, update_col_transform=true)
+        mf_fit!(new_model; opt=opt, verbosity=verbosity-1,
+                           max_epochs=500, update_col_layers=true)
     end
 
     # Update the new X 
-    mf_fit!(new_model; update_X=true, opt=opt, fit_kwargs...)
+    mf_fit!(new_model; update_X=true, verbosity=verbosity,
+                       opt=opt, fit_kwargs...)
 
     # Finally: update them both, jointly 
-    mf_fit!(new_model; update_X=true, update_col_transform=true,
-                       opt=opt, fit_kwargs...)
+    mf_fit!(new_model; update_X=true, update_col_layers=true,
+                       verbosity=verbosity, opt=opt, fit_kwargs...)
 
     new_model = cpu(new_model)
     unfreeze_layer!(new_model.matfac.col_transform, 1:3)

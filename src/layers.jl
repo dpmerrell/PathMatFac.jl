@@ -26,6 +26,11 @@ function view(cs::ColScale, idx1, idx2)
     return ColScale(view(cs.logsigma, idx2))
 end
 
+function Base.getindex(cs::ColScale, idx1, idx2)
+    return ColScale(cs.logsigma[idx2])
+end
+
+
 function ChainRulesCore.rrule(cs::ColScale, Z::AbstractMatrix)
     
     sigma = exp.(cs.logsigma)
@@ -64,6 +69,11 @@ end
 function view(cs::ColShift, idx1, idx2)
     return ColShift(view(cs.mu, idx2))
 end
+
+function Base.getindex(cs::ColShift, idx1, idx2)
+    return ColShift(cs.mu[idx2])
+end
+
 
 function ChainRulesCore.rrule(cs::ColShift, Z::AbstractMatrix)
     
@@ -108,6 +118,10 @@ function view(bs::BatchScale, idx1, idx2)
         idx2 = 1:bs.logdelta.col_ranges[end].stop
     end
     return BatchScale(view(bs.logdelta, idx1, idx2)) 
+end
+
+function Base.getindex(bs::BatchScale, idx1, idx2)
+    return view(bs, idx1, idx2)
 end
 
 
@@ -156,6 +170,9 @@ function view(bs::BatchShift, idx1, idx2)
     return BatchShift(view(bs.theta, idx1, idx2))
 end
 
+function Base.getindex(bs::BatchShift, idx1, idx2)
+    return view(bs, idx1, idx2)
+end
 
 function ChainRulesCore.rrule(bs::BatchShift, Z::AbstractMatrix)
     
@@ -170,10 +187,10 @@ function ChainRulesCore.rrule(bs::BatchShift, Z::AbstractMatrix)
     return result, batchshift_pullback
 end
 
+
 ###########################################
 # COMPOSE THE LAYERS
 ###########################################
-
 
 mutable struct ViewableComposition
     layers::Tuple
@@ -186,9 +203,12 @@ function (vc::ViewableComposition)(Z::AbstractMatrix)
 end
 
 function view(vc::ViewableComposition, idx1, idx2)
-    return ViewableComposition(map(layer->view(layer, idx1, idx2), vc.layers))
+    return ViewableComposition(map(layer->(isa(layer, Function) ? layer : view(layer, idx1, idx2)), vc.layers))
 end
 
+function Base.getindex(vc::ViewableComposition, idx1, idx2)
+    return ViewableComposition(map(layer-> isa(layer, Function) ? layer : layer[idx1, idx2], vc.layers))
+end
 
 function construct_model_layers(feature_views, batch_dict)
 
@@ -237,6 +257,10 @@ end
 
 function view(fl::FrozenLayer, idx1, idx2)
     return FrozenLayer(view(fl.layer, idx1, idx2))
+end
+
+function Base.getindex(fl::FrozenLayer, idx1, idx2)
+    return FrozenLayer(fl.layer[idx1, idx2])
 end
 
 

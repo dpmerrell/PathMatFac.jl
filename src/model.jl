@@ -182,7 +182,7 @@ end
 ##########################################
 
 
-function Base.getindex(model, idx1, idx2)
+function Base.getindex(model::PathMatFacModel, idx1, idx2)
     
     new_data = nothing
     if model.data != nothing
