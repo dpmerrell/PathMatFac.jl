@@ -566,6 +566,19 @@ function reg_tests()
 
     end
 
+    @testset "ARD regularizers" begin
+
+        K = 3
+        N = 5
+        test_Y = randn(K,N)
+        reg = PM.ARDRegularizer(test_Y)
+        l, grads = Zygote.withgradient(reg, test_Y)
+        test_precisions = (reg.alpha + 1) ./ (reg.beta .+ (test_Y.*test_Y))
+        @test isapprox(l, 0.5*sum(test_precisions .* test_Y .* test_Y))
+        @test length(grads) == 1
+        @test isapprox(grads[1], test_precisions .* test_Y)
+    end
+
     @testset "BatchArray regularizers" begin
         col_batches = ["cat", "cat", "cat", "dog", "dog", "fish"]
         row_batches = Dict("cat"=>[1,1,1,2,2], "dog"=>[1,1,2,2,2], "fish"=>[1,1,1,1,2])

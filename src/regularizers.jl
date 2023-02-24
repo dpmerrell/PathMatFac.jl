@@ -362,6 +362,59 @@ end
 
 
 ###########################################
+# Automatic Relevance Determination (ARD) 
+###########################################
+
+mutable struct ARDRegularizer
+    alpha::Number
+    beta::Number
+    tau_max::Number
+    weight::Number
+    tau::AbstractArray
+end
+
+@functor ARDRegularizer
+
+function ARDRegularizer(shape...; alpha=Float32(1e-6), beta=Float32(1e-6),
+                                  weight=1.0, tau_max=Float32(1e6))
+    return ARDRegularizer(alpha, beta, tau_max, ones(shape...))
+end
+
+function ARDRegularizer(X::AbstractArray; alpha=Float32(1e-6), beta=Float32(1e-6),
+                                          weight=1.0, tau_max=Float32(1e6))
+    # Initialize the regularizer's tau with posterior means
+    return ARDRegularizer(alpha, beta, tau_max, weight,
+                          (alpha + 1) ./ (beta .+ (X.*X))
+                         ) 
+end
+
+
+function (ard::ARDRegularizer)(X::AbstractArray; update_tau=true)
+    X2 = X .* X
+    if update_tau
+        ard.tau .= (ard.alpha + 1) ./ (ard.beta .+ (X2))
+        map!(x -> min(x, ard.tau_max), ard.tau, ard.tau)
+    end
+    return (0.5*ard.weight)*sum(ard.tau .* X2)
+end
+
+function ChainRulesCore.rrule(ard::ARDRegularizer, X::AbstractArray; update_tau=true)
+
+    X2 = X .* X
+    if update_tau
+        ard.tau .= (ard.alpha + 1) ./ (ard.beta .+ (X2))
+        map!(x -> min(x, ard.tau_max), ard.tau, ard.tau)
+    end
+
+    function ard_pullback(loss_bar)
+        return NoTangent(), (ard.weight*loss_bar) .* (ard.tau .* X)
+    end
+
+    return ard.weight*0.5*sum(ard.tau .* X2), ard_pullback
+end
+
+
+###########################################
 # Function for constructing "composite" 
 # regularizers. I.e., combinations of
 # regularizers that all act on the same parameter.
@@ -389,7 +442,7 @@ end
 # Construct regularizer for X matrix
 ###########################################
 
-function construct_X_reg(K, sample_ids, sample_conditions, sample_graphs, 
+function construct_X_reg(K, M, sample_ids, sample_conditions, sample_graphs, 
                          lambda_X_l2, lambda_X_condition, lambda_X_graph)
     regularizers = Any[x->0.0, x->0.0, x->0.0]
     if lambda_X_l2 != nothing
@@ -412,9 +465,22 @@ end
 # Construct regularizer for Y matrix
 ###########################################
 
-function construct_Y_reg(feature_ids, feature_graphs,
-                         lambda_Y_l1, lambda_Y_selective_l1, lambda_Y_graph)
+function construct_Y_reg(K, N, feature_ids, feature_graphs,
+                         lambda_Y_l1, lambda_Y_selective_l1, lambda_Y_graph,
+                         Y_ard, Y_geneset_ard)
 
+    # If either of the ARD flags are set `true`, then
+    # they take priority over the other regularizers.
+    if Y_geneset_ard
+        #TODO: implement geneset ARD!
+    end
+    if Y_ard
+        return ARDRegularizer(K,N) 
+    end
+
+    # If neither ARD flag is set `true`, then 
+    # construct a regularizer from any other flags.
+    # (Default is *no* regularization) 
     regularizers = Any[x->0.0, x->0.0, x->0.0]
     if lambda_Y_l1 != nothing
         regularizers[1] =  y->(lambda_Y_l1*sum(abs.(y)))
@@ -433,6 +499,7 @@ function construct_Y_reg(feature_ids, feature_graphs,
 
     return construct_composite_reg(regularizers) 
 end
+
 
 
 ###########################################

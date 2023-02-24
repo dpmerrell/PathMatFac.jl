@@ -41,20 +41,23 @@ function assemble_model(D, K, sample_ids, sample_conditions,
                               feature_graphs, sample_graphs,
                               lambda_X_l2, lambda_X_condition, lambda_X_graph, 
                               lambda_Y_l1, lambda_Y_selective_l1, lambda_Y_graph,
+                              Y_ard, Y_geneset_ard,
                               lambda_layer)
+
+    M, N = size(D)
 
     # Construct the column layers and their regularizer
     col_layers = construct_model_layers(feature_views, batch_dict) 
     layer_reg = construct_layer_reg(feature_views, batch_dict, lambda_layer) 
 
     # Construct regularizers for X and Y
-    X_reg = construct_X_reg(K, sample_ids, sample_conditions, sample_graphs, 
+    X_reg = construct_X_reg(K, M, sample_ids, sample_conditions, sample_graphs, 
                             lambda_X_l2, lambda_X_condition, lambda_X_graph)
-    Y_reg = construct_Y_reg(feature_ids, feature_graphs,
-                            lambda_Y_l1, lambda_Y_selective_l1, lambda_Y_graph)
+    Y_reg = construct_Y_reg(K, N, feature_ids, feature_graphs,
+                            lambda_Y_l1, lambda_Y_selective_l1, lambda_Y_graph,
+                            Y_ard, Y_geneset_ard)
 
     # Construct MatFacModel
-    M,N = size(D)
     matfac = MatFacModel(M, N, K, feature_distributions;
                          col_transform=col_layers,
                          X_reg=X_reg, Y_reg=Y_reg, 
@@ -100,7 +103,9 @@ function PathMatFacModel(D::AbstractMatrix{<:Real};
                          lambda_X_graph::Union{Real,Nothing}=1.0, 
                          lambda_Y_l1::Union{Real,Nothing}=nothing,
                          lambda_Y_selective_l1::Union{Real,Nothing}=nothing,
-                         lambda_Y_graph::Union{Real,Nothing}=nothing, 
+                         lambda_Y_graph::Union{Real,Nothing}=nothing,
+                         Y_ard::Bool=false,
+                         Y_geneset_ard::Bool=false, 
                          lambda_layer::Union{Real,Nothing}=1.0)
       
     ################################################
@@ -172,7 +177,8 @@ function PathMatFacModel(D::AbstractMatrix{<:Real};
                           feature_ids, feature_views, feature_distributions,
                           batch_dict, feature_graphs, sample_graphs,
                           lambda_X_l2, lambda_X_condition, lambda_X_graph,
-                          lambda_Y_l1, lambda_Y_selective_l1, lambda_Y_graph, 
+                          lambda_Y_l1, lambda_Y_selective_l1, lambda_Y_graph,
+                          Y_ard, Y_geneset_ard, 
                           lambda_layer) 
 end
 
