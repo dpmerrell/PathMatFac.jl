@@ -13,54 +13,50 @@ function Flux.Optimise.apply!(o::Flux.Optimise.AdaGrad, p::SubArray, g)
 end
 
 
-####################################################
-# An optimizer that performs _truncated_ updates on 
-# a model's L1-regularized parameters.
+##########################################################
+# A projected AdaGrad optimizer wrapped in an Iterated 
+# Shrinkage-Thresholding Algorithm (ISTA) rule. 
 # 
-# Whenever the "ordinary" update rule would change the sign of
-# an L1-regularized parameter, the truncated rule 
-# instead sets that parameter to zero.
+# This imposes nonnegativity constraints on the parameters
+# and applies L1-regularization.
 #
-# The update rule is a simpler version of the scheme described by 
-# Langford, Li, and Zhang (2009).
+# We designed this for a specific case where we're
+# optimizing a function of a single array. 
 
-
-mutable struct TruncatedOptimiser <: Flux.Optimise.AbstractOptimiser
-    opt::Flux.Optimise.AbstractOptimiser
-    l1_params::IdDict
+mutable struct ISTAOptimiser <: Flux.Optimise.AbstractOptimiser
+    lr::Float32
+    ssq_grad::AbstractArray
+    lambda::AbstractArray
 end
 
-
-function TruncatedOptimiser(pairs::Vector; inner_opt=nothing)
-    if inner_opt == nothing
-        inner_opt = Flux.Optimise.AdaGrad()
-    end
-    l1_params = IdDict()
-    for pair in pairs
-        l1_params[pair[1]] = pair[2]
-    end
-    return TruncatedOptimiser(inner_opt, l1_params)
+function ISTAOptimiser(target, lr, l1_lambda)
+    ssq_grad = zero(target) .+ 1e-8
+    return ISTAOptimiser(lr, ssq_grad, l1_lambda)
 end
 
-
-function Flux.Optimise.apply!(trunc_opt::TruncatedOptimiser, p, g)
-
-    # `delta` is the _negative_ update. I.e., an *ascent* direction.
-    # The `update!` function subtracts it from the parameter. 
-    delta = Flux.Optimise.apply!(trunc_opt.opt, p, g)
- 
-    if p in keys(trunc_opt.l1_params)
-        # Identify the updates that need to be truncated
-        trunc_idx = similar(trunc_opt.l1_params[p])
-        trunc_idx .= trunc_opt.l1_params[p]
-        trunc_idx .*= (sign.(p) .== sign.(delta))
-        trunc_idx .*= (abs.(p) .< abs.(delta))
-       
-        # Replace truncated updates with the parameters' values
-        delta .*= (!).(trunc_idx)  
-        delta .+= (trunc_idx .* p) 
-    end
-
-    return delta
+# ISTA projection rule for L1 regularization. 
+function ist_proj!(X_new, alpha)
+    X_new .= max.(abs.(X_new) .- alpha, 0.0)
 end
+
+# It makes most sense to define ISTA's behavior in 
+# `update!`, rather than `apply!`.
+function Flux.Optimise.update!(ist::ISTAOptimiser, p, g)
+
+    # Compute the (current) step size for each
+    # parameter
+    ist.ssq_grad .+= (g.*g)
+    eta = ist.lr ./ sqrt.(ist.ssq_grad)
+
+    # Apply the gradient update.
+    # Impose the nonnegativity constraint.
+    p .-= (eta.*g)
+    p .= max.(p, 0.0)
+        
+    # Apply the ISTA projection.
+    # The threshold for each parameter
+    # is the product (L1 lambda)*(step size)
+    ist_proj!(p, ist.lambda .* eta)
+end
+
 
