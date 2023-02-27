@@ -38,7 +38,7 @@ end
 function assemble_model(D, K, sample_ids, sample_conditions,
                               feature_ids, feature_views, feature_distributions,
                               batch_dict,
-                              feature_graphs, sample_graphs,
+                              feature_sets, feature_graphs, sample_graphs,
                               lambda_X_l2, lambda_X_condition, lambda_X_graph, 
                               lambda_Y_l1, lambda_Y_selective_l1, lambda_Y_graph,
                               Y_ard, Y_geneset_ard,
@@ -53,7 +53,7 @@ function assemble_model(D, K, sample_ids, sample_conditions,
     # Construct regularizers for X and Y
     X_reg = construct_X_reg(K, M, sample_ids, sample_conditions, sample_graphs, 
                             lambda_X_l2, lambda_X_condition, lambda_X_graph)
-    Y_reg = construct_Y_reg(K, N, feature_ids, feature_graphs,
+    Y_reg = construct_Y_reg(K, N, feature_ids, feature_sets, feature_graphs,
                             lambda_Y_l1, lambda_Y_selective_l1, lambda_Y_graph,
                             Y_ard, Y_geneset_ard)
 
@@ -97,6 +97,7 @@ function PathMatFacModel(D::AbstractMatrix{<:Real};
                          feature_distributions::Union{<:AbstractVector,Nothing}=nothing,
                          batch_dict::Union{<:AbstractDict,Nothing}=nothing,
                          sample_graphs::Union{<:AbstractVector,Nothing}=nothing,
+                         feature_sets::Union{<:AbstractVector,Nothing}=nothing,
                          feature_graphs::Union{<:AbstractVector,Nothing}=nothing,
                          lambda_X_l2::Union{Real,Nothing}=nothing,
                          lambda_X_condition::Union{Real,Nothing}=1.0,
@@ -104,9 +105,9 @@ function PathMatFacModel(D::AbstractMatrix{<:Real};
                          lambda_Y_l1::Union{Real,Nothing}=nothing,
                          lambda_Y_selective_l1::Union{Real,Nothing}=nothing,
                          lambda_Y_graph::Union{Real,Nothing}=nothing,
+                         lambda_layer::Union{Real,Nothing}=1.0,
                          Y_ard::Bool=false,
-                         Y_geneset_ard::Bool=false, 
-                         lambda_layer::Union{Real,Nothing}=1.0)
+                         Y_feature_set_ard::Bool=false) 
       
     ################################################
     # Validate input
@@ -171,14 +172,19 @@ function PathMatFacModel(D::AbstractMatrix{<:Real};
         feature_distributions = fill("normal", N)
     end
 
+    # Check whether we're running feature set ARD
+    if Y_feature_set_ard
+        @assert feature_sets != nothing "`feature_sets` must be provided whenever `Y_feature_set_ard` is true."
+    end 
+
     ###############################
     # Assemble the model
     return assemble_model(D, K, sample_ids, sample_conditions, 
                           feature_ids, feature_views, feature_distributions,
-                          batch_dict, feature_graphs, sample_graphs,
+                          batch_dict, feature_sets, feature_graphs, sample_graphs,
                           lambda_X_l2, lambda_X_condition, lambda_X_graph,
                           lambda_Y_l1, lambda_Y_selective_l1, lambda_Y_graph,
-                          Y_ard, Y_geneset_ard, 
+                          Y_ard, Y_feature_set_ard, 
                           lambda_layer) 
 end
 
@@ -211,13 +217,13 @@ function Base.getindex(model::PathMatFacModel, idx1, idx2)
 end
 
 
-
 PMTypes = Union{PathMatFacModel, NetworkRegularizer, GroupRegularizer,
                 L1Regularizer, ColScale, ColShift, BatchScale, BatchShift,
                 BatchArray, BatchArrayReg, ViewableComposition, SequenceReg,
-                CompositeRegularizer}
+                CompositeRegularizer, ARDRegularizer, FeatureSetARDReg}
 
 NoEqTypes = Union{Function,Tuple}
+
 
 function Base.:(==)(a::T, b::T) where T <: PMTypes
     for fn in fieldnames(T)

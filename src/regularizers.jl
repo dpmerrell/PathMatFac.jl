@@ -465,14 +465,14 @@ end
 # Construct regularizer for Y matrix
 ###########################################
 
-function construct_Y_reg(K, N, feature_ids, feature_graphs,
+function construct_Y_reg(K, N, feature_ids, feature_sets, feature_graphs,
                          lambda_Y_l1, lambda_Y_selective_l1, lambda_Y_graph,
                          Y_ard, Y_geneset_ard)
 
     # If either of the ARD flags are set `true`, then
     # they take priority over the other regularizers.
     if Y_geneset_ard
-        #TODO: implement geneset ARD!
+        return construct_featureset_ard(K, feature_ids, feature_sets) 
     end
     if Y_ard
         return ARDRegularizer(K,N) 
