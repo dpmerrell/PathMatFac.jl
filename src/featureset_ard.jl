@@ -1,7 +1,7 @@
 # Regularize a matrix Y under these
 # probabilistic assumptions:
 #
-# tau_kj ~ Gamma(alpha, beta .+ A_k^T S_j)
+# tau_kj ~ Gamma(alpha, scale*(beta_0 .+ A_k^T S_j))
 # Y_kj ~ Normal(0, 1 / tau_kj)
 # 
 # I.e., we assume that the variances of the
@@ -13,38 +13,56 @@
 # I.e.:  alternate between: 
 #     * updating `A` given fixed tau ("maximization"); 
 #     * updating `tau` given fixed `A` and `Y` ("expectation");
-#     * updating `Y` given fixed tau ("maximization")
+#     * updating `Y` given fixed `tau` ("maximization")
+# 
+# We also allow `alpha` and `scale` to be updated by 
+# Method of Moments estimates (from tau).
+# We allow the `alpha` and `scale` to vary between columns
+# of tau, but our updates assume they're constant
+# within feature views. 
  
 mutable struct FeatureSetARDReg
-    alpha0::Float32
+    feature_view_ids::AbstractVector
+    feature_views::Tuple
+    alpha::AbstractVector
+    scale::AbstractVector
     beta0::Float32
     tau::AbstractMatrix
+    tau_max::Float32
     S::AbstractMatrix
     A::AbstractMatrix
-    opt::Flux.Optimise.AbstractOptimiser
+    A_opt::Flux.Optimise.AbstractOptimiser
 end
 
 @functor FeatureSetARDReg
 
 
-function FeatureSetARDReg(K::Integer, S::AbstractMatrix;
-                          alpha0=0.5, beta0=0.5, lr=0.1)
-    tau = zeros(K,N)
+function FeatureSetARDReg(K::Integer, S::AbstractMatrix,
+                          feature_views::AbstractVector; 
+                          beta0=1e-6, lr=0.1, tau_max=1e6)
+
     n_sets, N = size(S)
+    feature_view_ids = unique(feature_views)
+    feature_views = Tuple(ids_to_ranges(feature_views))
+    alpha = fill(beta0, N)
+    scale = ones(N)
+    tau = zeros(K,N)
     A = zeros(n_sets, K)
     l1_lambda = sqrt.(sum(S; dims=2)./N)
-    opt = ISTAOptimiser(A, lr, l1_lambda)
+    A_opt = ISTAOptimiser(A, lr, l1_lambda)
  
-    return FeatureSetARDReg(alpha0, beta0, zeros(K,N),
-                            S, A, opt) 
+    return FeatureSetARDReg(feature_view_ids,
+                            feature_views,
+                            alpha, scale, beta0, 
+                            tau, tau_max,
+                            S, A, A_opt) 
 end
 
 
-function construct_featureset_ard(K, feature_ids, feature_sets;
-                                     alpha0=0.5, beta0=0.5,
-                                     lr=0.1, l1_lambda=nothing)
+function construct_featureset_ard(K, feature_ids, feature_views, feature_sets;
+                                  beta0=1e-6, lr=0.1, tau_max=1e6)
     L = length(feature_sets)
-    N = length(featureset_ids)
+    N = length(feature_ids)
     f_to_j = value_to_idx(feature_ids)
 
     # Construct the sparse feature set matrix
@@ -63,8 +81,8 @@ function construct_featureset_ard(K, feature_ids, feature_sets;
     end
     S = sparse(I, J, V, L, N)
 
-    return FeatureSetARDReg(K, S; alpha0=alpha0, beta0=beta0,
-                                  lr=lr, l1_lambda=l1_lambda)
+    return FeatureSetARDReg(K, S, feature_views; 
+                            beta0=beta0, lr=lr, tau_max=tau_max)
 end 
 
 
@@ -73,27 +91,59 @@ function (reg::FeatureSetARDReg)(Y::AbstractMatrix)
     return 0.5*sum(reg.tau .* (Y.*Y))
 end
 
+
 function ChainRulesCore.rrule(reg::FeatureSetARDReg, Y::AbstractMatrix)
 
-    g = 0.5.* (reg.tau .* Y)
+    g = reg.tau .* Y
 
     function featureset_ard_pullback(loss_bar)
         return NoTangent(), loss_bar.*g
     end
 
-    return sum(g.*Y), featureset_ard_pullback
+    return 0.5*sum(g.*Y), featureset_ard_pullback
+end
+
+
+# Update `alpha` via Method of Moments (on tau);
+# and update `scale` to be consistent with alpha and tau.
+function update_alpha_scale!(reg::FeatureSetARDReg; q=0.95)
+
+    # Compute view-wise means for tau
+    view_means = map(r->mean(reg.tau[:,r]), reg.feature_views)
+    view_means_sq = view_means.*view_means
+
+    # Compute view-wise variances for tau
+    viewsq_means = map(r->mean(reg.tau[:,r].^2), reg.feature_views) 
+    view_var = viewsq_means .- view_means_sq
+
+    # Compute new view-wise alpha; assign to model
+    view_alpha = view_means_sq./view_var
+    for (i,r) in enumerate(reg.feature_views)
+        reg.alpha[r] .= view_alpha[i]
+    end
+
+    # Compute view-wise maxes for tau 
+    # (By default we actually use 95%-ile for improved stability)
+    view_maxes = map(r->quantile(vec(reg.tau[:,r]), q), reg.feature_views) 
+
+    # Compute view-wise scale; assign to model
+    view_scale = view_alpha ./ (reg.beta0 .* view_maxes)
+    for (i,r) in enumerate(reg.feature_views)
+        reg.scale[r] .=  view_scale[i]
+    end
 end
 
 
 # Update tau via posterior expectation.
 function update_tau!(reg::FeatureSetARDReg, Y::AbstractMatrix)
-    reg.tau .= (reg.alpha0 + 0.5) ./(reg.beta0 .+ transpose(reg.S)*reg.A .+ 0.5.*(Y.*Y))
+    reg.tau .= (transpose(reg.alpha) .+ 0.5) ./(transpose(reg.scale).*(reg.beta0 .+ transpose(reg.A)*reg.S) .+ 0.5.*(Y.*Y))
+    map!(x->min(x, reg.tau_max), reg.tau, reg.tau)
 end
 
 
-function gamma_loss(A, S, tau, alpha0, beta0)
-    AtS = beta0 .+ transpose(A)*S
-    return sum(-alpha0.*log.(AtS) .+ (AtS).*tau)
+function gamma_loss(A, S, tau, alpha, beta0, scale)
+    beta = transpose(scale).*(beta0 .+ transpose(A)*S)
+    return sum(-transpose(alpha).*log.(beta) .+ (beta).*tau)
 end
 
 
@@ -103,7 +153,7 @@ function update_A_inner!(reg::FeatureSetARDReg; max_epochs=1000,
                                                 atol=1e-5, rtol=1e-5)
 
     A_loss = A -> gamma_loss(A, reg.S, reg.tau, 
-                                reg.alpha0, reg.beta0)
+                                reg.alpha, reg.beta0, reg.scale)
     total_lss = Inf
     for epoch in max_epochs
         new_lss, A_grads = Zygote.withgradient(A_loss, reg.A)

@@ -579,6 +579,7 @@ function reg_tests()
         @test isapprox(grads[1], test_precisions .* test_Y)
     end
 
+
     @testset "BatchArray regularizers" begin
         col_batches = ["cat", "cat", "cat", "dog", "dog", "fish"]
         row_batches = Dict("cat"=>[1,1,1,2,2], "dog"=>[1,1,2,2,2], "fish"=>[1,1,1,1,2])
@@ -609,6 +610,71 @@ function reg_tests()
         @test length(composite_reg.regularizers) == 2
         @test isapprox(composite_reg(test_Y), l1_reg(test_Y) + net_reg(test_Y))
     end
+end
+
+function featureset_ard_tests()
+
+    N = 40
+    K = 10
+    Y = randn(K,N)
+    feature_ids = collect(1:N)
+    feature_views = repeat([1,2], inner=div(N,2))
+    feature_sets = [collect(1:10),collect(11:20),collect(21:30),collect(31:40)]
+
+    reg = PM.construct_featureset_ard(K, feature_ids, feature_views, feature_sets;
+                                      beta0=1e-6, lr=0.1, tau_max=1e6)
+
+    @testset "Featureset ARD constructor" begin
+
+        @test size(reg.tau) == (K,N)
+        @test length(reg.feature_views) == 2
+        @test reg.feature_view_ids == [1,2]
+        @test all(reg.alpha .== 1e-6)
+        @test all(reg.scale .== 1.0)
+        @test isapprox(reg.beta0, 1e-6)
+        @test isapprox(reg.tau_max, 1e6)
+        
+        test_S = zeros(Bool, length(feature_sets), N)
+        for (i, s) in enumerate(feature_sets)
+            test_S[i,s] .= true
+        end
+
+        @test issparse(reg.S)
+        @test isapprox(Matrix(reg.S), test_S)
+    end
+   
+
+    @testset "Featureset ARD updates" begin
+
+        # Update tau
+        PM.update_tau!(reg, Y)
+        # This should hold ONLY because alpha and scale have not been updated yet.
+        @test isapprox(reg.tau, (transpose(reg.alpha) .+ 0.5) ./ (reg.beta0 .+ 0.5.*(Y.*Y)))
+
+        # Update alpha and scale
+        view_1_idx = feature_views .== 1
+        view_2_idx = feature_views .== 2
+        test_alpha = zeros(Float32, N)
+        test_alpha[view_1_idx] .= mean(reg.tau[:,view_1_idx])^2 / (mean(reg.tau[:,view_1_idx].^2) .- mean(reg.tau[:,view_1_idx])^2)
+        test_alpha[view_2_idx] .= mean(reg.tau[:,view_2_idx])^2 / (mean(reg.tau[:,view_2_idx].^2) .- mean(reg.tau[:,view_2_idx])^2)
+
+        test_scale = zeros(Float32, N)
+        test_scale[view_1_idx] .= test_alpha[view_1_idx] ./ (reg.beta0 .* quantile(vec(reg.tau[:,view_1_idx]), 0.9)) 
+        test_scale[view_2_idx] .= test_alpha[view_2_idx] ./ (reg.beta0 .* quantile(vec(reg.tau[:,view_2_idx]), 0.9)) 
+        
+        PM.update_alpha_scale!(reg; q=0.9)
+        @test isapprox(reg.alpha, test_alpha)
+        @test isapprox(reg.scale, test_scale)
+
+    end
+
+    @testset "Featureset ARD regularization" begin
+
+        @test isapprox(reg(Y), 0.5*sum(reg.tau .* Y .*Y))
+        grads = Zygote.gradient(reg, Y)
+        @test isapprox(grads[1], reg.tau .* Y)
+
+    end 
 end
 
 
@@ -805,23 +871,23 @@ function fit_tests()
     feature_graph = [[feat, "y", 1] for feat in feature_ids]
     feature_graphs = fill(feature_graph, K)
 
-    #@testset "Fit CPU" begin
+    @testset "Fit CPU" begin
 
-    #    model = PathMatFacModel(Z; sample_conditions, feature_ids=feature_ids,  feature_views=feature_views,
-    #                                                  feature_graphs=feature_graphs, batch_dict=batch_dict, 
-    #                                                  lambda_X_l2=0.1, lambda_Y_graph=0.1, lambda_Y_selective_l1=0.05)
+        model = PathMatFacModel(Z; sample_conditions, feature_ids=feature_ids,  feature_views=feature_views,
+                                                      feature_graphs=feature_graphs, batch_dict=batch_dict, 
+                                                      lambda_X_l2=0.1, lambda_Y_graph=0.1, lambda_Y_selective_l1=0.05)
 
-    #    X_start = deepcopy(model.matfac.X)
-    #    Y_start = deepcopy(model.matfac.Y)
-    #    batch_scale = deepcopy(model.matfac.col_transform.layers[3]) 
-    #    fit!(model; verbosity=2, lr=0.25, max_epochs=1000, print_iter=1, rel_tol=1e-7, abs_tol=1e-7)
+        X_start = deepcopy(model.matfac.X)
+        Y_start = deepcopy(model.matfac.Y)
+        batch_scale = deepcopy(model.matfac.col_transform.layers[3]) 
+        fit!(model; verbosity=2, lr=0.25, max_epochs=1000, print_iter=1, rel_tol=1e-7, abs_tol=1e-7)
 
-    #    @test !isapprox(model.matfac.X, X_start)
-    #    @test !isapprox(model.matfac.Y, Y_start)
-    #    @test all(map(isapprox, batch_scale.logdelta.values,
-    #                            model.matfac.col_transform.layers[3].logdelta.values)
-    #             ) # This should not have changed
-    #end
+        @test !isapprox(model.matfac.X, X_start)
+        @test !isapprox(model.matfac.Y, Y_start)
+        @test all(map(isapprox, batch_scale.logdelta.values,
+                                model.matfac.col_transform.layers[3].logdelta.values)
+                 ) # This should not have changed
+    end
 
     @testset "Fit GPU" begin
 
@@ -1011,16 +1077,17 @@ end
 
 function main()
 
-    util_tests()
-    batch_array_tests()
-    layers_tests()
-    preprocess_tests()
-    reg_tests()
-    model_tests()
-    score_tests()
-    fit_tests()
-    transform_tests()
-    model_io_tests()
+    #util_tests()
+    #batch_array_tests()
+    #layers_tests()
+    #preprocess_tests()
+    #reg_tests()
+    featureset_ard_tests()
+    #model_tests()
+    #score_tests()
+    #fit_tests()
+    #transform_tests()
+    #model_io_tests()
     #simulation_tests()
 
 end

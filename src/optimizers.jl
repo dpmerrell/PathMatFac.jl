@@ -29,7 +29,7 @@ mutable struct ISTAOptimiser <: Flux.Optimise.AbstractOptimiser
     lambda::AbstractArray
 end
 
-function ISTAOptimiser(target, lr, l1_lambda)
+function ISTAOptimiser(target::AbstractArray, lr::Number, l1_lambda)
     ssq_grad = zero(target) .+ 1e-8
     return ISTAOptimiser(lr, ssq_grad, l1_lambda)
 end

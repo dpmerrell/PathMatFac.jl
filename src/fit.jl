@@ -180,7 +180,7 @@ function basic_fit_reg_weight!(model::PathMatFacModel;
                                lr=0.25, opt=nothing, 
                                lambda_max=1.0, 
                                n_lambda=8,
-                               lambda_min=1e-6,
+                               lambda_min_frac=1e-3,
                                kwargs...)
     if opt == nothing
         opt = construct_optimizer(model, lr)
@@ -195,6 +195,7 @@ function basic_fit_reg_weight!(model::PathMatFacModel;
     model = gpu(model)
 
     # Loop over a set of weights (in decreasing order)
+    lambda_min = lambda_min_frac*lambda_max
     lambda_vec = exp.(collect(range(log(lambda_max), 
                                     log(lambda_min); 
                                     length=n_lambda)))
