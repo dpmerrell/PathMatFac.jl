@@ -41,7 +41,7 @@ function assemble_model(D, K, sample_ids, sample_conditions,
                               feature_sets, feature_graphs, sample_graphs,
                               lambda_X_l2, lambda_X_condition, lambda_X_graph, 
                               lambda_Y_l1, lambda_Y_selective_l1, lambda_Y_graph,
-                              Y_ard, Y_geneset_ard,
+                              Y_ard, Y_feature_set_ard,
                               lambda_layer)
 
     M, N = size(D)
@@ -52,10 +52,11 @@ function assemble_model(D, K, sample_ids, sample_conditions,
 
     # Construct regularizers for X and Y
     X_reg = construct_X_reg(K, M, sample_ids, sample_conditions, sample_graphs, 
-                            lambda_X_l2, lambda_X_condition, lambda_X_graph)
+                            lambda_X_l2, lambda_X_condition, lambda_X_graph,
+                            Y_ard, Y_feature_set_ard)
     Y_reg = construct_Y_reg(K, N, feature_ids, feature_sets, feature_graphs,
                             lambda_Y_l1, lambda_Y_selective_l1, lambda_Y_graph,
-                            Y_ard, Y_geneset_ard)
+                            Y_ard, Y_feature_set_ard)
 
     # Construct MatFacModel
     matfac = MatFacModel(M, N, K, feature_distributions;

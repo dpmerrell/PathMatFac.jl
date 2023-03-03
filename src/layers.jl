@@ -213,11 +213,11 @@ end
 function construct_model_layers(feature_views, batch_dict)
 
     N = length(feature_views)
-    layer_ls = [ColScale(N), ColShift(N), x->x, x->x]
+    layer_ls = [ColScale(N), x->x, ColShift(N), x->x]
     unq_views = unique(feature_views)
 
     if batch_dict != nothing
-        layer_ls[3] = BatchScale(feature_views, batch_dict)
+        layer_ls[2] = BatchScale(feature_views, batch_dict)
         layer_ls[4] = BatchShift(feature_views, batch_dict)
     end
     layer_obj = ViewableComposition(Tuple(layer_ls))

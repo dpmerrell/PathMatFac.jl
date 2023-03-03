@@ -270,25 +270,25 @@ function layers_tests()
         transform_nobatch = PM.construct_model_layers(col_batches, nothing)
         @test length(transform_nobatch.layers) == 4 
         @test typeof(transform_nobatch.layers[1]) <: PM.ColScale 
-        @test typeof(transform_nobatch.layers[2]) <: PM.ColShift
-        @test typeof(transform_nobatch.layers[3]) <: Function
+        @test typeof(transform_nobatch.layers[2]) <: Function
+        @test typeof(transform_nobatch.layers[3]) <: PM.ColShift
         @test typeof(transform_nobatch.layers[4]) <: Function
         transform_grads = Zygote.gradient((f,x)->sum(f(x)), transform_nobatch, xy)
         @test transform_grads[1].layers[1].logsigma != nothing
-        @test transform_grads[1].layers[2].mu != nothing
-        @test transform_grads[1].layers[3] == nothing
+        @test transform_grads[1].layers[2] == nothing
+        @test transform_grads[1].layers[3].mu != nothing
         @test transform_grads[1].layers[4] == nothing
  
         transform_w_batch = PM.construct_model_layers(col_batches, batch_dict) 
         @test length(transform_w_batch.layers) == 4 
         @test typeof(transform_w_batch.layers[1]) <: PM.ColScale 
-        @test typeof(transform_w_batch.layers[2]) <: PM.ColShift
-        @test typeof(transform_w_batch.layers[3]) <: PM.BatchScale 
+        @test typeof(transform_w_batch.layers[2]) <: PM.BatchScale 
+        @test typeof(transform_w_batch.layers[3]) <: PM.ColShift
         @test typeof(transform_w_batch.layers[4]) <: PM.BatchShift
         transform_grads = Zygote.gradient((f,x)->sum(f(x)), transform_w_batch, xy)
         @test transform_grads[1].layers[1].logsigma != nothing
-        @test transform_grads[1].layers[2].mu != nothing
-        @test transform_grads[1].layers[3].logdelta != nothing
+        @test transform_grads[1].layers[2].logdelta != nothing
+        @test transform_grads[1].layers[3].mu != nothing
         @test transform_grads[1].layers[4].theta != nothing
         
         ###################################
@@ -710,7 +710,7 @@ function model_tests()
         @test size(model.matfac.X) == (10,M)
         @test size(model.matfac.Y) == (10,N)
         @test typeof(model.matfac.col_transform.layers[1]) == PM.ColScale
-        @test typeof(model.matfac.col_transform.layers[2]) == PM.ColShift
+        @test typeof(model.matfac.col_transform.layers[3]) == PM.ColShift
         @test model.sample_ids == collect(1:M)
         @test model.feature_ids == collect(1:N)
         @test typeof(model.matfac.noise_model.noises[1]) == MF.NormalNoise
@@ -722,8 +722,8 @@ function model_tests()
         @test size(model.matfac.X) == (K,M)
         @test size(model.matfac.Y) == (K,N)
         @test typeof(model.matfac.col_transform.layers[1]) == PM.ColScale
-        @test typeof(model.matfac.col_transform.layers[2]) == PM.ColShift
-        @test typeof(model.matfac.col_transform.layers[3]) == PM.BatchScale
+        @test typeof(model.matfac.col_transform.layers[2]) == PM.BatchScale
+        @test typeof(model.matfac.col_transform.layers[3]) == PM.ColShift
         @test typeof(model.matfac.col_transform.layers[4]) == PM.BatchShift
     end
 
@@ -879,13 +879,13 @@ function fit_tests()
 
         X_start = deepcopy(model.matfac.X)
         Y_start = deepcopy(model.matfac.Y)
-        batch_scale = deepcopy(model.matfac.col_transform.layers[3]) 
+        batch_scale = deepcopy(model.matfac.col_transform.layers[2]) 
         fit!(model; verbosity=2, lr=0.25, max_epochs=1000, print_iter=1, rel_tol=1e-7, abs_tol=1e-7)
 
         @test !isapprox(model.matfac.X, X_start)
         @test !isapprox(model.matfac.Y, Y_start)
         @test all(map(isapprox, batch_scale.logdelta.values,
-                                model.matfac.col_transform.layers[3].logdelta.values)
+                                model.matfac.col_transform.layers[2].logdelta.values)
                  ) # This should not have changed
     end
 
@@ -897,7 +897,7 @@ function fit_tests()
 
         X_start = deepcopy(model.matfac.X)
         Y_start = deepcopy(model.matfac.Y)
-        batch_scale = deepcopy(model.matfac.col_transform.layers[3])
+        batch_scale = deepcopy(model.matfac.col_transform.layers[2])
 
         model = gpu(model) 
         fit!(model; verbosity=2, lr=0.25, max_epochs=1000, print_iter=1, rel_tol=1e-7, abs_tol=1e-7)
@@ -906,7 +906,7 @@ function fit_tests()
         @test !isapprox(model.matfac.X, X_start)
         @test !isapprox(model.matfac.Y, Y_start)
         @test all(map(isapprox, batch_scale.logdelta.values,
-                                model.matfac.col_transform.layers[3].logdelta.values)
+                                model.matfac.col_transform.layers[2].logdelta.values)
                  ) # This should not have changed
     end
 end
@@ -1077,17 +1077,17 @@ end
 
 function main()
 
-    #util_tests()
-    #batch_array_tests()
-    #layers_tests()
-    #preprocess_tests()
-    #reg_tests()
+    util_tests()
+    batch_array_tests()
+    layers_tests()
+    preprocess_tests()
+    reg_tests()
     featureset_ard_tests()
-    #model_tests()
-    #score_tests()
-    #fit_tests()
-    #transform_tests()
-    #model_io_tests()
+    model_tests()
+    score_tests()
+    fit_tests()
+    transform_tests()
+    model_io_tests()
     #simulation_tests()
 
 end

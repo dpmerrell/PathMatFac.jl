@@ -197,7 +197,7 @@ end
 mutable struct L1Regularizer
     l1_idx::AbstractMatrix{Bool} # Boolean matrix indicates which entries
                                  # are L1-regularized
-    weight::Number
+    weight::Number 
 end
 
 @functor L1Regularizer
@@ -228,7 +228,7 @@ function ChainRulesCore.rrule(reg::L1Regularizer, X::AbstractArray)
     lss = reg.weight*sum(abs.(sel_X))
 
     function L1Regularizer_pullback(loss_bar)
-        X_bar = (loss_bar*reg.weight).*sign.(sel_X)
+        X_bar = (loss_bar*reg.weight) .* sign.(sel_X)
         return ChainRulesCore.NoTangent(), X_bar
     end    
 
@@ -384,7 +384,7 @@ function ARDRegularizer(X::AbstractArray; alpha=Float32(1e-6), beta=Float32(1e-6
                                           weight=1.0, tau_max=Float32(1e6))
     # Initialize the regularizer's tau with posterior means
     return ARDRegularizer(alpha, beta, tau_max, weight,
-                          (alpha + 1) ./ (beta .+ (X.*X))
+                          (alpha + 0.5) ./ (beta .+ 0.5.*(X.*X))
                          ) 
 end
 
@@ -443,7 +443,20 @@ end
 ###########################################
 
 function construct_X_reg(K, M, sample_ids, sample_conditions, sample_graphs, 
-                         lambda_X_l2, lambda_X_condition, lambda_X_graph)
+                         lambda_X_l2, lambda_X_condition, lambda_X_graph,
+                         Y_ard, Y_geneset_ard)
+
+    # If we're doing ARD on Y, then we require X 
+    # to be quadratic or group regularized. 
+    # Regularization weights will be set by empirical Bayes.
+    if (Y_ard | Y_geneset_ard)
+        if sample_conditions
+            return GroupRegularizer(sample_condtions; weight=1.0, K=K)
+        else
+            return x->0.5*sum(x.*x)
+        end
+    end
+
     regularizers = Any[x->0.0, x->0.0, x->0.0]
     if lambda_X_l2 != nothing
         regularizers[1] = x->(lambda_X_l2*0.5)*sum(x.*x)
@@ -499,7 +512,6 @@ function construct_Y_reg(K, N, feature_ids, feature_sets, feature_graphs,
 
     return construct_composite_reg(regularizers) 
 end
-
 
 
 ###########################################
@@ -620,7 +632,7 @@ function construct_layer_reg(feature_views, batch_dict, lambda_layer)
     # If a batch_dict is provided, add regularizers for
     # logdelta and theta (the batch parameters)
     if batch_dict != nothing
-        regs[3] = BatchArrayReg(feature_views, batch_dict; weight=lambda_layer)
+        regs[2] = BatchArrayReg(feature_views, batch_dict; weight=lambda_layer)
         regs[4] = BatchArrayReg(feature_views, batch_dict; weight=lambda_layer)
     end
 
@@ -628,5 +640,58 @@ function construct_layer_reg(feature_views, batch_dict, lambda_layer)
 end
 
 
+#####################################################
+# A struct for temporarily nullifying a regularizer
+#####################################################
+
+mutable struct FrozenRegularizer
+    reg 
+end
+
+@functor FrozenRegularizer
+
+function (fr::FrozenRegularizer)(args...)
+    return 0.0
+end
+
+
+function ChainRulesCore.rrule(fr::FrozenRegularizer, args...)
+
+    function FrozenRegularizer_pullback(loss_bar)
+        return NoTangent(), ZeroTangent()
+    end
+
+    return 0.0, FrozenRegularizer_pullback 
+end
+
+
+function freeze_reg!(sr::SequenceReg, idx::Integer)
+    if !isa(sr.regs[idx], FrozenRegularizer)
+        sr.regs = (sr.regs[1:idx-1]..., 
+                   FrozenRegularizer(sr.regs[idx]),
+                   sr.regs[idx+1:end]...)
+    end
+end
+
+
+function freeze_reg!(sr::SequenceReg, idx::AbstractVector)
+    for i in idx
+        freeze_reg!(sr, i)
+    end
+end
+
+function unfreeze_reg!(sr::SequenceReg, idx::Integer)
+    if isa(vc.layers[idx], FrozenRegularizer)
+        sr.regs = (sr.regs[1:idx-1]..., 
+                   sr.regs[idx].layer,
+                   sr.regs[idx+1:end]...)
+    end
+end
+
+function unfreeze_reg!(sr::SequenceReg, idx::AbstractVector)
+    for i in idx
+        unfreeze_reg!(vc, i)
+    end
+end
 
 
