@@ -219,7 +219,7 @@ end
 
 
 PMTypes = Union{PathMatFacModel, NetworkRegularizer, GroupRegularizer,
-                L1Regularizer, ColScale, ColShift, BatchScale, BatchShift,
+                SelectiveL1Reg, ColScale, ColShift, BatchScale, BatchShift,
                 BatchArray, BatchArrayReg, ViewableComposition, SequenceReg,
                 CompositeRegularizer, ARDRegularizer, FeatureSetARDReg}
 

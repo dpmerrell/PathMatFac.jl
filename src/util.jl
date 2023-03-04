@@ -248,7 +248,7 @@ function edgelists_to_spmats(edgelists, node_to_idx; epsilon=0.0)
 end
 
 
-function rescale!(spmat::SparseMatrixCSC, scalar::Number)
+function scale_spmat!(spmat::AbstractMatrix, scalar::Number)
     spmat.nzval .*= scalar 
 end
 

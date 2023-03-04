@@ -78,6 +78,9 @@ function transform(model::PathMatFacModel, D::AbstractMatrix;
 
     # Construct "feature attributes"
     new_model.matfac.Y = new_model.matfac.Y[:,old_idx]
+    set_layer!(new_model.matfac.col_transform, 1, view(new_model.matfac.col_transform.layers[1], :, old_idx))
+    set_layer!(new_model.matfac.col_transform, 3, view(new_model.matfac.col_transform.layers[3], :, old_idx))
+    new_model.matfac.Y_reg = x->0.0
     new_model.matfac.noise_model = model.matfac.noise_model[old_idx]
     new_model.feature_ids = feature_ids[new_idx]
     new_model.feature_views = feature_views[new_idx]
@@ -92,16 +95,17 @@ function transform(model::PathMatFacModel, D::AbstractMatrix;
     # new BatchShift layer and BatchArrayReg.
     if batch_dict != nothing
         new_layer = BatchShift(feature_views, batch_dict)
-        new_model.matfac.col_trans.layers = (new_model.matfac.col_trans.layers[1:end-1]...,
-                                             new_layer)
+        set_layer!(new_model.matfac.col_trans, 4, new_layer)
 
         # The new regularizer should be informed by the values of the
         # fitted model's batch shift.
         new_reg = construct_new_batch_reg!(new_layer.theta,
-                                           model.matfac.col_trans_reg.regs[end],
-                                           model.matfac.col_transform.layers[end].theta)
-        new_model.matfac.col_trans_reg.regs = (new_model.matfac.col_trans_reg.regs[1:end-1]...,
-                                               new_reg)
+                                           model.matfac.col_transform_reg.regs[4],
+                                           model.matfac.col_transform.layers[4].theta)
+        set_reg!(new_model.matfac.col_transform_reg, 4, new_reg)
+    else # If we aren't provided batch information, then ignore batch effects
+        set_layer!(new_model.matfac.col_transform, 2, x->x)
+        set_layer!(new_model.matfac.col_transform, 4, x->x)
     end
 
     # If sample conditions are provided,
@@ -117,13 +121,20 @@ function transform(model::PathMatFacModel, D::AbstractMatrix;
     ##################################################
     # Fit the model to the new data.
     ##################################################
+    
+    # Move to GPU; initialize an optimizer
     new_model = gpu(new_model)
     opt = construct_optimizer(new_model, lr)
+    
+    # Freeze the other layers and ignore the column
+    # parameters' regularizers
+    freeze_layer!(new_model.matfac.col_transform, 1:4)
+    freeze_reg!(new_model.matfac.col_transform_reg, 1:4)
 
     # Fit the new BatchShift, in isolation
     if batch_dict != nothing
-        # Freeze the other layers
-        freeze_layer!(new_model.matfac.col_transform, 1:3)
+        unfreeze_layer!(new_model.matfac.col_transform, 4)
+        unfreeze_reg!(new_model.matfac.col_transform_reg, 4)
         mf_fit!(new_model; opt=opt, verbosity=verbosity-1,
                            max_epochs=500, update_col_layers=true)
     end
@@ -137,7 +148,7 @@ function transform(model::PathMatFacModel, D::AbstractMatrix;
                        verbosity=verbosity, opt=opt, fit_kwargs...)
 
     new_model = cpu(new_model)
-    unfreeze_layer!(new_model.matfac.col_transform, 1:3)
+    unfreeze_layer!(new_model.matfac.col_transform, 1:4)
 
     #############################################################
     # Restore the model as it was, and assemble the return values

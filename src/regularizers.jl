@@ -3,6 +3,49 @@ import Base: ==
 
 
 ##########################################################
+# L2 regularizer
+##########################################################
+
+mutable struct L2Regularizer
+    weights::AbstractVector
+end
+
+@functor L2Regularizer
+
+function L2Regularizer(K::Integer, w::Number)
+    return L2Regularizer(fill(w, K)) 
+end
+
+function (reg::L2Regularizer)(X::AbstractMatrix)
+    return 0.5*sum(reg.weights .* sum(X .* X, dims=2))
+end
+
+function ChainRulesCore.rrule(reg::L2Regularizer, X::AbstractMatrix)
+    g = reg.weights .* X
+
+    function L2MatReg_pullback(loss_bar)
+        return NoTangent(), loss_bar .* g
+    end
+
+    return 0.5*sum(g .* X)
+end
+
+function (reg::L2Regularizer)(x::AbstractVector)
+    return reg(transpose(x))
+end
+
+function reweight_eb!(reg::L2Regularizer, X::AbstractMatrix; mixture_p=1.0)
+    row_vars = var(X, dims=2)
+    row_precs = 1 ./ row_vars
+    reg.weights .= (mixture_p .* row_precs)
+end 
+
+function reweight_eb!(reg::L2Regularizer, x::AbstractVector; mixture_p=1.0)
+    reweight_eb!(reg, transpose(x); mixture_p=mixture_p)
+end 
+
+
+##########################################################
 # Network regularizer
 ##########################################################
 
@@ -19,7 +62,7 @@ mutable struct NetworkRegularizer{K}
 
     x_virtual::NTuple{K, <:AbstractVector}
 
-    weight::Number
+    cur_weights::AbstractVector
 end
 
 @functor NetworkRegularizer
@@ -55,6 +98,12 @@ function NetworkRegularizer(feature_ids, edgelists; epsilon=0.1, weight=1.0)
 
         # Construct a sparse matrix encoding this network
         spmat = edgelist_to_spmat(edgelist, node_to_idx; epsilon=epsilon)
+        scale_spmat!(spmat, weight)
+
+        #TODO: "REWEIGHT" THESE MATRICES S.T. THEY TEND TO
+        #      GENERATE VECTORS OF EQUAL MAGNITUDE
+        #TODO: THINK ABOUT HOW TO CHOOSE COMPARATIVE WEIGHT
+        #      OF NETWORK AND DIAGONAL ENTRIES
 
         # Split this matrix into observed/unobserved blocks
         N_total = size(spmat, 2)
@@ -70,14 +119,14 @@ function NetworkRegularizer(feature_ids, edgelists; epsilon=0.1, weight=1.0)
     return NetworkRegularizer(Tuple(AA), Tuple(AB), 
                                          Tuple(BB), 
                                          Tuple(x_virtual),
-                                         weight)
+                                         fill(weight, K))
 end
 
-quadratic(u::AbstractVector, 
-          X::AbstractMatrix, 
-          v::AbstractVector) = dot(u, (X*v))
+quadratic_form(u::AbstractVector, 
+               X::AbstractMatrix, 
+               v::AbstractVector) = dot(u, (X*v))
 
-quadratic(X::AbstractMatrix, v::AbstractVector) = dot(v, (X*v))
+quadratic_form(X::AbstractMatrix, v::AbstractVector) = dot(v, (X*v))
 
 ##################################################
 # Matrix row-regularization
@@ -93,13 +142,12 @@ function (nr::NetworkRegularizer)(X::AbstractMatrix)
         nr.x_virtual[k] .= - cg(nr.BB[k], xAB, nr.x_virtual[k])[1]
 
         net_loss = 0.0
-        net_loss += quadratic(nr.AA[k], X[k,:])
+        net_loss += quadratic_form(nr.AA[k], X[k,:])
         net_loss += 2*dot(xAB, nr.x_virtual[k])
-        net_loss += quadratic(nr.BB[k], nr.x_virtual[k])
+        net_loss += quadratic_form(nr.BB[k], nr.x_virtual[k])
         net_loss *= 0.5
         loss += net_loss
     end
-    loss *= nr.weight
     return loss
 end
 
@@ -130,14 +178,12 @@ function ChainRules.rrule(nr::NetworkRegularizer, X::AbstractMatrix)
         net_loss += 0.5*dot(nr.x_virtual[k], BBu)
         loss += net_loss 
     end
-    loss *= nr.weight
 
     function netreg_mat_pullback(loss_bar)
 
         # Network regularization for the observed nodes
         X_bar = (xAA .+ transpose(ABu))
         X_bar .*= loss_bar
-        X_bar .*= nr.weight
 
         return NoTangent(), X_bar 
     end
@@ -145,64 +191,42 @@ function ChainRules.rrule(nr::NetworkRegularizer, X::AbstractMatrix)
     return loss, netreg_mat_pullback
 end
 
-
-#################################################
-# Vector regularizer
-#################################################
-
 function (nr::NetworkRegularizer)(x::AbstractVector)
-
-    xAB = vec(transpose(x)*nr.AB[1])
-    nr.x_virtual[1] .= - cg(nr.BB[k], xAB, nr.x_virtual[1])[1]
-    loss = 0.0
-    loss += quadratic(nr.AA[1], x)
-    loss += 2*dot(xAB, nr.x_virtual[k])
-    loss += quadratic(nr.BB[1], nr.x_virtual[k])
-    loss *= (0.5*nr.weight)
-
-    return loss
+    return nr(transpose(x))
 end
 
-
-function ChainRules.rrule(nr::NetworkRegularizer, x::AbstractVector)
+#TODO revisit this after thinking about it some more
+function reweight_eb!(nr::NetworkRegularizer, X::AbstractMatrix; mixture_p=1.0)
     
-    loss = 0.0
+    # Compute weights from X
+    K, N = size(X)
+    row_precs = 1 ./ var(X, dims=2)
 
-    xAA = transpose(x)*nr.AA[1]
-    xAB = transpose(x)*nr.AB[1]
-    nr.x_virtual[1] .= - cg(nr.BB[k], xAB, nr.x_virtual[1])[1]
-    ABu = nr.AB[1]*u
-    BBu = nr.BB[1]*u
-
-    loss = 0.5*(dot(xAA, x) + 2*dot(x, ABu) + dot(u, BBu))
-
-    function netreg_vec_pullback(loss_bar)
-
-        x_bar = similar(x)
-        x_bar[:] .= vec(xAA) .+ ABu
-        x_bar .*= loss_bar
-        x_bar .*= nr.weight 
-
-        return NoTangent(), x_bar
+    # Rescale the blocks of each sparse matrix
+    new_over_old = mixture_p .* cpu(row_precs ./ nr.cur_weights)
+    for k=1:K
+        scale_spmat!(nr.AA[k], new_over_old[k])
+        scale_spmat!(nr.AB[k], new_over_old[k])
+        scale_spmat!(nr.BB[k], new_over_old[k])
     end
-    
-    return loss, netreg_vec_pullback
+
+    nr.cur_weights .= row_precs
 end
 
-
+ 
 ##########################################################
 # Selective L1 regularizer
 ##########################################################
 
-mutable struct L1Regularizer
+mutable struct SelectiveL1Reg
     l1_idx::AbstractMatrix{Bool} # Boolean matrix indicates which entries
                                  # are L1-regularized
-    weight::Number 
+    weight::AbstractVector 
 end
 
-@functor L1Regularizer
+@functor SelectiveL1Reg
 
-function L1Regularizer(feature_ids::Vector, edgelists::Vector; weight=1.0)
+function SelectiveL1Reg(feature_ids::Vector, edgelists::Vector; weight=1.0)
 
     l1_features = compute_nongraph_nodes(feature_ids, edgelists) 
     N = length(feature_ids)
@@ -214,25 +238,25 @@ function L1Regularizer(feature_ids::Vector, edgelists::Vector; weight=1.0)
         l1_idx[k,:] .= map(x->in(x, l1_feat), feature_ids) 
     end
 
-    return L1Regularizer(l1_idx, weight)
+    return SelectiveL1Reg(l1_idx, fill(weight, K))
 end
                         
-function (reg::L1Regularizer)(X::AbstractArray)
-    return reg.weight*sum(abs.(reg.l1_idx .* X)) 
+function (reg::SelectiveL1Reg)(X::AbstractArray)
+    return sum(reg.weight .* sum(abs.(reg.l1_idx .* X), dims=2)) 
 end
 
 
-function ChainRulesCore.rrule(reg::L1Regularizer, X::AbstractArray)
+function ChainRulesCore.rrule(reg::SelectiveL1Reg, X::AbstractArray)
 
     sel_X = reg.l1_idx .* X
-    lss = reg.weight*sum(abs.(sel_X))
+    lss = sum(reg.weight .* sum(abs.(sel_X), dims=2))
 
-    function L1Regularizer_pullback(loss_bar)
-        X_bar = (loss_bar*reg.weight) .* sign.(sel_X)
+    function SelectiveL1Reg_pullback(loss_bar)
+        X_bar = (loss_bar.*reg.weight) .* sign.(sel_X)
         return ChainRulesCore.NoTangent(), X_bar
     end    
 
-    return lss, L1Regularizer_pullback
+    return lss, SelectiveL1Reg_pullback
 end
 
 
@@ -243,10 +267,8 @@ end
 mutable struct GroupRegularizer
     group_labels::AbstractVector
     group_idx::AbstractMatrix{Float32}
-    group_sizes::AbstractVector{Float32}
-    biases::AbstractMatrix{Float32}
-    bias_sizes::AbstractVector{Float32}
-    weight::Number
+    group_weights::AbstractVector
+    group_sizes::AbstractVector
 end
 
 @functor GroupRegularizer
@@ -254,110 +276,134 @@ end
 function GroupRegularizer(group_labels::AbstractVector; weight=1.0, K=1)
     unq_labels = unique(group_labels)
     idx = ids_to_ind_mat(group_labels)
-    sizes = vec(sum(idx, dims=1))
-    
-    n_groups = size(idx, 2)
-    biases = zeros(Float32, K, n_groups)
-    bias_sizes = zeros(Int32, n_groups)
- 
     idx = sparse(idx)
-    return GroupRegularizer(unq_labels, idx, sizes, biases, bias_sizes, weight)
+    group_sizes = transpose(idx)*ones(length(group_labels))
+    n_groups = size(idx, 2)
+    weights = fill(weight, n_groups)
+    return GroupRegularizer(unq_labels, idx, weights, group_sizes)
 end
 
 
 function construct_new_group_reg(new_group_labels::AbstractVector,
                                  old_regularizer::GroupRegularizer, 
-                                 old_array::AbstractMatrix)
+                                 old_array::AbstractMatrix; 
+                                 mixture_p=1.0)
+    # Make a copy of the old regularizer and reweight it in an
+    # empirical Bayes fashion.
+    old_reg_copy = deepcopy(old_regularizer)
+    reweight_eb!(old_reg_copy, old_array; mixture_p=mixture_p)
+
+    # Figure out which groups are shared between old and new
+    unq_new_labels = unique(new_group_labels)
+    old_intersect_idx, new_intersect_idx = keymatch(old_reg_copy.group_labels,
+                                                    unq_new_labels)
+
+    # Construct a vector of group weights for the new regularizer.
+    # By default, set it to the mean of the old weights 
+    expected_weight = mean(old_reg_copy.group_weights)
+    new_weights = fill(expected_weight, length(unq_new_labels))
+
+    # Copy weights from the old regularizer to the new one,
+    # whenever appropriate
+    new_weights[new_intersect_idx] .= old_reg_copy.group_weights[old_intersect_idx]
+
+    # Finally: construct the sparse index matrix for the new regularizer
+    new_idx = ids_to_ind_mat(new_group_labels)
+    new_idx = sparse(new_idx)
+    new_group_sizes = transpose(new_idx) * ones(length(new_group_labels))
+
+    # Return the completed regularizer
+    return GroupRegularizer(unq_new_labels, new_idx, new_weights, new_group_sizes)
+end
+
+function reweight_eb!(gr::GroupRegularizer, X::AbstractMatrix; mixture_p=1.0)
+    # Compute the group-wise variances from X
+    means = transpose((X * gr.group_idx)) ./ gr.group_sizes
+    mean_mat = transpose(gr.group_idx * means)
+    diffs = X .- mean_mat
+    diff_sq = diffs.*diffs
+    group_vars = transpose((diff_sq * gr.group_idx)) ./ gr.group_sizes
     
-    K = size(old_array,1)
-    weight = old_regularizer.weight
-
-    # Construct the new regularizer
-    new_regularizer = GroupRegularizer(new_group_labels; weight=weight, K=K)
-    
-    # Collect the biases and bias sizes for the new regularizer,
-    # whenever the new groups intersect the old groups
-    old_intersect_idx, new_intersect_idx = keymatch(old_regularizer.group_labels,
-                                                    new_regularizer.group_labels)
-
-    old_means = (old_array * old_regularizer.group_idx) ./ transpose(old_regularizer.group_sizes) 
-    old_intersect_means = old_means[:,old_intersect_idx]
-
-    new_regularizer.biases[:,new_intersect_idx] .= old_intersect_means
-    new_regularizer.bias_sizes[new_intersect_idx] .= old_regularizer.group_sizes[old_intersect_idx]
-
-    return new_regularizer
+    # Set the group weights to their inverse variances
+    gr.group_weights .= mixture_p ./ vec(mean(group_vars, dims=2))
 end
 
-
-
-#####################################
-# regularize a vector
-function (cr::GroupRegularizer)(x::AbstractVector)
-
-    means = (transpose(cr.biases) .+ transpose(cr.group_idx)*x)./(cr.bias_sizes .+ cr.group_sizes)
-    mean_vec = cr.group_idx * means
-    diffs = x .- mean_vec
-    return 0.5*cr.weight*sum(diffs.*diffs)
+function reweight_eb!(gr::GroupRegularizer, x::AbstractVector; mixture_p=1.0)
+    reweight_eb!(gr, transpose(x); mixture_p=1.0)
 end
 
-function (cr::GroupRegularizer)(layer::ColScale)
-    return cr(layer.logsigma)
-end
-
-function (cr::GroupRegularizer)(layer::ColShift)
-    return cr(layer.mu)
-end
-
-function (cr::GroupRegularizer)(layer::FrozenLayer)
-    return 0.0
-end
-
-
-function ChainRulesCore.rrule(cr::GroupRegularizer, x::AbstractVector)
-   
-    means = (transpose(cr.biases) .+ transpose(cr.group_idx)*x)./(cr.bias_sizes .+ cr.group_sizes)
-    mean_vec = cr.group_idx * means
-    diffs = x .- mean_vec
-
-    function group_reg_pullback(loss_bar)
-        return ChainRulesCore.NoTangent(), 
-               Float32(cr.weight) .* diffs 
-    end
-    loss = 0.5*cr.weight*sum(diffs.*diffs)
-
-    return loss, group_reg_pullback
-end
+######################################
+## regularize a vector
+#function (gr::GroupRegularizer)(x::AbstractVector)
+#    means = (transpose(gr.group_idx)*x)./gr.group_sizes
+#    mean_vec = gr.group_idx * means
+#    weight_vec = gr.group_idx * gr.group_weights
+#    diffs = x .- mean_vec
+#    return 0.5*sum(weight_vec .* diffs.*diffs)
+#end
+#
+#
+#function ChainRulesCore.rrule(gr::GroupRegularizer, x::AbstractVector)
+#   
+#    means = (transpose(gr.group_idx)*x)./gr.group_sizes
+#    mean_vec = gr.group_idx * means
+#    weight_vec = gr.group_idx * gr.group_weights
+#    diffs = x .- mean_vec
+#    g = weight_vec .* diffs 
+#
+#    function group_reg_pullback(loss_bar)
+#        return ChainRulesCore.NoTangent(), loss_bar.*g
+#    end
+#    loss = 0.5*sum(g.*diffs)
+#
+#    return loss, group_reg_pullback
+#end
 
 
 ####################################
 # Regularize rows of a matrix
-function (cr::GroupRegularizer)(X::AbstractMatrix)
+function (gr::GroupRegularizer)(X::AbstractMatrix)
 
-    means = (transpose(cr.biases) .+ transpose(cr.group_idx)*transpose(X))./(cr.bias_sizes .+ cr.group_sizes)
+    means = transpose((X * gr.group_idx)) ./ gr.group_sizes
+    mean_mat = transpose(gr.group_idx * means)
+    weight_vec = gr.group_idx * gr.group_weights
+    diffs = X .- mean_mat
 
-    mean_rows = transpose(cr.group_idx * means)
-    w_vec = cr.group_idx * (Float32(cr.weight) .+ cr.bias_sizes)
-    diffs = X .- mean_rows
-
-    return 0.5*sum(transpose(w_vec) .* diffs.*diffs) 
+    return 0.5*sum(transpose(weight_vec) .* diffs.*diffs) 
 end
 
 
-function ChainRulesCore.rrule(cr::GroupRegularizer, X::AbstractMatrix)
+function ChainRulesCore.rrule(gr::GroupRegularizer, X::AbstractMatrix)
 
-    means = (transpose(cr.biases) .+ transpose(cr.group_idx)*transpose(X))./(cr.bias_sizes .+ cr.group_sizes)
-    mean_rows = transpose(cr.group_idx * means)
-    w_vec = cr.group_idx * (Float32(cr.weight) .+ cr.bias_sizes)
-    diffs = X .- mean_rows
+    means = transpose((X * gr.group_idx)) ./ gr.group_sizes
+    mean_mat = transpose(gr.group_idx * means)
+    weight_vec = gr.group_idx * gr.group_weights
+    diffs = X .- mean_mat
+    g = transpose(weight_vec) .* diffs
 
     function group_reg_pullback(loss_bar)
         return ChainRulesCore.NoTangent(), 
-               loss_bar .* (transpose(w_vec) .* diffs)
+               loss_bar.* (g .* diffs)
     end
-    loss = 0.5*sum(transpose(w_vec) .* diffs.*diffs)
+    loss = 0.5*sum(g .* diffs)
 
     return loss, group_reg_pullback
+end
+
+function (gr::GroupRegularizer)(x::AbstractVector)
+    return gr(transpose(x))
+end
+
+function (gr::GroupRegularizer)(layer::ColScale)
+    return gr(layer.logsigma)
+end
+
+function (gr::GroupRegularizer)(layer::ColShift)
+    return gr(layer.mu)
+end
+
+function (gr::GroupRegularizer)(layer::FrozenLayer)
+    return 0.0
 end
 
 
@@ -422,19 +468,31 @@ end
 
 mutable struct CompositeRegularizer
     regularizers::Tuple
+    mixture_p::AbstractVector
 end
 
 @functor CompositeRegularizer
+Flux.trainable(cr::CompositeRegularizer) = (regularizers=cr.regularizers,)
 
-function construct_composite_reg(regs::AbstractVector)
+
+function construct_composite_reg(regs::AbstractVector, mixture_p::AbstractVector)
     if length(regs) == 0
         regs = [ x->0.0 ]
+        mixture_p = [0]
     end
-    return CompositeRegularizer(Tuple(regs))
+    return CompositeRegularizer(Tuple(regs), mixture_p)
 end
 
+
+function reweight_eb!(cr::CompositeRegularizer, X; super_mixture_p=1.0)
+    for (reg, p) in zip(cr.regularizers, mixture_p)
+        reweight_eb!(reg, X; mixture_p=p*super_mixture_p) 
+    end
+end
+
+
 function (cr::CompositeRegularizer)(x)
-    return sum(map(f->f(x), cr.regularizers))
+    return sum(map((f,p)->p*f(x), cr.regularizers, cr.mixture_p))
 end
 
 
@@ -458,19 +516,24 @@ function construct_X_reg(K, M, sample_ids, sample_conditions, sample_graphs,
     end
 
     regularizers = Any[x->0.0, x->0.0, x->0.0]
+    mixture_p = zeros(3)
     if lambda_X_l2 != nothing
         regularizers[1] = x->(lambda_X_l2*0.5)*sum(x.*x)
+        mixture_p[1] = 1
     end
 
     if sample_conditions != nothing
         regularizers[2] = GroupRegularizer(sample_conditions; weight=lambda_X_condition, K=K)
+        mixture_p[2] = 1
     end
 
     if sample_graphs != nothing
         regularizers[3] = NetworkRegularizer(sample_ids, sample_graphs; weight=lambda_X_graph)
+        mixture_p[3] = 1
     end
 
-    return construct_composite_reg(regularizers) 
+    mixture_p ./= sum(mixture_p)
+    return construct_composite_reg(regularizers, mixture_p) 
 end
 
 
@@ -495,22 +558,27 @@ function construct_Y_reg(K, N, feature_ids, feature_sets, feature_graphs,
     # construct a regularizer from any other flags.
     # (Default is *no* regularization) 
     regularizers = Any[x->0.0, x->0.0, x->0.0]
+    mixture_p = zeros(3)
     if lambda_Y_l1 != nothing
         regularizers[1] =  y->(lambda_Y_l1*sum(abs.(y)))
+        mixture_p[1] = 1
     end
 
     if (feature_ids != nothing) & (feature_graphs != nothing)
         if lambda_Y_selective_l1 != nothing
-            regularizers[2] = L1Regularizer(feature_ids, feature_graphs; 
+            regularizers[2] = SelectiveL1Reg(feature_ids, feature_graphs; 
                                             weight=lambda_Y_selective_l1)
+            mixture_p[2] = 1
         end
         if lambda_Y_graph != nothing
             regularizers[3] = NetworkRegularizer(feature_ids, feature_graphs;
                                                  weight=lambda_Y_graph)
+            mixture_p[3] = 1
         end
     end
 
-    return construct_composite_reg(regularizers) 
+    mixture_p ./= sum(mixture_p)
+    return construct_composite_reg(regularizers, mixture_p) 
 end
 
 
@@ -519,63 +587,68 @@ end
 ###########################################
 
 mutable struct BatchArrayReg 
-    weight::Number
-    counts::Tuple
-    biases::Tuple
-    bias_counts::Tuple
+    weights::Tuple
 end
 
 @functor BatchArrayReg 
 
 function BatchArrayReg(ba::BatchArray; weight=1.0)
-    row_counts = map(mat->vec(sum(mat,dims=1)), ba.row_batches)
-    col_counts = map(length, ba.col_ranges)
-    counts = row_counts .* col_counts
-    biases = map(zero, ba.values)
-    bias_counts = map(zero, counts)
-    return BatchArrayReg(weight, counts, biases, bias_counts) 
+    N_col_batches = length(ba.col_ranges)
+    return BatchArrayReg(Tuple(fill(weight, N_col_batches))) 
 end
 
 
-function BatchArrayReg(feature_views::AbstractVector, batch_dict; weight=1.0)
-    row_batches = [batch_dict[uv] for uv in unique(feature_views)] 
-    values = [Dict(urb => 0.0 for urb in unique(rbv)) for rbv in row_batches]
-    ba = BatchArray(feature_views, batch_dict, values)
-    return BatchArrayReg(ba; weight=weight)
+function BatchArrayReg(feature_views::AbstractVector; weight=1.0)
+    unq_feature_views = unique(feature_views)
+    return BatchArrayReg(Tuple(fill(weight, length(unq_feature_views))))
+end
+
+
+function reweight_eb!(reg::BatchArrayReg, A::BatchArray; mixture_p=1.0)
+    n_col_range = length(A.col_ranges)
+    new_weights = zeros(n_col_range)
+     
+    for i=1:n_col_range
+        M, n_batches = size(A.row_batches[i])
+        batch_sizes = ones(1, M) * A.row_batches[i]
+        all_values = A.row_batches[i] * A.values[i]
+        batch_param_var = var(all_values)
+        new_weights[i] = mixture_p ./ batch_param_var
+    end
+
+    reg.weights = Tuple(new_weights)
 end
 
 
 # Construct a new BatchArrayReg for the `new_batch_array`;
 # but let its biases be informed by an `old_batch_array`.
 # And mutate `new_batch_array`'s values to agree with those biases.
-function construct_new_batch_reg!(new_batch_array, 
+function construct_new_batch_reg!(new_batch_array::BatchArray, 
                                   old_batch_array_reg::BatchArrayReg,
                                   old_batch_array)
-   
-    new_reg = BatchArrayReg(new_batch_array; weight=old_batch_array_reg.weight)
+ 
+    # Make a copy of the old regularizer, and update its weights
+    # in an empirical Bayes fashion. 
+    old_reg_copy = deepcopy(old_batch_array)
+    reweight_eb!(old_reg_copy, old_batch_array)
+ 
+    # By default the new regularizer's weights will be the mean of the old weights
+    new_weights = fill(mean(old_reg_copy.weights), length(new_batch_array.col_ranges))
 
-    # Select the column ranges shared between the old and the new    
+    # Set the new regularizer's weight to match the old weight,
+    # whenever appropriate
     old_col_intersect, new_col_intersect = keymatch(old_batch_array.col_range_ids,
                                                     new_batch_array.col_range_ids)
-
-    # For each shared column range, set the new regularizer's
-    # values, biases, and bias counts. 
     for (i_old, i_new) in zip(old_value_intersect, new_value_intersect)
-        old_batch_intersect, new_batch_intersect = keymatch(old_batch_array.row_batch_ids[i_old],
-                                                            new_batch_array.row_batch_ids[i_new])
-        new_reg.biases[i_new][new_batch_intersect] .= old_batch_array.values[i_old][old_batch_intersect]
-        new_reg.bias_counts[i_new][new_batch_intersect] .= old_batch_array_reg.counts[i_old][old_batch_intersect]
-        new_batch_array.values[i_new][new_batch_intersect] .= old_batch_array.values[i_old][old_batch_intersect]
+        new_weights[i_new] = old_reg_copy.weights[i_old] 
     end
 
-    return new_reg 
+    return BatchArrayReg(Tuple(new_weights))
 end
 
 
 function (reg::BatchArrayReg)(ba::BatchArray)
-    diffs = ba.values .- reg.biases
-    weights = map(v -> reg.weight .+ v, reg.bias_counts)
-    return 0.5*sum(map((w,d)->sum(w .* d .* d), weights, diffs))
+    return 0.5*sum(map((w,v)->w*sum(v .* v), reg.weights, ba.values))
 end
 
 function (reg::BatchArrayReg)(layer::BatchScale)
@@ -592,17 +665,15 @@ end
 
 function ChainRulesCore.rrule(reg::BatchArrayReg, ba::BatchArray)
 
-    weights = map(v -> reg.weight .+ v, reg.bias_counts)
-    diffs = ba.values .- reg.biases
-    wd = 0.5.* map((w,d)->w.*d, weights, diffs)
+    grad = map((w,v)->w.*v, reg.weights, ba.values)
 
     function batcharray_reg_pullback(loss_bar)
-        val_bar = loss_bar .* wd
+        val_bar = loss_bar .* grad
         return ChainRulesCore.NoTangent(),
                ChainRulesCore.Tangent{BatchArray}(values=val_bar)
 
     end
-    lss = sum(map((w,d) -> sum(w .* d), wd, diffs))
+    lss = 0.5*sum(map((g,v) -> sum(g .* v), grad, ba.values))
 
     return lss, batcharray_reg_pullback
 end
@@ -617,6 +688,7 @@ mutable struct SequenceReg
 end
 
 @functor SequenceReg
+Flux.trainable(sr::SequenceReg) = (regs=sr.regs)
 
 function (reg::SequenceReg)(seq)
     return sum(map((f,x)->f(x), reg.regs, seq.layers))
@@ -628,17 +700,26 @@ function construct_layer_reg(feature_views, batch_dict, lambda_layer)
     # Start with the regularizers for logsigma and mu
     # (the column parameters)
     regs = Any[x->0.0, x->0.0, x->0.0, x->0.0]
+    if feature_views != nothing
+        regs[1] = GroupRegularizer(feature_views; weight=lambda_layer)
+        regs[2] = GroupRegularizer(feature_views; weight=lambda_layer)
+    end
  
     # If a batch_dict is provided, add regularizers for
     # logdelta and theta (the batch parameters)
     if batch_dict != nothing
-        regs[2] = BatchArrayReg(feature_views, batch_dict; weight=lambda_layer)
-        regs[4] = BatchArrayReg(feature_views, batch_dict; weight=lambda_layer)
+        regs[2] = BatchArrayReg(feature_views; weight=lambda_layer)
+        regs[4] = BatchArrayReg(feature_views; weight=lambda_layer)
     end
 
     return SequenceReg(Tuple(regs))    
 end
 
+function set_reg!(sr::SequenceReg, idx::Int, reg)
+    sr.layers = (sr.regs[1:idx-1]...,
+                 reg,
+                 sr.regs[idx+1:end]...)
+end
 
 #####################################################
 # A struct for temporarily nullifying a regularizer
@@ -649,6 +730,7 @@ mutable struct FrozenRegularizer
 end
 
 @functor FrozenRegularizer
+Flux.trainable(fr::FrozenRegularizer) = ()
 
 function (fr::FrozenRegularizer)(args...)
     return 0.0

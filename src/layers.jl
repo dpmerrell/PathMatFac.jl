@@ -206,6 +206,7 @@ function view(vc::ViewableComposition, idx1, idx2)
     return ViewableComposition(map(layer->(isa(layer, Function) ? layer : view(layer, idx1, idx2)), vc.layers))
 end
 
+
 function Base.getindex(vc::ViewableComposition, idx1, idx2)
     return ViewableComposition(map(layer-> isa(layer, Function) ? layer : layer[idx1, idx2], vc.layers))
 end
@@ -225,6 +226,11 @@ function construct_model_layers(feature_views, batch_dict)
     return layer_obj
 end 
 
+function set_layer!(vc::ViewableComposition, idx::Int, layer)
+    vc.layers = (vc.layers[1:idx-1]...,
+                 layer,
+                 vc.layers[idx+1:end]...)
+end
 
 #############################################
 # Selectively freeze a layer
@@ -235,11 +241,15 @@ mutable struct FrozenLayer
 end
 
 @functor FrozenLayer
+Flux.trainable(fl::FrozenLayer) = ()
 
 function (fl::FrozenLayer)(args...)
     fl.layer(args...)
 end
 
+function FrozenLayer(f::Function)
+    return f
+end
 
 function ChainRulesCore.rrule(fl::FrozenLayer, args...)
 

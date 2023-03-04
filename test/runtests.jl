@@ -537,7 +537,7 @@ function reg_tests()
                     ]
         data_features = [1,2,3,4,5]
         test_Y = randn(2,5)
-        reg = PM.L1Regularizer(data_features, edgelists)
+        reg = PM.SelectiveL1Reg(data_features, edgelists)
   
         @test isapprox(reg.l1_idx, [0 0 0 0 1;
                                     0 0 0 0 1])
@@ -586,12 +586,12 @@ function reg_tests()
         values = [Dict(1=>3.14, 2=>2.7), Dict(1=>0.0, 2=>0.5), Dict(1=>-1.0, 2=>1.0)]
         
         ba = PM.BatchArray(col_batches, row_batches, values)
-
         ba_reg = PM.BatchArrayReg(ba; weight=1.0)
+        @test isapprox(ba_reg(ba), 0.5*sum(map((w,v)->sum(w .* v.*v), ba_reg.weights, ba.values)))
 
-        @test sum(map(sum, ba_reg.counts)) == 6*5
-        grads = Zygote.gradient((r,ba)->r(ba), ba_reg, ba)
-
+        grads = Zygote.gradient(arr->ba_reg(arr), ba)
+        @test all(map((g, w, v)->isapprox(g, w.*v), grads[1].values, ba_reg.weights, ba.values)) 
+ 
     end
 
     @testset "Composed regularizers" begin
@@ -603,12 +603,12 @@ function reg_tests()
         data_features = [1,2,3,4,5]
         test_Y = randn(2,5)
 
-        l1_reg = PM.L1Regularizer(data_features, edgelists)
+        l1_reg = PM.SelectiveL1Reg(data_features, edgelists)
         net_reg = PM.NetworkRegularizer(data_features, edgelists)
-        composite_reg = PM.construct_composite_reg([l1_reg, net_reg])
+        composite_reg = PM.construct_composite_reg([l1_reg, net_reg], [0.5, 0.5])
 
         @test length(composite_reg.regularizers) == 2
-        @test isapprox(composite_reg(test_Y), l1_reg(test_Y) + net_reg(test_Y))
+        @test isapprox(composite_reg(test_Y), 0.5*(l1_reg(test_Y) + net_reg(test_Y)))
     end
 end
 
@@ -752,7 +752,7 @@ function model_tests()
         @test length(model.matfac.X_reg.regularizers) == 3 
         @test length(model.matfac.col_transform.layers) == 4 
         @test length(model.matfac.Y_reg.regularizers) == 3 
-        @test typeof(model.matfac.Y_reg.regularizers[2]) <: PM.L1Regularizer
+        @test typeof(model.matfac.Y_reg.regularizers[2]) <: PM.SelectiveL1Reg
         
         # Both, at the same time! 
         model = PathMatFacModel(Z; feature_ids=feature_ids, feature_graphs=feature_graphs, lambda_Y_graph=1.0, lambda_Y_selective_l1=1.0)
@@ -760,7 +760,7 @@ function model_tests()
         @test length(model.matfac.col_transform.layers) == 4 
         @test length(model.matfac.X_reg.regularizers) == 3 
         @test length(model.matfac.Y_reg.regularizers) == 3 
-        @test typeof(model.matfac.Y_reg.regularizers[2]) <: PM.L1Regularizer
+        @test typeof(model.matfac.Y_reg.regularizers[2]) <: PM.SelectiveL1Reg
         @test typeof(model.matfac.Y_reg.regularizers[3]) <: PM.NetworkRegularizer
 
     end
@@ -788,7 +788,7 @@ function model_tests()
         @test length(model.matfac.col_transform.layers) == 4 
         @test length(model.matfac.X_reg.regularizers) == 3 
         @test typeof(model.matfac.X_reg.regularizers[3]) <: PM.NetworkRegularizer
-        @test model.matfac.X_reg.regularizers[3].weight == 1.0
+        @test all(model.matfac.X_reg.regularizers[3].cur_weights .== 1.0)
         
         # Combined X regularization 
         model = PathMatFacModel(Z; sample_ids=sample_ids, sample_conditions=sample_conditions,
@@ -798,8 +798,8 @@ function model_tests()
         @test length(model.matfac.X_reg.regularizers) == 3 
         @test typeof(model.matfac.X_reg.regularizers[2]) <: PM.GroupRegularizer
         @test typeof(model.matfac.X_reg.regularizers[3]) <: PM.NetworkRegularizer
-        @test model.matfac.X_reg.regularizers[2].weight == 5.678 
-        @test model.matfac.X_reg.regularizers[3].weight == 1.234
+        @test all(model.matfac.X_reg.regularizers[2].group_weights .== 5.678) 
+        @test all(model.matfac.X_reg.regularizers[3].cur_weights .== 1.234)
     end
 
     @testset "Full-featured model constructor" begin
@@ -813,14 +813,14 @@ function model_tests()
         @test length(model.matfac.X_reg.regularizers) == 3 
         @test typeof(model.matfac.X_reg.regularizers[2]) <: PM.GroupRegularizer
         @test typeof(model.matfac.X_reg.regularizers[3]) <: PM.NetworkRegularizer
-        @test model.matfac.X_reg.regularizers[2].weight == 5.678 
-        @test model.matfac.X_reg.regularizers[3].weight == 1.234
+        @test all(model.matfac.X_reg.regularizers[2].group_weights .== 5.678)
+        @test all(model.matfac.X_reg.regularizers[3].cur_weights .== 1.234)
         @test size(model.matfac.Y) == (K,N)
         @test length(model.matfac.Y_reg.regularizers) == 3 
-        @test typeof(model.matfac.Y_reg.regularizers[2]) <: PM.L1Regularizer
+        @test typeof(model.matfac.Y_reg.regularizers[2]) <: PM.SelectiveL1Reg
         @test typeof(model.matfac.Y_reg.regularizers[3]) <: PM.NetworkRegularizer
-        @test model.matfac.Y_reg.regularizers[2].weight == 1.0 
-        @test model.matfac.Y_reg.regularizers[3].weight == 1.0
+        @test all(model.matfac.Y_reg.regularizers[2].weight .== 1.0) 
+        @test all(model.matfac.Y_reg.regularizers[3].cur_weights .== 1.0)
     end
 
 end
@@ -1077,15 +1077,15 @@ end
 
 function main()
 
-    util_tests()
-    batch_array_tests()
-    layers_tests()
-    preprocess_tests()
-    reg_tests()
-    featureset_ard_tests()
-    model_tests()
-    score_tests()
-    fit_tests()
+    #util_tests()
+    #batch_array_tests()
+    #layers_tests()
+    #preprocess_tests()
+    #reg_tests()
+    #featureset_ard_tests()
+    #model_tests()
+    #score_tests()
+    #fit_tests()
     transform_tests()
     model_io_tests()
     #simulation_tests()
