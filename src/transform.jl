@@ -10,7 +10,7 @@ function transform(model::PathMatFacModel, D::AbstractMatrix;
                    sample_conditions::Union{<:AbstractVector,Nothing}=nothing,
                    feature_views::Union{<:AbstractVector,Nothing}=nothing,
                    batch_dict::Union{<:AbstractDict,Nothing}=nothing,
-                   verbosity=1, lr=0.25, fit_kwargs...)
+                   verbosity=1, lr=0.1, fit_kwargs...)
 
     K, N = size(model.matfac.Y)
     M_new, N_new = size(D)

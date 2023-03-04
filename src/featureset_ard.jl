@@ -35,7 +35,7 @@ mutable struct FeatureSetARDReg
 end
 
 @functor FeatureSetARDReg
-
+Flux.trainable(r::FeatureSetARDReg) = ()
 
 function FeatureSetARDReg(K::Integer, S::AbstractMatrix,
                           feature_views::AbstractVector; 
@@ -170,20 +170,51 @@ function update_A_inner!(reg::FeatureSetARDReg; max_epochs=1000,
 end
 
 
+function set_lambda_max(reg::FeatureSetARDReg)
+    A = reg.A
+    A .= 0
+
+    A_loss = Z -> gamma_loss(Z, reg.S, reg.tau, 
+                                reg.alpha, reg.beta0, reg.scale)
+
+    origin_grad = Zygote.gradient(A_loss, A)
+    lambda_max = maximum(abs.(origin_grad))
+
+    return lambda_max
+end
+
+# Score A by the fraction of its columns 
+# containing a nonzero entry.
+function score_A(A)
+    K = size(A,2)
+    return sum(sum(A .!= 0, dims=1) .> 0, dims=2)/K
+end
+
 function update_A!(reg::FeatureSetARDReg; max_epochs=1000,
                                           atol=1e-5, rtol=1e-5,
-                                          n_lambda=10, lambda_min_ratio=1e-3)
+                                          n_lambda=10, lambda_min_ratio=1e-3,
+                                          score_threshold=0.7)
 
-    # Set lambda_max 
     # Compute the sequence of lambdas
-    # Keep track of the best A and best score
-    # For each lambda: 
-        # Set reg.lambda
-        # fit reg.A via `update_A_inner!`
-        # Score A
-        # If score is best, update best A and best score
-    
-    # Set reg.A to be the best A 
+    lambda_max = set_lambda_max(reg)
+    lambda_min = lambda_max*lambda_min_ratio
+    lambdas = exp.(collect(LinRange(log(lambda_max), 
+                                    log(lambda_min), 
+                                    n_lambda)))
+ 
+    # For each lambda:
+    for lambda in lambdas
 
+        reg.opt.lambda .= lambda 
+        update_A_inner!(reg; max_epochs=max_epochs,
+                             atol=atol, rtol=rtol)
+    
+        # If we pass the threshold, then
+        # we're finished!    
+        if score_A(reg.A) >= score_threshold
+            break
+        end
+    end    
+    
 end
 

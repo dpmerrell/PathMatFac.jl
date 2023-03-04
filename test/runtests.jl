@@ -962,7 +962,7 @@ function transform_tests()
 
         result = transform(model, D_new; feature_ids=new_feature_ids, feature_views=new_feature_views,
                                          sample_conditions=new_sample_conditions,
-                                         verbosity=2, lr=0.25, max_epochs=1000, print_iter=1, rel_tol=1e-7, abs_tol=1e-7,
+                                         verbosity=2, lr=0.05, max_epochs=1000, print_iter=1, rel_tol=1e-7, abs_tol=1e-7,
                                          use_gpu=false)
         
         @test size(result.matfac.X) == (K, M_new) 
@@ -976,7 +976,7 @@ function transform_tests()
         
         result = transform(model, D_new; feature_ids=new_feature_ids, feature_views=new_feature_views,
                                          sample_conditions=new_sample_conditions,
-                                         verbosity=2, lr=0.25, max_epochs=1000, print_iter=1, rel_tol=1e-7, abs_tol=1e-7,
+                                         verbosity=2, lr=0.05, max_epochs=1000, print_iter=1, rel_tol=1e-7, abs_tol=1e-7,
                                          use_gpu=true)
         
         @test size(result.matfac.X) == (K, M_new) 
