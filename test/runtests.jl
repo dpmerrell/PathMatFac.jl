@@ -591,7 +591,7 @@ function reg_tests()
         test_Y = randn(K,N)
         reg = PM.ARDRegularizer()
         l, grads = Zygote.withgradient(reg, test_Y)
-        b = 1 .+ (0.5/ard.beta).*(test_Y.*test_Y)
+        b = 1 .+ (0.5/reg.beta).*(test_Y.*test_Y)
         @test isapprox(l, (0.5 - reg.alpha).*sum(log.(b)))
         @test length(grads) == 1
         @test isapprox(grads[1], ((0.5 .- reg.alpha)/reg.beta).* test_Y ./ b)
@@ -903,7 +903,7 @@ function fit_tests()
         X_start = deepcopy(model.matfac.X)
         Y_start = deepcopy(model.matfac.Y)
         batch_scale = deepcopy(model.matfac.col_transform.layers[2]) 
-        fit!(model; verbosity=2, lr=0.05, max_epochs=1000, print_iter=1, rel_tol=1e-7, abs_tol=1e-7,
+        fit!(model; verbosity=2, lr=0.05, max_epochs=1000, print_iter=10, rel_tol=1e-7, abs_tol=1e-7,
                     fit_reg_weight=false)
 
         @test !isapprox(model.matfac.X, X_start)
@@ -925,7 +925,7 @@ function fit_tests()
         batch_scale = deepcopy(model.matfac.col_transform.layers[2])
 
         model = gpu(model) 
-        fit!(model; verbosity=2, lr=0.05, max_epochs=1000, print_iter=1, rel_tol=1e-7, abs_tol=1e-7,
+        fit!(model; verbosity=2, lr=0.05, max_epochs=1000, print_iter=10, rel_tol=1e-7, abs_tol=1e-7,
                     fit_reg_weight=false)
         model = cpu(model)
 
@@ -950,7 +950,7 @@ function fit_tests()
         X_start = deepcopy(model.matfac.X)
         Y_start = deepcopy(model.matfac.Y)
         batch_scale = deepcopy(model.matfac.col_transform.layers[2]) 
-        fit!(model; verbosity=2, lr=0.05, max_epochs=1000, print_iter=1, rel_tol=1e-7, abs_tol=1e-7,
+        fit!(model; verbosity=2, lr=0.05, max_epochs=1000, print_iter=10, rel_tol=1e-7, abs_tol=1e-7,
                     fit_reg_weight="EB")
 
         @test !isapprox(model.matfac.X, X_start)
@@ -972,7 +972,7 @@ function fit_tests()
         batch_scale = deepcopy(model.matfac.col_transform.layers[2])
 
         model = gpu(model) 
-        fit!(model; verbosity=2, lr=0.05, max_epochs=1000, print_iter=1, rel_tol=1e-7, abs_tol=1e-7,
+        fit!(model; verbosity=2, lr=0.05, max_epochs=1000, print_iter=10, rel_tol=1e-7, abs_tol=1e-7,
                     fit_reg_weight="EB")
         model = cpu(model)
 
@@ -999,7 +999,7 @@ function fit_tests()
         X_start = deepcopy(model.matfac.X)
         Y_start = deepcopy(model.matfac.Y)
         batch_scale = deepcopy(model.matfac.col_transform.layers[2]) 
-        fit!(model; verbosity=1, lr=0.05, max_epochs=1000, print_iter=1, rel_tol=1e-7, abs_tol=1e-7)
+        fit!(model; verbosity=1, lr=0.05, max_epochs=1000, print_iter=10, rel_tol=1e-7, abs_tol=1e-7)
 
         @test !isapprox(model.matfac.X, X_start)
         @test !isapprox(model.matfac.Y, Y_start)
@@ -1022,7 +1022,7 @@ function fit_tests()
         batch_scale = deepcopy(model.matfac.col_transform.layers[2])
 
         model = gpu(model) 
-        fit!(model; verbosity=2, lr=0.05, max_epochs=1000, print_iter=1, rel_tol=1e-7, abs_tol=1e-7)
+        fit!(model; verbosity=2, lr=0.05, max_epochs=1000, print_iter=10, rel_tol=1e-7, abs_tol=1e-7)
         model = cpu(model)
 
         @test !isapprox(model.matfac.X, X_start)

@@ -406,7 +406,6 @@ function fit_ard!(model::PathMatFacModel; lr=0.05, opt=nothing,
     v_println("Training with ARD on Y..."; verbosity=verbosity,
                                            prefix=print_prefix)
     model.matfac.Y_reg = orig_ard
-    opt.eta = opt.eta * 0.1
     basic_fit!(model; opt=opt, fit_factors=true, 
                                verbosity=verbosity,
                                print_prefix=n_pref,
