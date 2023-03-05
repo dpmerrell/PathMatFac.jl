@@ -10,12 +10,15 @@ function transform(model::PathMatFacModel, D::AbstractMatrix;
                    sample_conditions::Union{<:AbstractVector,Nothing}=nothing,
                    feature_views::Union{<:AbstractVector,Nothing}=nothing,
                    batch_dict::Union{<:AbstractDict,Nothing}=nothing,
-                   verbosity=1, lr=0.1, fit_kwargs...)
+                   verbosity=1, print_prefix="", 
+                   lr=0.1, fit_kwargs...)
 
     K, N = size(model.matfac.Y)
     M_new, N_new = size(D)
 
-    println("Transforming new data...")
+    next_pref = string("    ", print_prefix)
+    nn_pref = string("    ", next_pref)
+    v_println("Transforming new data..."; verbosity=verbosity, prefix=print_prefix)
 
     ###################################################
     ## Validate input
@@ -133,20 +136,29 @@ function transform(model::PathMatFacModel, D::AbstractMatrix;
 
     # Fit the new BatchShift, in isolation
     if batch_dict != nothing
+        v_println("Fitting batch shift..."; verbosity=verbosity, 
+                                            prefix=next_pref)
         unfreeze_layer!(new_model.matfac.col_transform, 4)
         unfreeze_reg!(new_model.matfac.col_transform_reg, 4)
-        mf_fit!(new_model; opt=opt, verbosity=verbosity-1,
-                           max_epochs=500, update_col_layers=true)
+        mf_fit!(new_model; opt=opt, max_epochs=500, update_col_layers=true,
+                           verbosity=verbosity, print_prefix=nn_pref)
     end
 
     # Update the new X 
-    mf_fit!(new_model; update_X=true, verbosity=verbosity,
-                       opt=opt, fit_kwargs...)
+    v_println("Fitting X..."; verbosity=verbosity, 
+                              prefix=next_pref)
+    mf_fit!(new_model; update_X=true, opt=opt, 
+                       verbosity=verbosity, print_prefix=nn_pref,
+                       fit_kwargs...)
 
-    # Finally: update them both, jointly 
-    mf_fit!(new_model; update_X=true, update_col_layers=true,
-                       verbosity=verbosity, opt=opt, fit_kwargs...)
-
+    # Finally: update them both, jointly
+    if batch_dict != nothing 
+        v_println("Jointly tuning X and batch shift..."; verbosity=verbosity, 
+                                                         prefix=next_pref)
+        mf_fit!(new_model; update_X=true, update_col_layers=true,
+                           verbosity=verbosity, fit_prefix=nn_pref, 
+                           opt=opt, fit_kwargs...)
+    end
     new_model = cpu(new_model)
     unfreeze_layer!(new_model.matfac.col_transform, 1:4)
 

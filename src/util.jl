@@ -51,10 +51,14 @@ end
 # I/O Utils
 #####################################################
 
-function verbose_print(args...; verbosity=1, level=1)
+function v_print(args...; verbosity=1, level=1, prefix="")
     if verbosity >= level
-        print(string(args...))
+        print(string(prefix, args...))
     end
+end
+
+function v_println(args...; kwargs...)
+    v_print(args..., "\n"; kwargs...)
 end
 
 ######################################################

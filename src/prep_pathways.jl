@@ -1,5 +1,5 @@
 
-export prep_pathway_graphs, prep_pathway_sifs
+export prep_pathway_graphs, prep_pathway_featuresets 
 
 
 ######################################################
@@ -67,6 +67,7 @@ function sifs_to_edgelists(sif_files::Vector{<:AbstractString})
     sif_data = read_all_sif_files(sif_files)
     return sifs_to_edgelists(sif_data)
 end
+
 
 
 """
@@ -228,6 +229,80 @@ function prep_pathway_graphs(pwy_sifs::Vector, feature_genes::Vector, feature_do
     pathway_graphs = extend_pathways(pwy_edgelists, new_feature_ids, feature_weights)    
 
     return pathway_graphs, new_feature_ids
+end
+
+###############################################################
+# Construct featuresets
+###############################################################
+
+function sif_to_nodeset(pwy_sif::Vector)
+    nodes = Set()
+    for edge in pwy_sif
+        push!(nodes, edge[1])
+        push!(nodes, edge[3])
+    end
+    return nodes
+end
+
+
+function sifs_to_nodesets(pwy_sifs::Vector{<:Vector{<:Vector}})
+    return map(sif_to_nodeset, pwy_sifs)
+end
+
+function sifs_to_nodesets(sif_files::Vector{<:AbstractString})
+    sif_data = read_all_sif_files(sif_files)
+    return map(sif_to_nodeset, sif_data)
+end
+
+"""
+    prep_pathway_featuresets(pwy_sifs, feature_genes; feature_ids=nothing)
+
+    Given (1) a vector of pathway SIFs and 
+    (2) a vector of feature genes; and
+    map the features into the pathways and construct 
+    a vector of node sets that include the features.
+
+    Returns (1) a vector of featuresets; and 
+    (2) a vector of new feature IDs consistent with those featuresets.
+
+    `pwy_sifs`: a vector of paths to specially formatted SIF files;
+                OR a vector of specially formatted edgelists.
+    `feature_genes`: a vector of gene ID strings.
+"""
+function prep_pathway_featuresets(pwy_sifs::Vector, feature_genes::Vector;
+                                  feature_ids::Union{Nothing,Vector}=nothing)
+    # Check whether feature ids were provided
+    if feature_ids == nothing
+        feature_ids = collect(1:length(feature_genes))
+    end 
+
+    # Create a map from genes to indices 
+    gene_to_idxs = Dict()
+    for (i,g) in enumerate(feature_genes)
+        idx_set = get!(gene_to_idxs, g, Set())
+        push!(idx_set, i)
+    end
+
+    # Create new feature ids 
+    new_feature_ids = map(t->join(t, "_"), collect(zip(feature_genes, feature_ids)))
+    n_pwy = length(pwy_sifs)
+
+    # Convert the SIFs to node sets
+    nodesets = sifs_to_nodesets(pwy_sifs)
+
+    # For each pathway, find all of the features
+    # associated with it
+    feature_sets = Vector{Set}(undef, n_pwy)
+    for (i,ns) in enumerate(nodesets)
+        fs = Set()
+        for node in ns
+            node_idx = collect(get!(gene_to_idxs, node, []))
+            union!(fs, new_feature_ids[node_idx])
+        end 
+        feature_sets[i] = fs
+    end
+
+    return feature_sets, new_feature_ids
 end
 
 

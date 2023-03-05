@@ -23,11 +23,11 @@ end
 function ChainRulesCore.rrule(reg::L2Regularizer, X::AbstractMatrix)
     g = reg.weights .* X
 
-    function L2MatReg_pullback(loss_bar)
+    function L2Regularizer_pullback(loss_bar)
         return NoTangent(), loss_bar .* g
     end
 
-    return 0.5*sum(g .* X)
+    return 0.5*sum(g .* X), L2Regularizer_pullback
 end
 
 function (reg::L2Regularizer)(x::AbstractVector)
@@ -35,7 +35,7 @@ function (reg::L2Regularizer)(x::AbstractVector)
 end
 
 function reweight_eb!(reg::L2Regularizer, X::AbstractMatrix; mixture_p=1.0)
-    row_vars = var(X, dims=2)
+    row_vars = vec(var(X, dims=2))
     row_precs = 1 ./ row_vars
     reg.weights .= (mixture_p .* row_precs)
 end 
@@ -200,10 +200,10 @@ function reweight_eb!(nr::NetworkRegularizer, X::AbstractMatrix; mixture_p=1.0)
     
     # Compute weights from X
     K, N = size(X)
-    row_precs = 1 ./ var(X, dims=2)
+    row_precs = vec(mixture_p ./ var(X, dims=2))
 
     # Rescale the blocks of each sparse matrix
-    new_over_old = mixture_p .* cpu(row_precs ./ nr.cur_weights)
+    new_over_old = cpu(row_precs ./ nr.cur_weights)
     for k=1:K
         scale_spmat!(nr.AA[k], new_over_old[k])
         scale_spmat!(nr.AB[k], new_over_old[k])
@@ -241,6 +241,7 @@ function SelectiveL1Reg(feature_ids::Vector, edgelists::Vector; weight=1.0)
     return SelectiveL1Reg(l1_idx, fill(weight, K))
 end
                         
+
 function (reg::SelectiveL1Reg)(X::AbstractArray)
     return sum(reg.weight .* sum(abs.(reg.l1_idx .* X), dims=2)) 
 end
@@ -257,6 +258,19 @@ function ChainRulesCore.rrule(reg::SelectiveL1Reg, X::AbstractArray)
     end    
 
     return lss, SelectiveL1Reg_pullback
+end
+
+
+function reweight_eb!(reg::SelectiveL1Reg, X::AbstractMatrix; mixture_p=1.0)
+    # Given an empirical variance V,
+    # the corresponding Laplace scale b = sqrt(V/2) 
+    sel_X = reg.l1_idx .* X
+    mean_x = mean(sel_X, dims=2)
+    mean_x2 = mean(sel_X.*sel_X, dims=2)
+    var_x = vec(mean_x2 .- (mean_x.*mean_x))
+    new_weights = mixture_p .* sqrt.(2 ./ var_x)
+    new_weights[(!isfinite).(new_weights)] .= 1
+    reg.weight .= new_weights
 end
 
 
@@ -329,36 +343,16 @@ function reweight_eb!(gr::GroupRegularizer, X::AbstractMatrix; mixture_p=1.0)
 end
 
 function reweight_eb!(gr::GroupRegularizer, x::AbstractVector; mixture_p=1.0)
-    reweight_eb!(gr, transpose(x); mixture_p=1.0)
+    reweight_eb!(gr, transpose(x); mixture_p=mixture_p)
 end
 
-######################################
-## regularize a vector
-#function (gr::GroupRegularizer)(x::AbstractVector)
-#    means = (transpose(gr.group_idx)*x)./gr.group_sizes
-#    mean_vec = gr.group_idx * means
-#    weight_vec = gr.group_idx * gr.group_weights
-#    diffs = x .- mean_vec
-#    return 0.5*sum(weight_vec .* diffs.*diffs)
-#end
-#
-#
-#function ChainRulesCore.rrule(gr::GroupRegularizer, x::AbstractVector)
-#   
-#    means = (transpose(gr.group_idx)*x)./gr.group_sizes
-#    mean_vec = gr.group_idx * means
-#    weight_vec = gr.group_idx * gr.group_weights
-#    diffs = x .- mean_vec
-#    g = weight_vec .* diffs 
-#
-#    function group_reg_pullback(loss_bar)
-#        return ChainRulesCore.NoTangent(), loss_bar.*g
-#    end
-#    loss = 0.5*sum(g.*diffs)
-#
-#    return loss, group_reg_pullback
-#end
+function reweight_eb!(gr::GroupRegularizer, cs::ColShift; mixture_p=1.0)
+    reweight_eb!(gr, cs.mu; mixture_p=mixture_p)
+end
 
+function reweight_eb!(gr::GroupRegularizer, cs::ColScale; mixture_p=1.0)
+    reweight_eb!(gr, cs.logsigma; mixture_p=mixture_p)
+end
 
 ####################################
 # Regularize rows of a matrix
@@ -414,55 +408,38 @@ end
 mutable struct ARDRegularizer
     alpha::Number
     beta::Number
-    tau_max::Number
     weight::Number
-    tau::AbstractArray
 end
 
 @functor ARDRegularizer
 
-function ARDRegularizer(shape...; alpha=Float32(1e-6), beta=Float32(1e-6),
-                                  weight=1.0, tau_max=Float32(1e6))
-    return ARDRegularizer(alpha, beta, tau_max, ones(shape...))
-end
-
-function ARDRegularizer(X::AbstractArray; alpha=Float32(1e-6), beta=Float32(1e-6),
-                                          weight=1.0, tau_max=Float32(1e6))
-    # Initialize the regularizer's tau with posterior means
-    return ARDRegularizer(alpha, beta, tau_max, weight,
-                          (alpha + 0.5) ./ (beta .+ 0.5.*(X.*X))
-                         ) 
+function ARDRegularizer(;alpha=Float32(1e-6), 
+                         beta=Float32(1e-6),
+                         weight=1.0)
+    return ARDRegularizer(alpha, beta, weight)
 end
 
 
-function (ard::ARDRegularizer)(X::AbstractArray; update_tau=true)
-    X2 = X .* X
-    if update_tau
-        ard.tau .= (ard.alpha + 1) ./ (ard.beta .+ (X2))
-        map!(x -> min(x, ard.tau_max), ard.tau, ard.tau)
-    end
-    return (0.5*ard.weight)*sum(ard.tau .* X2)
+function (ard::ARDRegularizer)(X::AbstractMatrix)
+    b = 1 .+ (0.5/ard.beta).*(X.*X)
+    return (0.5 - ard.alpha)*sum(log.(b))
 end
 
-function ChainRulesCore.rrule(ard::ARDRegularizer, X::AbstractArray; update_tau=true)
 
-    X2 = X .* X
-    if update_tau
-        ard.tau .= (ard.alpha + 1) ./ (ard.beta .+ (X2))
-        map!(x -> min(x, ard.tau_max), ard.tau, ard.tau)
-    end
-
+function ChainRulesCore.rrule(ard::ARDRegularizer, X::AbstractMatrix)
+    
+    b = 1 .+ (0.5/ard.beta).*(X.*X)
     function ard_pullback(loss_bar)
-        return NoTangent(), (ard.weight*loss_bar) .* (ard.tau .* X)
+        return NoTangent(), (loss_bar/ard.beta)*(0.5 - ard.alpha) .* X ./ b 
     end
 
-    return ard.weight*0.5*sum(ard.tau .* X2), ard_pullback
+    return (0.5 .- ard.alpha)*sum(log.(b)), ard_pullback
 end
 
 
 ###########################################
 # Function for constructing "composite" 
-# regularizers. I.e., combinations of
+# regularizers. I.e., a mixture of
 # regularizers that all act on the same parameter.
 ###########################################
 
@@ -485,7 +462,7 @@ end
 
 
 function reweight_eb!(cr::CompositeRegularizer, X; super_mixture_p=1.0)
-    for (reg, p) in zip(cr.regularizers, mixture_p)
+    for (reg, p) in zip(cr.regularizers, cr.mixture_p)
         reweight_eb!(reg, X; mixture_p=p*super_mixture_p) 
     end
 end
@@ -508,17 +485,17 @@ function construct_X_reg(K, M, sample_ids, sample_conditions, sample_graphs,
     # to be quadratic or group regularized. 
     # Regularization weights will be set by empirical Bayes.
     if (Y_ard | Y_geneset_ard)
-        if sample_conditions
-            return GroupRegularizer(sample_condtions; weight=1.0, K=K)
+        if sample_conditions != nothing
+            return GroupRegularizer(sample_conditions; weight=1.0, K=K)
         else
-            return x->0.5*sum(x.*x)
+            return L2Regularizer(K, 1.0)
         end
     end
 
     regularizers = Any[x->0.0, x->0.0, x->0.0]
     mixture_p = zeros(3)
     if lambda_X_l2 != nothing
-        regularizers[1] = x->(lambda_X_l2*0.5)*sum(x.*x)
+        regularizers[1] = L2Regularizer(K, lambda_X_l2)
         mixture_p[1] = 1
     end
 
@@ -551,7 +528,7 @@ function construct_Y_reg(K, N, feature_ids, feature_sets, feature_graphs,
         return construct_featureset_ard(K, feature_ids, feature_sets) 
     end
     if Y_ard
-        return ARDRegularizer(K,N) 
+        return ARDRegularizer() 
     end
 
     # If neither ARD flag is set `true`, then 
@@ -567,7 +544,7 @@ function construct_Y_reg(K, N, feature_ids, feature_sets, feature_graphs,
     if (feature_ids != nothing) & (feature_graphs != nothing)
         if lambda_Y_selective_l1 != nothing
             regularizers[2] = SelectiveL1Reg(feature_ids, feature_graphs; 
-                                            weight=lambda_Y_selective_l1)
+                                             weight=lambda_Y_selective_l1)
             mixture_p[2] = 1
         end
         if lambda_Y_graph != nothing
@@ -617,6 +594,14 @@ function reweight_eb!(reg::BatchArrayReg, A::BatchArray; mixture_p=1.0)
     end
 
     reg.weights = Tuple(new_weights)
+end
+
+function reweight_eb!(reg::BatchArrayReg, bs::BatchShift; mixture_p=1.0)
+    reweight_eb!(reg, bs.theta; mixture_p=mixture_p)
+end
+
+function reweight_eb!(reg::BatchArrayReg, bs::BatchScale; mixture_p=1.0)
+    reweight_eb!(reg, bs.logdelta; mixture_p=mixture_p)
 end
 
 
@@ -715,10 +700,22 @@ function construct_layer_reg(feature_views, batch_dict, lambda_layer)
     return SequenceReg(Tuple(regs))    
 end
 
+# Pure functions don't have adjustable weights
+function reweight_eb!(f::Function, z; mixture_p=1.0)
+    return 
+end
+
+function reweight_eb!(sr::SequenceReg, vc::ViewableComposition; mixture_p=1.0)
+    for (r, l) in zip(sr.regs, vc.layers)
+        reweight_eb!(r,l; mixture_p=mixture_p)
+    end
+end
+
+
 function set_reg!(sr::SequenceReg, idx::Int, reg)
-    sr.layers = (sr.regs[1:idx-1]...,
-                 reg,
-                 sr.regs[idx+1:end]...)
+    sr.regs = (sr.regs[1:idx-1]...,
+               reg,
+               sr.regs[idx+1:end]...)
 end
 
 #####################################################
@@ -763,16 +760,16 @@ function freeze_reg!(sr::SequenceReg, idx::AbstractVector)
 end
 
 function unfreeze_reg!(sr::SequenceReg, idx::Integer)
-    if isa(vc.layers[idx], FrozenRegularizer)
+    if isa(sr.regs[idx], FrozenRegularizer)
         sr.regs = (sr.regs[1:idx-1]..., 
-                   sr.regs[idx].layer,
+                   sr.regs[idx].reg,
                    sr.regs[idx+1:end]...)
     end
 end
 
 function unfreeze_reg!(sr::SequenceReg, idx::AbstractVector)
     for i in idx
-        unfreeze_reg!(vc, i)
+        unfreeze_reg!(sr, i)
     end
 end
 

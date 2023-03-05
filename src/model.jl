@@ -232,9 +232,6 @@ function Base.:(==)(a::T, b::T) where T <: PMTypes
         bf = getfield(b, fn)
         if !(af == bf)
             if !((typeof(af) <: NoEqTypes) & (typeof(bf) <: NoEqTypes))
-                println(string("(PM) NOT EQUAL: ", fn))
-                println(af)
-                println(bf)
                 return false
             end
         end

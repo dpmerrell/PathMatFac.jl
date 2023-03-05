@@ -43,24 +43,25 @@ function construct_optimizer(model, lr)
 end
 
 function init_mu!(model::PathMatFacModel, opt; capacity=Int(1e8), max_epochs=500,
-                                               verbosity=1, kwargs...)
+                                               verbosity=1, print_prefix="", kwargs...)
     
     M_estimates = MF.compute_M_estimates(model.matfac, model.data;
                                          capacity=capacity, max_epochs=max_epochs,
-                                         opt=opt, verbosity=verbosity) 
+                                         opt=opt, verbosity=verbosity, print_prefix=print_prefix) 
     model.matfac.col_transform.layers[3].mu .= vec(M_estimates)
 
 end
 
 
 function init_theta!(model::PathMatFacModel, opt; capacity=Int(1e8), max_epochs=500,
-                                                  verbosity=1, kwargs...)
+                                                  verbosity=1, print_prefix="", kwargs...)
     # Freeze everything except batch shift... 
     freeze_layer!(model.matfac.col_transform, 1:3)
 
     mf_fit!(model; update_col_layers=true, capacity=capacity,
-                   max_epochs=500, verbosity=verbosity-1,
-                   opt=opt)
+                   max_epochs=500, opt=opt,
+                   verbosity=verbosity-1,
+                   print_prefix=print_prefix)
     
     unfreeze_layer!(model.matfac.col_transform, 1:3)
 
@@ -88,8 +89,9 @@ end
 function reweight_col_losses!(model::PathMatFacModel; capacity=Int(1e8))
     
 
-    # Freeze the model parameters.
-    freeze_layer!(model.matfac.col_transform, 1) # Col scales
+    # Freeze the model layers.
+    freeze_layer!(model.matfac.col_transform, [1,2,4])
+    unfreeze_layer!(model.matfac.col_transform, 3) 
 
     # Set the noise model's weights to 1
     N = size(model.data, 2)
@@ -97,7 +99,7 @@ function reweight_col_losses!(model::PathMatFacModel; capacity=Int(1e8))
     one_vec .= 1
     MF.set_weight!(model.matfac.noise_model, one_vec)
 
-    # Reweight the column losses.
+    # Compute the RMS norm of the loss gradient w.r.t. X, for each column
     M_estimates = transpose(model.matfac.col_transform.layers[3].mu) 
     ssq_grads = vec(MF.batched_column_ssq_grads(model.matfac,
                                                 M_estimates,
@@ -109,9 +111,12 @@ function reweight_col_losses!(model::PathMatFacModel; capacity=Int(1e8))
     weights[ (!isfinite).(weights) ] .= 1
     weights = map(x -> max(x, 1e-2), weights)
     weights = map(x -> min(x, 10.0), weights)
+    
+    # Set the weights
     MF.set_weight!(model.matfac.noise_model, vec(weights))
 
-    unfreeze_layer!(model.matfac.col_transform, 1)
+    # Unfreeze the model layers
+    unfreeze_layer!(model.matfac.col_transform, [1,2,4])
 end
 
 #######################################################################
@@ -134,15 +139,17 @@ end
 ################################
 # Procedures for simple models
 
-function basic_fit!(model::PathMatFacModel; fit_mu=true, fit_logsigma=true,
-                                            reweight_losses=true,
-                                            fit_batch=true, fit_factors=true,
-                                            fit_joint=true,
-                                            whiten=true,
-                                            verbosity=1, capacity=Int(1e8),
-                                            opt=nothing, lr=0.25, max_epochs=1000, 
+function basic_fit!(model::PathMatFacModel; fit_mu=false, fit_logsigma=false,
+                                            reweight_losses=false,
+                                            fit_batch=false, fit_factors=false,
+                                            fit_joint=false,
+                                            whiten=false,
+                                            capacity=Int(1e8),
+                                            opt=nothing, lr=0.05, max_epochs=1000, 
+                                            verbosity=1, print_prefix="",
                                             kwargs...)
 
+    n_prefix = string(print_prefix, "    ")
     K,N = size(model.matfac.Y)
     
     # If an optimizer doesn't exist, then construct one. 
@@ -153,56 +160,67 @@ function basic_fit!(model::PathMatFacModel; fit_mu=true, fit_logsigma=true,
 
     if fit_mu
         # Initialize mu with the column M-estimates.
-        println("Computing column M-estimates...")
+        v_println("Fitting column shifts..."; verbosity=verbosity,
+                                              prefix=print_prefix)
         init_mu!(model, opt; capacity=capacity, 
+                             max_epochs=500,
                              verbosity=verbosity-1,
-                             max_epochs=500)
+                             print_prefix=n_prefix)
     end
 
     # If the model has batch parameters:
     if (fit_batch & isa(model.matfac.col_transform.layers[4], BatchShift))
         # Fit the batch shift parameters.
-        println("Fitting batch parameters...")
+        v_println("Fitting batch parameters..."; verbosity=verbosity,
+                                                 prefix=print_prefix)
         init_theta!(model, opt; capacity=capacity, 
+                                max_epochs=500,
                                 verbosity=verbosity-1,
-                                max_epochs=500)
+                                print_prefix=n_prefix)
         
     end
 
     # Choose column scales in a way that encourages
     # columns of Y to have similar magnitudes.
     if fit_logsigma
-        println("Computing column scale parameters...")
+        v_println("Fitting column scales..."; verbosity=verbosity,
+                                              prefix=print_prefix)
         init_logsigma!(model; capacity=capacity)
     end
 
     # Reweight the column losses so that they exert 
     # similar gradients on X
     if reweight_losses 
-        println("Reweighting column losses...")
+        v_println("Reweighting column losses..."; verbosity=verbosity,
+                                                  prefix=print_prefix)
         reweight_col_losses!(model; capacity=capacity)
     end
 
     # Fit the factors X,Y
     if fit_factors
-        println("Fitting linear factors.")
+        v_println("Fitting linear factors..."; verbosity=verbosity, prefix=print_prefix)
         mf_fit!(model; capacity=capacity, update_X=true, update_Y=true,
-                       opt=opt, max_epochs=max_epochs, verbosity=verbosity)
+                       opt=opt, max_epochs=max_epochs, 
+                       verbosity=verbosity, print_prefix=n_prefix,
+                       kwargs...)
     end
 
     # Finally: jointly fit X, Y, and batch shifts
     if fit_joint
         freeze_layer!(model.matfac.col_transform, 1:2) # batch and column scale 
         unfreeze_layer!(model.matfac.col_transform, 3:4) # batch and column shift 
-        println("Jointly adjusting parameters.")
+        v_println("Jointly adjusting parameters..."; verbosity=verbosity, prefix=print_prefix)
         mf_fit!(model; capacity=capacity, update_X=true, update_Y=true,
                                           update_col_layers=true,
                                           opt=opt,
+                                          max_epochs=max_epochs,
                                           verbosity=verbosity,
-                                          max_epochs=max_epochs)
+                                          print_prefix=n_prefix,
+                                          kwargs...)
     end
 
     if whiten
+        v_println("Whitening X."; verbosity=verbosity, prefix=print_prefix)
         whiten!(model)
     end
 
@@ -211,56 +229,65 @@ function basic_fit!(model::PathMatFacModel; fit_mu=true, fit_logsigma=true,
 end
 
 
-function reweight_eb(reg, X::AbstractMatrix)
-    precs = 1.0 ./ var(X, dims=2)
-    min_prec = minimum(precs)
-    return x -> mean_prec*reg(x)
-end
-
 function basic_fit_reg_weight_eb!(model::PathMatFacModel; 
-                                  verbosity=1, capacity=Int(1e8),
-                                  opt=nothing, lr=0.25, max_epochs=1000, kwargs...) 
+                                  capacity=Int(1e8), opt=nothing, lr=0.05, max_epochs=1000, 
+                                  verbosity=1, print_prefix="", kwargs...) 
 
-    freeze_reg!(model.matfac.X_reg, 1:3)
+    n_pref = string(print_prefix, "    ")
+
+    freeze_reg!(model.matfac.col_transform_reg, 1:4)
+
+    orig_X_reg = model.matfac.X_reg
+    model.matfac.X_reg = X->0.0
+
     orig_Y_reg = model.matfac.Y_reg
-    model.matfac.Y_reg = Y->Y
+    model.matfac.Y_reg = Y->0.0
 
     # Fit the model without regularization. 
     # Whiten the embedding.
+    v_println("Fitting unregularized model..."; prefix=print_prefix,
+                                                verbosity=verbosity)
     basic_fit!(model; fit_mu=true, fit_logsigma=true,
                       reweight_losses=true,
                       fit_batch=true, fit_factors=true,
-                      fit_joint=false,
                       whiten=true,
-                      verbosity=verbosity, capacity=capacity,
+                      verbosity=verbosity, print_prefix=n_pref, 
+                      capacity=capacity,
                       opt=opt, lr=lr, max_epochs=max_epochs, kwargs...) 
     
     # Restore the regularizers; reweight the regularizers.
-    unfreeze_reg!(model.matfac.X_reg, 1:3)
+    v_println("Setting regularizer weights via Empirical Bayes..."; prefix=print_prefix, 
+                                                                    verbosity=verbosity)
+    unfreeze_reg!(model.matfac.col_transform_reg, 1:4)
+    model.matfac.X_reg = orig_X_reg
     model.matfac.Y_reg = orig_Y_reg
-    model.matfax.X_reg = reweight_eb(model.matfax.X_reg, model.matfac.X)
-    model.matfax.Y_reg = reweight_eb(model.matfax.Y_reg, model.matfac.Y)
+    reweight_eb!(model.matfac.col_transform_reg, model.matfac.col_transform)
+    reweight_eb!(model.matfac.X_reg, model.matfac.X)
+    reweight_eb!(model.matfac.Y_reg, model.matfac.Y)
 
     # Re-fit the model with regularized factors
-    basic_fit!(model; fit_mu=false, fit_logsigma=false,
-                      reweight_losses=false,
-                      fit_batch=false, fit_factors=true,
-                      fit_joint=true,
-                      whiten=false,
-                      verbosity=verbosity, capacity=capacity,
+    v_println("Refitting with regularization..."; prefix=print_prefix, 
+                                                  verbosity=verbosity)
+    basic_fit!(model; fit_factors=true, fit_joint=true,
+                      verbosity=verbosity, print_prefix=n_pref,
+                      capacity=capacity,
                       opt=opt, lr=lr, max_epochs=max_epochs, kwargs...) 
 
 end
 
 
 function basic_fit_reg_weight_crossval!(model::PathMatFacModel; 
-                                        verbosity=1, capacity=Int(1e8),
-                                        validation_frac=0.2,
-                                        lr=0.25, opt=nothing, 
+                                        capacity=Int(1e8),
+                                        validation_frac=0.1,
+                                        lr=0.05, opt=nothing, 
+                                        use_gpu=true,
                                         lambda_max=1.0, 
                                         n_lambda=8,
                                         lambda_min_frac=1e-3,
+                                        verbosity=1, print_prefix="", 
                                         kwargs...)
+    n_pref = string(print_prefix, "    ")
+
     if opt == nothing
         opt = construct_optimizer(model, lr)
     end
@@ -271,7 +298,17 @@ function basic_fit_reg_weight_crossval!(model::PathMatFacModel;
     val_idx = sprand(Bool, M, N, validation_frac)
     true_validation = model.data[val_idx]
     model.data[val_idx] .= NaN
-    model = gpu(model)
+    if use_gpu
+        model = gpu(model)
+    end
+
+    v_println("Pre-fitting model layers..."; verbosity=verbosity,
+                                             prefix=print_prefix)
+    basic_fit!(model; capacity=capacity, opt=opt,
+                      fit_mu=true, fit_logsigma=true,
+                      reweight_losses=true,
+                      fit_batch=true, 
+                      print_prefix=n_pref, verbosity=verbosity)
 
     # Loop over a set of weights (in decreasing order)
     lambda_min = lambda_min_frac*lambda_max
@@ -285,18 +322,17 @@ function basic_fit_reg_weight_crossval!(model::PathMatFacModel;
     best_model = deepcopy(cpu(model))
     for (i,lambda) in enumerate(lambda_vec)
 
-        println(string("Outer loop: ", i,"/",n_lambda,";\tλ=",lambda))
+        v_println("Outer loop: ", i,"/",n_lambda,";\tλ=",lambda; verbosity=verbosity,
+                                                                 prefix=print_prefix)
         # Set the regularizer weights for X, Y, and layers
         model.matfac.X_reg = (X -> lambda*orig_X_reg(X))
         model.matfac.Y_reg = (Y -> lambda*orig_Y_reg(Y))
         model.matfac.col_transform_reg = (layers -> lambda*orig_layer_reg(layers))
 
         # (re-)fit with the new weights
-        basic_fit!(model; verbosity=verbosity, capacity=capacity, opt=opt,
-                          fit_mu=false, fit_logsigma=false, reweight_losses=false, 
-                          fit_batch=false, 
-                          fit_factors=true, fit_joint=true, 
-                          whiten=false)
+        basic_fit!(model; capacity=capacity, opt=opt,
+                          fit_factors=true,
+                          print_prefix=n_pref, verbosity=verbosity)
 
         # Compute loss on the test data
         model_cpu = deepcopy(cpu(model))
@@ -304,7 +340,8 @@ function basic_fit_reg_weight_crossval!(model::PathMatFacModel;
         model_cpu.data[val_idx] .= true_validation
         train_val_loss = MF.batched_data_loss(model_cpu.matfac, model_cpu.data; capacity=capacity)
         val_loss = train_val_loss - train_loss
-        println(("Validation loss: ", val_loss))
+        v_println("Validation loss: ", val_loss; verbosity=verbosity,
+                                                 prefix=n_pref)
  
         # Check whether this is an improvement
         if val_loss < best_val_loss
@@ -317,13 +354,13 @@ function basic_fit_reg_weight_crossval!(model::PathMatFacModel;
 end
 
 
-function fit_non_ard!(model::PathMatFacModel; fit_reg_weight="EB",
+function fit_non_ard!(model::PathMatFacModel; fit_reg_weight="eb",
                                               lambda_max=1.0, 
                                               n_lambda=8,
                                               lambda_min=1e-6,
                                               kwargs...)
 
-    if fit_reg_weight=="eb"
+    if fit_reg_weight=="EB"
         basic_fit_reg_weight_eb!(model; kwargs...)
     elseif fit_reg_weight=="crossval"
         basic_fit_reg_weight_crossval!(model; lambda_max=lambda_max,
@@ -331,7 +368,10 @@ function fit_non_ard!(model::PathMatFacModel; fit_reg_weight="EB",
                                               lambda_min=lambda_min,
                                               kwargs...)
     else
-        basic_fit!(model; kwargs...)
+        basic_fit!(model; fit_mu=true, fit_logsigma=true, reweight_losses=true,
+                          fit_batch=true, fit_factors=true, fit_joint=true,
+                          whiten=true, 
+                          kwargs...)
     end
 end
 
@@ -339,8 +379,11 @@ end
 ############################################
 # Fit models with ARD regularization on Y
 
-function fit_ard!(model::PathMatFacModel; lr=0.1, opt=nothing, 
+function fit_ard!(model::PathMatFacModel; lr=0.05, opt=nothing, 
+                                          verbosity=1, print_prefix="", 
                                           kwargs...)
+
+    n_pref = string(print_prefix, "    ")
 
     if opt == nothing
         opt = construct_optimizer(model, lr)
@@ -349,17 +392,25 @@ function fit_ard!(model::PathMatFacModel; lr=0.1, opt=nothing,
     # First, we fit the model in an Empirical Bayes fashion
     # with an L2 regularizer on Y
     orig_ard = model.matfac.Y_reg
-    model.matfac.Y_reg = Y -> 0.5*sum(Y.*Y)
-    basic_fit_reg_weight_eb!(model::PathMatFacModel; opt=opt, kwargs...) 
+
+    K = size(model.matfac.Y, 1)
+    model.matfac.Y_reg = L2Regularizer(K, 1.0)
+    v_println("Pre-training with Empirical Bayes L2 regularization..."; verbosity=verbosity,
+                                                                        prefix=print_prefix)
+    basic_fit_reg_weight_eb!(model; opt=opt, verbosity=verbosity,
+                                             print_prefix=n_pref,
+                                             kwargs...) 
     
     # Next, we put the ARD prior back in place and
     # continue fitting the model.
+    v_println("Training with ARD on Y..."; verbosity=verbosity,
+                                           prefix=print_prefix)
     model.matfac.Y_reg = orig_ard
-    basic_fit!(model; opt=opt, 
-                      fit_mu=false, fit_logsigma=false, fit_batch=false,
-                      fit_factors=true, fit_joint=true,
-                      whiten=false,
-                      kwargs...)
+    opt.eta = opt.eta * 0.1
+    basic_fit!(model; opt=opt, fit_factors=true, 
+                               verbosity=verbosity,
+                               print_prefix=n_pref,
+                               kwargs...)
 
 end
 
@@ -367,7 +418,7 @@ end
 
 ###################################################
 # Fit models with geneset ARD regularization on Y
-function fit_feature_set_ard!(model::PathMatFacModel; lr=0.1, opt=nothing,
+function fit_feature_set_ard!(model::PathMatFacModel; lr=0.05, opt=nothing,
                                                       kwargs...)
 
     if opt == nothing
@@ -376,17 +427,14 @@ function fit_feature_set_ard!(model::PathMatFacModel; lr=0.1, opt=nothing,
 
     # First, fit the model under a "vanilla" ARD regularizer.
     orig_reg = model.matfac.Y_reg
-    model.matfac.Y_reg = ARDRegularizer(model.matfac.Y; opt=opt, kwargs...)
+    model.matfac.Y_reg = ARDRegularizer()
     fit_ard!(model; opt=opt, kwargs...)
 
     # Next, put the FeatureSetARDReg back in place and
     # continue fitting the model.
     model.matfac.Y_reg = orig_reg
-    basic_fit!(model; opt=opt,
-                      fit_mu=false, fit_logsigma=false, fit_batch=false,
-                      fit_factors=true, fit_joint=true,
-                      whiten=false,
-                      kwargs...)
+    basic_fit!(model; opt=opt, fit_factors=true, fit_joint=true,
+                               kwargs...)
 end
 
 
@@ -396,7 +444,7 @@ end
 """ 
     fit!(model::PathMatFacModel; capacity=Int(1e8),
                                  verbosity=1, 
-                                 lr=0.25,
+                                 lr=0.05,
                                  max_epochs=1000,
                                  opt=nothing, 
                                  fit_reg_weight="EB",
@@ -411,14 +459,18 @@ end
     Empirical Bayes.
     
 """
-function fit!(model::PathMatFacModel; kwargs...)
+function fit!(model::PathMatFacModel; opt=nothing, lr=0.05, kwargs...)
+  
+    if opt == nothing
+        opt = construct_optimizer(model, lr) 
+    end 
     
     if isa(model.matfac.Y_reg, ARDRegularizer)
-        fit_ard!(model; kwargs...)
+        fit_ard!(model; opt=opt, kwargs...)
     elseif isa(model.matfac.Y_reg, FeatureSetARDReg)
-        fit_feature_set_ard!(model; kwargs...)
+        fit_feature_set_ard!(model; opt=opt, kwargs...)
     else
-        fit_non_ard!(model; kwargs...)
+        fit_non_ard!(model; opt=opt, kwargs...)
     end
 
 end
