@@ -46,6 +46,108 @@ end
 
 
 ##########################################################
+# L1 regularizer
+##########################################################
+
+mutable struct L1Regularizer
+    weights::AbstractVector
+end
+
+@functor L1Regularizer
+
+function L1Regularizer(K::Integer, w::Number)
+    return L1Regularizer(fill(w, K)) 
+end
+
+function (reg::L1Regularizer)(X::AbstractMatrix)
+    return sum(reg.weights .* sum(abs.(X), dims=2))
+end
+
+function ChainRulesCore.rrule(reg::L1Regularizer, X::AbstractMatrix)
+
+    function L1Regularizer_pullback(loss_bar)
+        return NoTangent(), (loss_bar .* reg.weights) .* sign.(X)
+    end
+
+    return sum(reg.weights .* sum(abs.(X), dims=2)), L1Regularizer_pullback
+end
+
+function (reg::L1Regularizer)(x::AbstractVector)
+    return reg(transpose(x))
+end
+
+function reweight_eb!(reg::L1Regularizer, X::AbstractMatrix; mixture_p=1.0)
+    row_vars = vec(var(X, dims=2))
+    row_precs = 1 ./ row_vars
+    reg.weights .= (mixture_p .* row_precs)
+end 
+
+function reweight_eb!(reg::L1Regularizer, x::AbstractVector; mixture_p=1.0)
+    reweight_eb!(reg, transpose(x); mixture_p=mixture_p)
+end 
+
+
+##########################################################
+# Selective L1 regularizer
+##########################################################
+
+mutable struct SelectiveL1Reg
+    l1_idx::AbstractMatrix{Bool} # Boolean matrix indicates which entries
+                                 # are L1-regularized
+    weight::AbstractVector 
+end
+
+@functor SelectiveL1Reg
+
+function SelectiveL1Reg(feature_ids::Vector, edgelists::Vector; weight=1.0)
+
+    l1_features = compute_nongraph_nodes(feature_ids, edgelists) 
+    N = length(feature_ids)
+    K = length(l1_features)
+
+    l1_idx = zeros(Bool, K, N)
+
+    for (k, l1_feat) in enumerate(l1_features)
+        l1_idx[k,:] .= map(x->in(x, l1_feat), feature_ids) 
+    end
+
+    return SelectiveL1Reg(l1_idx, fill(weight, K))
+end
+                        
+
+function (reg::SelectiveL1Reg)(X::AbstractArray)
+    return sum(reg.weight .* sum(abs.(reg.l1_idx .* X), dims=2)) 
+end
+
+
+function ChainRulesCore.rrule(reg::SelectiveL1Reg, X::AbstractArray)
+
+    sel_X = reg.l1_idx .* X
+    lss = sum(reg.weight .* sum(abs.(sel_X), dims=2))
+
+    function SelectiveL1Reg_pullback(loss_bar)
+        X_bar = (loss_bar.*reg.weight) .* sign.(sel_X)
+        return ChainRulesCore.NoTangent(), X_bar
+    end    
+
+    return lss, SelectiveL1Reg_pullback
+end
+
+
+function reweight_eb!(reg::SelectiveL1Reg, X::AbstractMatrix; mixture_p=1.0)
+    # Given an empirical variance V,
+    # the corresponding Laplace scale b = sqrt(V/2) 
+    sel_X = reg.l1_idx .* X
+    mean_x = mean(sel_X, dims=2)
+    mean_x2 = mean(sel_X.*sel_X, dims=2)
+    var_x = vec(mean_x2 .- (mean_x.*mean_x))
+    new_weights = mixture_p .* sqrt.(2 ./ var_x)
+    new_weights[(!isfinite).(new_weights)] .= 1
+    reg.weight .= new_weights
+end
+
+
+##########################################################
 # Network regularizer
 ##########################################################
 
@@ -128,9 +230,6 @@ quadratic_form(u::AbstractVector,
 
 quadratic_form(X::AbstractMatrix, v::AbstractVector) = dot(v, (X*v))
 
-##################################################
-# Matrix row-regularization
-##################################################
 
 function (nr::NetworkRegularizer)(X::AbstractMatrix)
 
@@ -214,65 +313,6 @@ function reweight_eb!(nr::NetworkRegularizer, X::AbstractMatrix; mixture_p=1.0)
 end
 
  
-##########################################################
-# Selective L1 regularizer
-##########################################################
-
-mutable struct SelectiveL1Reg
-    l1_idx::AbstractMatrix{Bool} # Boolean matrix indicates which entries
-                                 # are L1-regularized
-    weight::AbstractVector 
-end
-
-@functor SelectiveL1Reg
-
-function SelectiveL1Reg(feature_ids::Vector, edgelists::Vector; weight=1.0)
-
-    l1_features = compute_nongraph_nodes(feature_ids, edgelists) 
-    N = length(feature_ids)
-    K = length(l1_features)
-
-    l1_idx = zeros(Bool, K, N)
-
-    for (k, l1_feat) in enumerate(l1_features)
-        l1_idx[k,:] .= map(x->in(x, l1_feat), feature_ids) 
-    end
-
-    return SelectiveL1Reg(l1_idx, fill(weight, K))
-end
-                        
-
-function (reg::SelectiveL1Reg)(X::AbstractArray)
-    return sum(reg.weight .* sum(abs.(reg.l1_idx .* X), dims=2)) 
-end
-
-
-function ChainRulesCore.rrule(reg::SelectiveL1Reg, X::AbstractArray)
-
-    sel_X = reg.l1_idx .* X
-    lss = sum(reg.weight .* sum(abs.(sel_X), dims=2))
-
-    function SelectiveL1Reg_pullback(loss_bar)
-        X_bar = (loss_bar.*reg.weight) .* sign.(sel_X)
-        return ChainRulesCore.NoTangent(), X_bar
-    end    
-
-    return lss, SelectiveL1Reg_pullback
-end
-
-
-function reweight_eb!(reg::SelectiveL1Reg, X::AbstractMatrix; mixture_p=1.0)
-    # Given an empirical variance V,
-    # the corresponding Laplace scale b = sqrt(V/2) 
-    sel_X = reg.l1_idx .* X
-    mean_x = mean(sel_X, dims=2)
-    mean_x2 = mean(sel_X.*sel_X, dims=2)
-    var_x = vec(mean_x2 .- (mean_x.*mean_x))
-    new_weights = mixture_p .* sqrt.(2 ./ var_x)
-    new_weights[(!isfinite).(new_weights)] .= 1
-    reg.weight .= new_weights
-end
-
 
 ##########################################################
 # Group Regularizer
@@ -342,20 +382,7 @@ function reweight_eb!(gr::GroupRegularizer, X::AbstractMatrix; mixture_p=1.0)
     gr.group_weights .= mixture_p ./ vec(mean(group_vars, dims=2))
 end
 
-function reweight_eb!(gr::GroupRegularizer, x::AbstractVector; mixture_p=1.0)
-    reweight_eb!(gr, transpose(x); mixture_p=mixture_p)
-end
 
-function reweight_eb!(gr::GroupRegularizer, cs::ColShift; mixture_p=1.0)
-    reweight_eb!(gr, cs.mu; mixture_p=mixture_p)
-end
-
-function reweight_eb!(gr::GroupRegularizer, cs::ColScale; mixture_p=1.0)
-    reweight_eb!(gr, cs.logsigma; mixture_p=mixture_p)
-end
-
-####################################
-# Regularize rows of a matrix
 function (gr::GroupRegularizer)(X::AbstractMatrix)
 
     means = transpose((X * gr.group_idx)) ./ gr.group_sizes
@@ -384,6 +411,8 @@ function ChainRulesCore.rrule(gr::GroupRegularizer, X::AbstractMatrix)
     return loss, group_reg_pullback
 end
 
+# Define behaviors on various types
+
 function (gr::GroupRegularizer)(x::AbstractVector)
     return gr(transpose(x))
 end
@@ -398,6 +427,18 @@ end
 
 function (gr::GroupRegularizer)(layer::FrozenLayer)
     return 0.0
+end
+
+function reweight_eb!(gr::GroupRegularizer, x::AbstractVector; mixture_p=1.0)
+    reweight_eb!(gr, transpose(x); mixture_p=mixture_p)
+end
+
+function reweight_eb!(gr::GroupRegularizer, cs::ColShift; mixture_p=1.0)
+    reweight_eb!(gr, cs.mu; mixture_p=mixture_p)
+end
+
+function reweight_eb!(gr::GroupRegularizer, cs::ColScale; mixture_p=1.0)
+    reweight_eb!(gr, cs.logsigma; mixture_p=mixture_p)
 end
 
 
@@ -422,7 +463,7 @@ end
 
 function (ard::ARDRegularizer)(X::AbstractMatrix)
     b = 1 .+ (0.5/ard.beta).*(X.*X)
-    return (0.5 - ard.alpha)*sum(log.(b))
+    return (0.5 + ard.alpha)*sum(log.(b))
 end
 
 
@@ -430,18 +471,16 @@ function ChainRulesCore.rrule(ard::ARDRegularizer, X::AbstractMatrix)
     
     b = 1 .+ (0.5/ard.beta).*(X.*X)
     function ard_pullback(loss_bar)
-        return NoTangent(), (loss_bar/ard.beta)*(0.5 - ard.alpha) .* X ./ b 
+        return NoTangent(), (loss_bar/ard.beta)*(0.5 + ard.alpha) .* X ./ b 
     end
 
-    return (0.5 .- ard.alpha)*sum(log.(b)), ard_pullback
+    return (0.5 .+ ard.alpha)*sum(log.(b)), ard_pullback
 end
 
 
-###########################################
-# Function for constructing "composite" 
-# regularizers. I.e., a mixture of
-# regularizers that all act on the same parameter.
-###########################################
+#################################################
+# Struct representing a mixture of regularizers 
+#################################################
 
 mutable struct CompositeRegularizer
     regularizers::Tuple
@@ -473,9 +512,9 @@ function (cr::CompositeRegularizer)(x)
 end
 
 
-###########################################
+######################################################
 # Construct regularizer for X matrix
-###########################################
+######################################################
 
 function construct_X_reg(K, M, sample_ids, sample_conditions, sample_graphs, 
                          lambda_X_l2, lambda_X_condition, lambda_X_graph,
@@ -514,9 +553,9 @@ function construct_X_reg(K, M, sample_ids, sample_conditions, sample_graphs,
 end
 
 
-###########################################
+#########################################################
 # Construct regularizer for Y matrix
-###########################################
+#########################################################
 
 function construct_Y_reg(K, N, feature_ids, feature_sets, feature_graphs,
                          lambda_Y_l1, lambda_Y_selective_l1, lambda_Y_graph,
@@ -537,7 +576,7 @@ function construct_Y_reg(K, N, feature_ids, feature_sets, feature_graphs,
     regularizers = Any[x->0.0, x->0.0, x->0.0]
     mixture_p = zeros(3)
     if lambda_Y_l1 != nothing
-        regularizers[1] =  y->(lambda_Y_l1*sum(abs.(y)))
+        regularizers[1] =  L1Regularizer(K, lambda_Y_l1)
         mixture_p[1] = 1
     end
 
@@ -559,9 +598,9 @@ function construct_Y_reg(K, N, feature_ids, feature_sets, feature_graphs,
 end
 
 
-###########################################
-# Regularizer for Batch Arrays
-###########################################
+##########################################################
+# Regularizer for Batch Array structs
+##########################################################
 
 mutable struct BatchArrayReg 
     weights::Tuple
@@ -581,6 +620,27 @@ function BatchArrayReg(feature_views::AbstractVector; weight=1.0)
 end
 
 
+function (reg::BatchArrayReg)(ba::BatchArray)
+    return 0.5*sum(map((w,v)->w*sum(v .* v), reg.weights, ba.values))
+end
+
+
+function ChainRulesCore.rrule(reg::BatchArrayReg, ba::BatchArray)
+
+    grad = map((w,v)->w.*v, reg.weights, ba.values)
+
+    function batcharray_reg_pullback(loss_bar)
+        val_bar = loss_bar .* grad
+        return ChainRulesCore.NoTangent(),
+               ChainRulesCore.Tangent{BatchArray}(values=val_bar)
+
+    end
+    lss = 0.5*sum(map((g,v) -> sum(g .* v), grad, ba.values))
+
+    return lss, batcharray_reg_pullback
+end
+
+
 function reweight_eb!(reg::BatchArrayReg, A::BatchArray; mixture_p=1.0)
     n_col_range = length(A.col_ranges)
     new_weights = zeros(n_col_range)
@@ -594,14 +654,6 @@ function reweight_eb!(reg::BatchArrayReg, A::BatchArray; mixture_p=1.0)
     end
 
     reg.weights = Tuple(new_weights)
-end
-
-function reweight_eb!(reg::BatchArrayReg, bs::BatchShift; mixture_p=1.0)
-    reweight_eb!(reg, bs.theta; mixture_p=mixture_p)
-end
-
-function reweight_eb!(reg::BatchArrayReg, bs::BatchScale; mixture_p=1.0)
-    reweight_eb!(reg, bs.logdelta; mixture_p=mixture_p)
 end
 
 
@@ -631,9 +683,14 @@ function construct_new_batch_reg!(new_batch_array::BatchArray,
     return BatchArrayReg(Tuple(new_weights))
 end
 
+# Behaviors on various other types
 
-function (reg::BatchArrayReg)(ba::BatchArray)
-    return 0.5*sum(map((w,v)->w*sum(v .* v), reg.weights, ba.values))
+function reweight_eb!(reg::BatchArrayReg, bs::BatchShift; mixture_p=1.0)
+    reweight_eb!(reg, bs.theta; mixture_p=mixture_p)
+end
+
+function reweight_eb!(reg::BatchArrayReg, bs::BatchScale; mixture_p=1.0)
+    reweight_eb!(reg, bs.logdelta; mixture_p=mixture_p)
 end
 
 function (reg::BatchArrayReg)(layer::BatchScale)
@@ -648,25 +705,10 @@ function (cr::BatchArrayReg)(layer::FrozenLayer)
     return 0.0
 end
 
-function ChainRulesCore.rrule(reg::BatchArrayReg, ba::BatchArray)
 
-    grad = map((w,v)->w.*v, reg.weights, ba.values)
-
-    function batcharray_reg_pullback(loss_bar)
-        val_bar = loss_bar .* grad
-        return ChainRulesCore.NoTangent(),
-               ChainRulesCore.Tangent{BatchArray}(values=val_bar)
-
-    end
-    lss = 0.5*sum(map((g,v) -> sum(g .* v), grad, ba.values))
-
-    return lss, batcharray_reg_pullback
-end
-
-
-############################################
-# Construct regularizer for layers
-############################################
+####################################################
+# Regularizer for `ViewableComposition` structs
+####################################################
 
 mutable struct SequenceReg
     regs::Tuple
@@ -700,23 +742,23 @@ function construct_layer_reg(feature_views, batch_dict, lambda_layer)
     return SequenceReg(Tuple(regs))    
 end
 
-# Pure functions don't have adjustable weights
-function reweight_eb!(f::Function, z; mixture_p=1.0)
-    return 
-end
-
 function reweight_eb!(sr::SequenceReg, vc::ViewableComposition; mixture_p=1.0)
     for (r, l) in zip(sr.regs, vc.layers)
         reweight_eb!(r,l; mixture_p=mixture_p)
     end
 end
 
-
 function set_reg!(sr::SequenceReg, idx::Int, reg)
     sr.regs = (sr.regs[1:idx-1]...,
                reg,
                sr.regs[idx+1:end]...)
 end
+
+# Pure functions don't have adjustable weights
+function reweight_eb!(f::Function, z; mixture_p=1.0)
+    return 
+end
+
 
 #####################################################
 # A struct for temporarily nullifying a regularizer

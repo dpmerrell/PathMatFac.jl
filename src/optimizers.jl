@@ -23,7 +23,7 @@ end
 # We designed this for a specific case where we're
 # optimizing a function of a single array. 
 
-mutable struct ISTAOptimiser <: Flux.Optimise.AbstractOptimiser
+mutable struct ISTAOptimiser 
     lr::Float32
     ssq_grad::AbstractArray
     lambda::AbstractArray
@@ -41,7 +41,7 @@ end
 
 # It makes most sense to define ISTA's behavior in 
 # `update!`, rather than `apply!`.
-function Flux.Optimise.update!(ist::ISTAOptimiser, p, g)
+function update!(ist::ISTAOptimiser, p::AbstractMatrix, g::AbstractMatrix)
 
     # Compute the (current) step size for each
     # parameter
