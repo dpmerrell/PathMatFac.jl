@@ -592,9 +592,9 @@ function reg_tests()
         reg = PM.ARDRegularizer()
         l, grads = Zygote.withgradient(reg, test_Y)
         b = 1 .+ (0.5/reg.beta).*(test_Y.*test_Y)
-        @test isapprox(l, (0.5 - reg.alpha).*sum(log.(b)))
+        @test isapprox(l, (0.5 + reg.alpha).*sum(log.(b)))
         @test length(grads) == 1
-        @test isapprox(grads[1], ((0.5 .- reg.alpha)/reg.beta).* test_Y ./ b)
+        @test isapprox(grads[1], ((0.5 .+ reg.alpha)/reg.beta).* test_Y ./ b)
     end
 
 
@@ -637,62 +637,79 @@ function featureset_ard_tests()
     Y = randn(K,N)
     feature_ids = collect(1:N)
     feature_views = repeat([1,2], inner=div(N,2))
+    view_1_idx = (feature_views .== 1)
+    view_2_idx = (feature_views .== 2)
     feature_sets = [collect(1:10),collect(11:20),collect(21:30),collect(31:40)]
 
     reg = PM.construct_featureset_ard(K, feature_ids, feature_views, feature_sets;
-                                      beta0=1e-6, lr=0.1, tau_max=1e6)
+                                      beta0=1e-6, lr=0.1)
 
     @testset "Featureset ARD constructor" begin
 
-        @test size(reg.tau) == (K,N)
         @test length(reg.feature_views) == 2
         @test reg.feature_view_ids == [1,2]
         @test all(reg.alpha .== 1e-6)
         @test all(reg.scale .== 1.0)
         @test isapprox(reg.beta0, 1e-6)
-        @test isapprox(reg.tau_max, 1e6)
         
         test_S = zeros(Bool, length(feature_sets), N)
         for (i, s) in enumerate(feature_sets)
             test_S[i,s] .= true
         end
 
+        @test size(reg.A) == (length(feature_sets), K)
+
         @test issparse(reg.S)
         @test isapprox(Matrix(reg.S), test_S)
     end
-   
 
-    @testset "Featureset ARD updates" begin
-
-        # Update tau
-        PM.update_tau!(reg, Y)
-        # This should hold ONLY because alpha and scale have not been updated yet.
-        @test isapprox(reg.tau, (transpose(reg.alpha) .+ 0.5) ./ (reg.beta0 .+ 0.5.*(Y.*Y)))
-
-        # Update alpha and scale
-        view_1_idx = feature_views .== 1
-        view_2_idx = feature_views .== 2
-        test_alpha = zeros(Float32, N)
-        test_alpha[view_1_idx] .= mean(reg.tau[:,view_1_idx])^2 / (mean(reg.tau[:,view_1_idx].^2) .- mean(reg.tau[:,view_1_idx])^2)
-        test_alpha[view_2_idx] .= mean(reg.tau[:,view_2_idx])^2 / (mean(reg.tau[:,view_2_idx].^2) .- mean(reg.tau[:,view_2_idx])^2)
-
-        test_scale = zeros(Float32, N)
-        test_scale[view_1_idx] .= test_alpha[view_1_idx] ./ (reg.beta0 .* quantile(vec(reg.tau[:,view_1_idx]), 0.9)) 
-        test_scale[view_2_idx] .= test_alpha[view_2_idx] ./ (reg.beta0 .* quantile(vec(reg.tau[:,view_2_idx]), 0.9)) 
-        
-        PM.update_alpha_scale!(reg; q=0.9)
-        @test isapprox(reg.alpha, test_alpha)
-        @test isapprox(reg.scale, test_scale)
-
-    end
+    gamma_normal_loss_fn = (beta, Y) -> -sum(transpose(reg.alpha).*log.(beta)) + sum(transpose(reg.alpha .+ 0.5).*sum(log.(beta .+ (0.5.*(Y.*Y))), dims=1))
+    gamma_normal_loss_Y = Y -> gamma_normal_loss_fn(reg.beta, Y) 
+    calibrated_loss_Y = Y -> gamma_normal_loss_Y(Y) - gamma_normal_loss_Y(zero(Y))
 
     @testset "Featureset ARD regularization" begin
 
-        @test isapprox(reg(Y), 0.5*sum(reg.tau .* Y .*Y))
-        grads = Zygote.gradient(reg, Y)
-        @test isapprox(grads[1], reg.tau .* Y)
+        lss, Y_grads = Zygote.withgradient(reg, Y)
+        @test isapprox(lss, calibrated_loss_Y(Y))
 
-    end 
+        test_grad = Zygote.gradient(gamma_normal_loss_Y, Y)[1]
+        @test isapprox(test_grad, Y_grads[1])
+
+    end
+
+    @testset "Featureset ARD updates: alpha, scale" begin
+
+        # Update alpha and scale
+        test_alpha = zeros(Float32, N)
+        test_scale = zeros(Float32, N)
+        PM.update_alpha_scale!(reg, Y)
+
+        @test all(reg.alpha .> 0)
+        @test all(reg.scale .== 1)
+
+    end
+
+    @testset "Featureset ARD updates: A" begin
+
+        # Set A to random positive values
+        reg.A .= 0.1.*abs.(randn(size(reg.A)))
+        A_copy = deepcopy(reg.A)
+
+        # Set lambda to a value that forces all entries to zero
+        lambda_max = PM.set_lambda_max(reg, Y)
+        reg.A_opt.lambda .= lambda_max
+        PM.update_A_inner!(reg, Y; max_epochs=1000, atol=1e-5, rtol=1e-5, print_iter=1000, print_prefix="   ")
+        @test isapprox(reg.A, zero(reg.A), atol=1e-3)
+   
+        PM.update_A!(reg, Y;
+                     max_epochs=1000, atol=1e-5, rtol=1e-5,
+                     n_lambda=1000, lambda_min_ratio=1e-6,
+                     score_threshold=1.0,
+                     print_iter=1000,
+                     verbosity=1, print_prefix="")
+
+        @test !isapprox(reg.A, zero(reg.A))
+    end
 end
 
 
@@ -761,7 +778,7 @@ function model_tests()
         @test length(model.matfac.X_reg.regularizers) == 3 
         @test length(model.matfac.col_transform.layers) == 4 
         @test length(model.matfac.Y_reg.regularizers) == 3 
-        @test typeof(model.matfac.Y_reg.regularizers[1]) <: Function 
+        @test typeof(model.matfac.Y_reg.regularizers[1]) <: PM.L1Regularizer 
         @test isapprox(model.matfac.Y_reg(model.matfac.Y), 3.14*sum(abs.(model.matfac.Y)))
 
         # Selective L1-regularized model construction 
@@ -1068,7 +1085,7 @@ function transform_tests()
                                                   feature_graphs=feature_graphs, batch_dict=batch_dict, 
                                                   lambda_X_condition=0.1, lambda_Y_graph=0.1, lambda_Y_selective_l1=0.05)
 
-    fit!(model; verbosity=-1, lr=0.05, max_epochs=1000, print_iter=1, rel_tol=1e-7, abs_tol=1e-7)
+    fit!(model; verbosity=-1, lr=0.05, max_epochs=1000, print_iter=10, rel_tol=1e-7, abs_tol=1e-7)
 
     ###################################
     # Build the test set
@@ -1084,7 +1101,7 @@ function transform_tests()
 
         result = transform(model, D_new; feature_ids=new_feature_ids, feature_views=new_feature_views,
                                          sample_conditions=new_sample_conditions,
-                                         verbosity=2, lr=0.05, max_epochs=1000, print_iter=1, rel_tol=1e-7, abs_tol=1e-7,
+                                         verbosity=2, lr=0.05, max_epochs=1000, print_iter=10, rel_tol=1e-7, abs_tol=1e-7,
                                          use_gpu=false)
         
         @test size(result.matfac.X) == (K, M_new) 
@@ -1098,7 +1115,7 @@ function transform_tests()
         
         result = transform(model, D_new; feature_ids=new_feature_ids, feature_views=new_feature_views,
                                          sample_conditions=new_sample_conditions,
-                                         verbosity=2, lr=0.05, max_epochs=1000, print_iter=1, rel_tol=1e-7, abs_tol=1e-7,
+                                         verbosity=2, lr=0.05, max_epochs=1000, print_iter=10, rel_tol=1e-7, abs_tol=1e-7,
                                          use_gpu=true)
         
         @test size(result.matfac.X) == (K, M_new) 
