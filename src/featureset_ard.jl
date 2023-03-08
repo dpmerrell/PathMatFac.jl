@@ -1,7 +1,7 @@
 # Regularize a matrix Y under these
 # probabilistic assumptions:
 #
-# tau_kj ~ Gamma(alpha, scale*(beta_0 .+ A_k^T S_j))
+# tau_kj ~ Gamma(alpha, beta0*(1 .+ A_k^T S_j))
 # Y_kj ~ Normal(0, 1 / tau_kj)
 # 
 # I.e., we assume that the variances of the
@@ -12,9 +12,9 @@
 # procedure that alternates between (1) regularizing Y and
 # (2) fitting the matrix A on the matrix Y.
 # 
-# We also allow `alpha` and `scale` to be updated by 
+# We also allow `alpha` to be updated by 
 # Method of Moments estimates (from tau).
-# We allow the `alpha` and `scale` to vary between columns
+# We allow the `alpha` to vary between columns
 # of tau, but our updates assume they're constant
 # within feature views. 
  
@@ -22,7 +22,6 @@ mutable struct FeatureSetARDReg
     feature_view_ids::AbstractVector
     feature_views::Tuple
     alpha::AbstractVector
-    scale::AbstractVector
     beta0::Float32
     beta::AbstractMatrix
     S::AbstractMatrix
@@ -41,7 +40,6 @@ function FeatureSetARDReg(K::Integer, S::AbstractMatrix,
     feature_view_ids = unique(feature_views)
     feature_views = Tuple(ids_to_ranges(feature_views))
     alpha = fill(beta0, N)
-    scale = ones(N)
     beta = fill(beta0, K,N) 
     A = zeros(n_sets, K)
     l1_lambda = ones(n_sets)  #TODO: revisit lambda
@@ -50,7 +48,7 @@ function FeatureSetARDReg(K::Integer, S::AbstractMatrix,
     return FeatureSetARDReg(feature_view_ids,
                             feature_views,
                             alpha, 
-                            scale, beta0, beta,
+                            beta0, beta,
                             S, A, A_opt) 
 end
 
@@ -101,54 +99,63 @@ function ChainRulesCore.rrule(reg::FeatureSetARDReg, Y::AbstractMatrix)
 end
 
 
-# Update `alpha` via Method of Moments (on the posterior means of tau, given Y);
-# and update `scale` to be consistent with alpha.
+# Update `alpha` via the closed form estimator of Ye and Chen (2017)
+# (https://doi.org/10.1080%2F00031305.2016.1209129) 
+# **on the posterior means of tau**
 # TODO replace this with a more direct estimate from Y.
-function update_alpha_scale!(reg::FeatureSetARDReg, Y::AbstractMatrix)
+function update_alpha!(reg::FeatureSetARDReg, Y::AbstractMatrix)
 
     tau = (reg.beta0 .+ 0.5) ./ (reg.beta0 .+ (0.5.*Y.*Y))
 
-    # Compute view-wise means for tau
-    view_means = map(r->mean(tau[:,r]), reg.feature_views)
-    view_means_sq = view_means.*view_means
+    # Compute view-wise quantities from tau
+    view_mean_t = map(r->mean(tau[:,r]), reg.feature_views)
+    view_mean_lt = map(r->mean(log.(tau[:,r])), reg.feature_views)
+    view_mean_tlt = map(r->mean(tau[:,r].*log.(tau[:,r])), reg.feature_views)
 
-    # Compute view-wise variances for tau
-    viewsq_means = map(r->mean(tau[:,r].^2), reg.feature_views) 
-    view_var = viewsq_means .- view_means_sq
-
-    # Compute new view-wise alpha; assign to model
-    view_alpha = cpu(view_means_sq./view_var)
+    # Compute new view-wise alphas; assign to model
+    view_alpha = view_mean_t ./(view_mean_tlt .- view_mean_t .* view_mean_lt)
     for (i,r) in enumerate(reg.feature_views)
         reg.alpha[r] .= view_alpha[i]
     end
-
-    # For now, set feature-wise `scale` uniformly to one.
-    # TODO replace this with something more principled
-    reg.scale .= 1
+    
+    # For features that do not appear in any feature sets,
+    # set alpha = beta0 for an uninformative ARD prior on
+    # that column of Y.
+    L = size(reg.S, 1)
+    feature_appearances = vec(ones(1,L) * reg.S)
+    noprior_features = (feature_appearances .== 0)
+    reg.alpha[noprior_features] .= reg.beta0
 end
 
 
-function gamma_normal_loss(A, S, alpha, beta0, scale, Y)
-    beta = transpose(scale).*(beta0 .+ transpose(A)*S)
-    return -sum(transpose(alpha).*sum(log.(beta), dims=1)) .+ sum(transpose(alpha.+0.5).*sum(log.(beta .+ 0.5.*(Y.*Y)), dims=1))
+function gamma_normal_loss(A, S, alpha, beta0, Y)
+    beta = beta0 .* (1 .+ transpose(A)*S)
+    alpha_p_5 = alpha .+ 0.5
+    lss = -sum(transpose(alpha).*sum(log.(beta), dims=1)) .+ sum(transpose(alpha_p_5).*sum(log.(beta .+ 0.5.*(Y.*Y)), dims=1))
+    # Calibration term
+    lss -= sum(transpose((alpha_p_5).*log.(alpha_p_5) .- (alpha).*log.(alpha)) .+ sum(log.(abs.(Y) .+ 1e-9), dims=1))
+    return lss
 end
 
-function ChainRulesCore.rrule(::typeof(gamma_normal_loss), A, S, alpha, beta0, scale, Y)
+function ChainRulesCore.rrule(::typeof(gamma_normal_loss), A, S, alpha, beta0, Y)
 
-    beta = beta0 .+ transpose(A)*S
+    beta = beta0.*(1 .+ transpose(A)*S)
     Y2 = Y.*Y
+    alpha_p_5 = alpha .+ 0.5
 
     function gamma_normal_loss_pullback(loss_bar)
 
-        grad_AtS = (-transpose(alpha) ./ beta) .+ transpose(alpha .+ 0.5)./(beta .+ Y2./(2 .* transpose(scale)))
+        grad_AtS = beta0.*((-transpose(alpha) ./ beta) .+ transpose(alpha_p_5)./(beta .+ 0.5.*Y2))
         grad_A = S*transpose(grad_AtS)
         return NoTangent(), loss_bar.*grad_A,
                             NoTangent(), NoTangent(),
-                            NoTangent(), NoTangent(), 
-                            NoTangent()
+                            NoTangent(), NoTangent()
     end
 
-    lss = -sum(transpose(alpha).*sum(log.(transpose(scale).*beta), dims=1)) .+ sum(transpose(alpha .+ 0.5).*sum(log.(transpose(scale).*beta .+ 0.5.*Y2), dims=1))
+    lss = -sum(transpose(alpha).*sum(beta, dims=1)) .+ sum(transpose(alpha_p_5).*sum(log.(beta .+ 0.5.*Y2), dims=1))
+    
+    # Calibration term
+    lss -= sum(transpose((alpha_p_5).*log.(alpha_p_5) .- (alpha).*log.(alpha)) .+ sum(log.(abs.(Y) .+ 1e-9), dims=1))
 
     return lss, gamma_normal_loss_pullback
 end 
@@ -157,54 +164,76 @@ end
 # Update the matrix of "activations" via 
 # nonnegative projected ISTA
 function update_A_inner!(reg::FeatureSetARDReg, Y::AbstractMatrix; 
-                         max_epochs=1000, atol=1e-5, rtol=1e-5,
-                         verbosity=1, print_prefix="", print_iter=100,
-                         term_iter=3)
+                         max_epochs=1000, term_iter=50, atol=1e-5,
+                         verbosity=1, print_prefix="", print_iter=100)
 
-    A_loss = A -> gamma_normal_loss(A, reg.S, reg.alpha, reg.beta0, reg.scale, Y)
-    cur_loss = Inf
+    A_loss = A -> gamma_normal_loss(A, reg.S, reg.alpha, reg.beta0, Y)
+    reg_loss = A -> sum(reg.A_opt.lambda .* abs.(A))
     term_count = 0
 
+    best_loss = A_loss(reg.A) + reg_loss(reg.A)
+    A_best = deepcopy(reg.A)
+    v_println("Iteration 0:\t Loss=", best_loss; verbosity=verbosity,
+                                                 prefix=print_prefix)
+
     for epoch=1:max_epochs
-        new_loss, A_grads = Zygote.withgradient(A_loss, reg.A)
+
+        A_grads = Zygote.gradient(A_loss, reg.A)
         update!(reg.A_opt, reg.A, A_grads[1]) 
-        
-        new_loss += sum(reg.A_opt.lambda .* abs.(reg.A))
+        new_loss = A_loss(reg.A) + reg_loss(reg.A)
 
-        loss_diff = abs(new_loss - cur_loss)
+        # Track the best we've seen thus far.
+        # If we don't make any progress, then increment
+        # the termination counter.
+        if new_loss < best_loss
+            loss_diff = best_loss - new_loss
 
+            best_loss = new_loss
+            A_best .= reg.A
+            if loss_diff > atol 
+                term_count = 0
+            else
+                term_count += 1
+            end
+        else
+            term_count += 1
+            v_println("Δ_loss: ", (new_loss - best_loss), ". termination counter=", term_count; verbosity=verbosity-1,
+                                                                                                 prefix=print_prefix)
+        end
+
+        # Print information for this iteration
         if epoch % print_iter == 0
-            v_println("Iteration ", epoch, ":\t Loss=", new_loss; verbosity=verbosity,
+            v_println("Iteration ", epoch, ":\t Loss=", new_loss; verbosity=verbosity-1,
                                                                   prefix=print_prefix)
         end
 
-        # If progress is too small (or in the wrong direction), then 
-        # increment the termination counter
-        if (loss_diff < atol) | (abs(loss_diff/new_loss) < rtol)
-            term_count += 1
-            v_println("Small loss diff: ", loss_diff, ". termination counter=", term_count; verbosity=verbosity,
-                                                                                            prefix=print_prefix)
-        else # Reset the counter if we start making more progress
-            term_count = 0
-        end
-
+        # Terminate if progress has halted 
         if term_count >= term_iter
-            v_println("Convergence reached -- terminating.", verbosity=verbosity,
+            v_println("Criterion satisfied -- terminating.", verbosity=verbosity-1,
                                                              prefix=print_prefix)
             break
         end
-        cur_loss = new_loss
     end
+    if term_count < term_iter 
+        v_println("Max iterations reached -- terminating.", verbosity=verbosity,
+                                                            prefix=print_prefix)
+
+    end
+
+    reg.A .= A_best
+    v_println("Final loss: ", best_loss; verbosity=verbosity, prefix=print_prefix)
+
+    return best_loss
 end
 
 
 function set_lambda_max(reg::FeatureSetARDReg, Y::AbstractMatrix)
     
-    A_loss = Z -> gamma_normal_loss(Z, reg.S, reg.alpha, reg.beta0, reg.scale, Y)
+    A_loss = Z -> gamma_normal_loss(Z, reg.S, reg.alpha, reg.beta0, Y)
 
     A = zero(reg.A)
     origin_grad = Zygote.gradient(A_loss, A)[1]
-    lambda_max = quantile(vec((abs.(origin_grad))), 0.95)
+    lambda_max = maximum((abs.(origin_grad)))
 
     return lambda_max
 end
@@ -212,15 +241,15 @@ end
 
 # Score A by the fraction of its columns 
 # containing a nonzero entry.
-function score_A(A; threshold=1e-6)
-    K = size(A,2)
+function score_A(A; threshold=1e-3)
+    L,K = size(A)
     return sum(sum(A .> threshold, dims=1) .> 0)/K
 end
 
 
 function update_A!(reg::FeatureSetARDReg, Y::AbstractMatrix; 
-                   max_epochs=1000, atol=1e-5, rtol=1e-5,
-                   n_lambda=10, lambda_min_ratio=1e-3,
+                   max_epochs=500, term_iter=50,
+                   n_lambda=100, lambda_min_ratio=1e-3,
                    score_threshold=0.7,
                    print_iter=100,
                    verbosity=1, print_prefix="")
@@ -235,25 +264,27 @@ function update_A!(reg::FeatureSetARDReg, Y::AbstractMatrix;
                                     n_lambda)))
  
     # For each lambda:
-    for lambda in lambdas
+    v_println("Updating A and λ_A..."; verbosity=verbosity, prefix=print_prefix)
+    for (i,lambda) in enumerate(lambdas)
 
-        v_println("Updating A with λ_A = ", lambda; verbosity=verbosity, prefix=print_prefix)
+        v_println("(", i,") Updating A with λ_A=", lambda; verbosity=verbosity-1, prefix=print_prefix)
         reg.A_opt.lambda .= lambda 
         update_A_inner!(reg, Y; max_epochs=max_epochs,
-                                atol=atol, rtol=rtol,
-                                verbosity=verbosity,
+                                term_iter=term_iter,
+                                verbosity=verbosity-1,
                                 print_iter=print_iter, 
                                 print_prefix=n_pref)
     
         # If we pass the threshold, then
         # we're finished!    
         if score_A(reg.A) >= score_threshold
-            v_println("Finished updating A; selected λ_A = ", lambda; verbosity=verbosity, prefix=print_prefix)
+            v_println("Finished updating A; selected λ_A=", lambda; verbosity=verbosity, prefix=print_prefix)
             break
         end
     end    
+    v_println("Warning: selected the smallest λ_A=", lambdas[end]; verbosity=verbosity, prefix=print_prefix)
    
-    reg.beta = transpose(reg.scale) .* (reg.beta0 .+ transpose(reg.A)*reg.S)
+    reg.beta =  reg.beta0 .* (1 .+ transpose(reg.A)*reg.S)
 
 end
 

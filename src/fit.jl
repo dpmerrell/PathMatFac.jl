@@ -124,7 +124,7 @@ end
 #######################################################################
 
 # "Whiten" the embedding X, such that std(X_k) = 1 for each k;
-# reallocating its variance to Y.
+# Variance is reallocated to Y.
 function whiten!(model::PathMatFacModel)
     X_std = std(model.matfac.X, dims=2)
     model.matfac.X ./= X_std
@@ -198,7 +198,7 @@ function basic_fit!(model::PathMatFacModel; fit_mu=false, fit_logsigma=false,
 
     # Fit the factors X,Y
     if fit_factors
-        v_println("Fitting linear factors..."; verbosity=verbosity, prefix=print_prefix)
+        v_println("Fitting linear factors X,Y..."; verbosity=verbosity, prefix=print_prefix)
         mf_fit!(model; capacity=capacity, update_X=true, update_Y=true,
                        opt=opt, max_epochs=max_epochs, 
                        verbosity=verbosity, print_prefix=n_prefix,
@@ -283,7 +283,7 @@ function basic_fit_reg_weight_crossval!(model::PathMatFacModel;
                                         use_gpu=true,
                                         lambda_max=1.0, 
                                         n_lambda=8,
-                                        lambda_min_frac=1e-3,
+                                        lambda_min_frac=1e-8,
                                         verbosity=1, print_prefix="", 
                                         kwargs...)
     n_pref = string(print_prefix, "    ")
@@ -395,7 +395,7 @@ function fit_ard!(model::PathMatFacModel; lr=0.05, opt=nothing,
 
     K = size(model.matfac.Y, 1)
     model.matfac.Y_reg = L2Regularizer(K, 1.0)
-    v_println("Pre-training with Empirical Bayes L2 regularization..."; verbosity=verbosity,
+    v_println("Pre-fitting with Empirical Bayes L2 regularization..."; verbosity=verbosity,
                                                                         prefix=print_prefix)
     basic_fit_reg_weight_eb!(model; opt=opt, verbosity=verbosity,
                                              print_prefix=n_pref,
@@ -403,7 +403,7 @@ function fit_ard!(model::PathMatFacModel; lr=0.05, opt=nothing,
     
     # Next, we put the ARD prior back in place and
     # continue fitting the model.
-    v_println("Training with ARD on Y..."; verbosity=verbosity,
+    v_println("Adjusting with ARD on Y..."; verbosity=verbosity,
                                            prefix=print_prefix)
     model.matfac.Y_reg = orig_ard
     basic_fit!(model; opt=opt, fit_factors=true, 
@@ -418,8 +418,16 @@ end
 ###################################################
 # Fit models with geneset ARD regularization on Y
 function fit_feature_set_ard!(model::PathMatFacModel; lr=0.05, opt=nothing,
+                                                      fsard_max_iter=10,
+                                                      fsard_max_A_iter=500,
+                                                      fsard_A_prior_frac=0.5,
+                                                      fsard_term_iter=5,
+                                                      fsard_term_rtol=1e-5,
+                                                      fsard_lambda_min_ratio=1e-2,
+                                                      verbosity=1, print_prefix="",
+                                                      capacity=Int(10e8),
                                                       kwargs...)
-
+    n_pref = string(print_prefix, "    ")
     if opt == nothing
         opt = construct_optimizer(model, lr)
     end
@@ -427,13 +435,78 @@ function fit_feature_set_ard!(model::PathMatFacModel; lr=0.05, opt=nothing,
     # First, fit the model under a "vanilla" ARD regularizer.
     orig_reg = model.matfac.Y_reg
     model.matfac.Y_reg = ARDRegularizer()
-    fit_ard!(model; opt=opt, kwargs...)
+    v_println("##### Pre-fitting with vanilla ARD... #####"; verbosity=verbosity,
+                                                 prefix=print_prefix)
+    fit_ard!(model; opt=opt, verbosity=verbosity, print_prefix=n_pref, kwargs...)
 
     # Next, put the FeatureSetARDReg back in place and
     # continue fitting the model.
     model.matfac.Y_reg = orig_reg
-    basic_fit!(model; opt=opt, fit_factors=true, fit_joint=true,
-                               kwargs...)
+
+    # Set alpha
+    update_alpha!(model.matfac.Y_reg, model.matfac.Y)
+
+    # For now we assess "convergence" via change in X
+    X_old = deepcopy(model.matfac.X)
+
+    for iter=1:fsard_max_iter
+
+        # Fit A
+        v_println("##### Featureset ARD outer iteration (", iter, ") #####"; verbosity=verbosity,
+                                                                             prefix=print_prefix)
+        update_A!(model.matfac.Y_reg, model.matfac.Y; max_epochs=fsard_max_A_iter, term_iter=50,
+                                                      n_lambda=100, 
+                                                      lambda_min_ratio=fsard_lambda_min_ratio,
+                                                      score_threshold=fsard_A_prior_frac,
+                                                      print_prefix=n_pref,
+                                                      print_iter=100,
+                                                      verbosity=verbosity)
+
+        # Re-fit the factors X, Y
+        basic_fit!(model; opt=opt, fit_factors=true, capacity=capacity,
+                          verbosity=verbosity, print_prefix=n_pref,
+                          kwargs...)
+        
+        # Compute the relative change in X
+        X_old .-= model.matfac.X
+        X_old .= X_old.*X_old
+        X_diff = sum(X_old)/sum(model.matfac.X.*model.matfac.X)
+
+        v_println("##### (ΔX)^2/(X)^2 = ", X_diff, " #####"; verbosity=verbosity,
+                                                         prefix=print_prefix)
+
+        if X_diff < fsard_term_rtol
+            v_println("##### (ΔX)^2/(X)^2 < ", fsard_term_rtol," #####"; verbosity=verbosity,
+                                                                    prefix=print_prefix)
+            v_println("##### Terminating."; verbosity=verbosity,
+                                            prefix=print_prefix)
+            break 
+        end
+        
+        X_old .= model.matfac.X
+        ## Compute components of the loss.
+        #A_loss = gamma_normal_loss(model.matfac.Y_reg.A, 
+        #                           model.matfac.Y_reg.S, 
+        #                           model.matfac.Y_reg.alpha, 
+        #                           model.matfac.Y_reg.beta0, 
+        #                           model.matfac.Y) 
+        #A_loss += sum(model.matfac.Y_reg.A_opt.lambda .* abs.(model.matfac.Y_reg.A))
+
+        #data_loss = MF.batched_data_loss(model.matfac, model.data; capacity=capacity)
+        #Y_reg_loss = model.matfac.Y_reg(model.matfac.Y) 
+        #X_reg_loss = model.matfac.X_reg(model.matfac.X)
+        #new_loss = sum([A_loss, data_loss, Y_reg_loss, X_reg_loss])
+
+        #v_println("##### Geneset ARD total loss: ", new_loss, " #####"; verbosity=verbosity,
+        #                                                    prefix=print_prefix)
+        if iter == fsard_max_iter 
+            v_println("##### Reached max iteration (", fsard_max_iter,"); #####"; verbosity=verbosity,
+                                                                    prefix=print_prefix)
+            v_println("##### Terminating."; verbosity=verbosity,
+                                            prefix=print_prefix)
+        end
+    end
+
 end
 
 

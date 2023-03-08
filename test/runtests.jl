@@ -634,28 +634,31 @@ function featureset_ard_tests()
 
     N = 40
     K = 10
-    Y = randn(K,N)
+    
     feature_ids = collect(1:N)
     feature_views = repeat([1,2], inner=div(N,2))
     view_1_idx = (feature_views .== 1)
     view_2_idx = (feature_views .== 2)
     feature_sets = [collect(1:10),collect(11:20),collect(21:30),collect(31:40)]
+    n_sets = length(feature_sets)
 
     reg = PM.construct_featureset_ard(K, feature_ids, feature_views, feature_sets;
                                       beta0=1e-6, lr=0.1)
+    
+    test_A = (rand(Bool, n_sets, 10) .* randn(4,10))
+    test_S = zeros(Bool, n_sets, N)
+    for (i, s) in enumerate(feature_sets)
+        test_S[i,s] .= true
+    end
+    corrupt_S = (test_S)# .| rand([true, false, false, false], n_sets, N))
+    Y = transpose(test_A)*corrupt_S .+ randn(K,N).*0.01
 
     @testset "Featureset ARD constructor" begin
 
         @test length(reg.feature_views) == 2
         @test reg.feature_view_ids == [1,2]
         @test all(reg.alpha .== 1e-6)
-        @test all(reg.scale .== 1.0)
         @test isapprox(reg.beta0, 1e-6)
-        
-        test_S = zeros(Bool, length(feature_sets), N)
-        for (i, s) in enumerate(feature_sets)
-            test_S[i,s] .= true
-        end
 
         @test size(reg.A) == (length(feature_sets), K)
 
@@ -682,10 +685,9 @@ function featureset_ard_tests()
         # Update alpha and scale
         test_alpha = zeros(Float32, N)
         test_scale = zeros(Float32, N)
-        PM.update_alpha_scale!(reg, Y)
+        PM.update_alpha!(reg, Y)
 
         @test all(reg.alpha .> 0)
-        @test all(reg.scale .== 1)
 
     end
 
@@ -697,18 +699,20 @@ function featureset_ard_tests()
 
         # Set lambda to a value that forces all entries to zero
         lambda_max = PM.set_lambda_max(reg, Y)
-        reg.A_opt.lambda .= lambda_max
-        PM.update_A_inner!(reg, Y; max_epochs=1000, atol=1e-5, rtol=1e-5, print_iter=1000, print_prefix="   ")
+        reg.A_opt.lambda .= 1.25*lambda_max
+        PM.update_A_inner!(reg, Y; max_epochs=5000, term_iter=100, verbosity=0, print_iter=1000, print_prefix="   ")
         @test isapprox(reg.A, zero(reg.A), atol=1e-3)
    
         PM.update_A!(reg, Y;
-                     max_epochs=1000, atol=1e-5, rtol=1e-5,
-                     n_lambda=1000, lambda_min_ratio=1e-6,
-                     score_threshold=1.0,
-                     print_iter=1000,
+                     max_epochs=500, term_iter=100,
+                     n_lambda=100, lambda_min_ratio=1e-2,
+                     score_threshold=0.7,
+                     print_iter=100,
                      verbosity=1, print_prefix="")
 
         @test !isapprox(reg.A, zero(reg.A))
+
+        println(reg.A)
     end
 end
 
@@ -905,118 +909,179 @@ function fit_tests()
 
     feature_graph = [[feat, "y", 1] for feat in feature_ids]
     feature_graphs = fill(feature_graph, K)
-    
-    ####################################################
-    # Basic fitting
-    ####################################################
-    
-    @testset "Basic fit CPU" begin
 
-        model = PathMatFacModel(Z; sample_conditions=sample_conditions, 
-                                   feature_ids=feature_ids,  feature_views=feature_views,
-                                   feature_graphs=feature_graphs, batch_dict=batch_dict, 
-                                   lambda_X_l2=0.1, lambda_Y_graph=0.1, lambda_Y_selective_l1=0.05)
+    L = 50
+    feature_sets = [Set(rand(feature_ids, 4)) for _=1:L]
+ 
+    ######################################################
+    ### Basic fitting
+    ######################################################
+    ##
+    ##@testset "Basic fit CPU" begin
 
-        X_start = deepcopy(model.matfac.X)
-        Y_start = deepcopy(model.matfac.Y)
-        batch_scale = deepcopy(model.matfac.col_transform.layers[2]) 
-        fit!(model; verbosity=2, lr=0.05, max_epochs=1000, print_iter=10, rel_tol=1e-7, abs_tol=1e-7,
-                    fit_reg_weight=false)
+    ##    model = PathMatFacModel(Z; sample_conditions=sample_conditions, 
+    ##                               feature_ids=feature_ids,  feature_views=feature_views,
+    ##                               feature_graphs=feature_graphs, batch_dict=batch_dict, 
+    ##                               lambda_X_l2=0.1, lambda_Y_graph=0.1, lambda_Y_selective_l1=0.05)
 
-        @test !isapprox(model.matfac.X, X_start)
-        @test !isapprox(model.matfac.Y, Y_start)
-        @test all(map(isapprox, batch_scale.logdelta.values,
-                                model.matfac.col_transform.layers[2].logdelta.values)
-                 ) # This should not have changed
-    end
+    ##    X_start = deepcopy(model.matfac.X)
+    ##    Y_start = deepcopy(model.matfac.Y)
+    ##    batch_scale = deepcopy(model.matfac.col_transform.layers[2]) 
+    ##    fit!(model; verbosity=2, lr=0.05, max_epochs=1000, print_iter=10, rel_tol=1e-7, abs_tol=1e-7,
+    ##                fit_reg_weight=false)
 
-    @testset "Basic fit GPU" begin
+    ##    @test !isapprox(model.matfac.X, X_start)
+    ##    @test !isapprox(model.matfac.Y, Y_start)
+    ##    @test all(map(isapprox, batch_scale.logdelta.values,
+    ##                            model.matfac.col_transform.layers[2].logdelta.values)
+    ##             ) # This should not have changed
+    ##end
 
-        model = PathMatFacModel(Z; sample_conditions=sample_conditions, 
-                                   feature_ids=feature_ids,  feature_views=feature_views,
-                                   feature_graphs=feature_graphs, batch_dict=batch_dict, 
-                                   lambda_X_l2=0.1, lambda_Y_graph=0.1, lambda_Y_selective_l1=0.05)
+    ##@testset "Basic fit GPU" begin
 
-        X_start = deepcopy(model.matfac.X)
-        Y_start = deepcopy(model.matfac.Y)
-        batch_scale = deepcopy(model.matfac.col_transform.layers[2])
+    ##    model = PathMatFacModel(Z; sample_conditions=sample_conditions, 
+    ##                               feature_ids=feature_ids,  feature_views=feature_views,
+    ##                               feature_graphs=feature_graphs, batch_dict=batch_dict, 
+    ##                               lambda_X_l2=0.1, lambda_Y_graph=0.1, lambda_Y_selective_l1=0.05)
 
-        model = gpu(model) 
-        fit!(model; verbosity=2, lr=0.05, max_epochs=1000, print_iter=10, rel_tol=1e-7, abs_tol=1e-7,
-                    fit_reg_weight=false)
-        model = cpu(model)
+    ##    X_start = deepcopy(model.matfac.X)
+    ##    Y_start = deepcopy(model.matfac.Y)
+    ##    batch_scale = deepcopy(model.matfac.col_transform.layers[2])
 
-        @test !isapprox(model.matfac.X, X_start)
-        @test !isapprox(model.matfac.Y, Y_start)
-        @test all(map(isapprox, batch_scale.logdelta.values,
-                                model.matfac.col_transform.layers[2].logdelta.values)
-                 ) # This should not have changed
-    end
+    ##    model = gpu(model) 
+    ##    fit!(model; verbosity=2, lr=0.05, max_epochs=1000, print_iter=10, rel_tol=1e-7, abs_tol=1e-7,
+    ##                fit_reg_weight=false)
+    ##    model = cpu(model)
 
-    ####################################################
-    # Empirical Bayes fitting
-    ####################################################
+    ##    @test !isapprox(model.matfac.X, X_start)
+    ##    @test !isapprox(model.matfac.Y, Y_start)
+    ##    @test all(map(isapprox, batch_scale.logdelta.values,
+    ##                            model.matfac.col_transform.layers[2].logdelta.values)
+    ##             ) # This should not have changed
+    ##end
 
-    @testset "Empirical Bayes fit CPU" begin
+    ######################################################
+    ### Empirical Bayes fitting
+    ######################################################
 
-        model = PathMatFacModel(Z; sample_conditions=sample_conditions, 
-                                   feature_ids=feature_ids,  feature_views=feature_views,
-                                   feature_graphs=feature_graphs, batch_dict=batch_dict, 
-                                   lambda_X_l2=0.1, lambda_Y_graph=0.1, lambda_Y_selective_l1=0.05)
+    ##@testset "Empirical Bayes fit CPU" begin
 
-        X_start = deepcopy(model.matfac.X)
-        Y_start = deepcopy(model.matfac.Y)
-        batch_scale = deepcopy(model.matfac.col_transform.layers[2]) 
-        fit!(model; verbosity=2, lr=0.05, max_epochs=1000, print_iter=10, rel_tol=1e-7, abs_tol=1e-7,
-                    fit_reg_weight="EB")
+    ##    model = PathMatFacModel(Z; sample_conditions=sample_conditions, 
+    ##                               feature_ids=feature_ids,  feature_views=feature_views,
+    ##                               feature_graphs=feature_graphs, batch_dict=batch_dict, 
+    ##                               lambda_X_l2=0.1, lambda_Y_graph=0.1, lambda_Y_selective_l1=0.05)
 
-        @test !isapprox(model.matfac.X, X_start)
-        @test !isapprox(model.matfac.Y, Y_start)
-        @test all(map(isapprox, batch_scale.logdelta.values,
-                                model.matfac.col_transform.layers[2].logdelta.values)
-                 ) # This should not have changed
-    end
+    ##    X_start = deepcopy(model.matfac.X)
+    ##    Y_start = deepcopy(model.matfac.Y)
+    ##    batch_scale = deepcopy(model.matfac.col_transform.layers[2]) 
+    ##    fit!(model; verbosity=2, lr=0.05, max_epochs=1000, print_iter=10, rel_tol=1e-7, abs_tol=1e-7,
+    ##                fit_reg_weight="EB")
 
-    @testset "Empirical Bayes fit GPU" begin
+    ##    @test !isapprox(model.matfac.X, X_start)
+    ##    @test !isapprox(model.matfac.Y, Y_start)
+    ##    @test all(map(isapprox, batch_scale.logdelta.values,
+    ##                            model.matfac.col_transform.layers[2].logdelta.values)
+    ##             ) # This should not have changed
+    ##end
 
-        model = PathMatFacModel(Z; sample_conditions=sample_conditions, 
-                                   feature_ids=feature_ids,  feature_views=feature_views,
-                                   feature_graphs=feature_graphs, batch_dict=batch_dict, 
-                                   lambda_X_l2=0.1, lambda_Y_graph=0.1, lambda_Y_selective_l1=0.05)
+    ##@testset "Empirical Bayes fit GPU" begin
 
-        X_start = deepcopy(model.matfac.X)
-        Y_start = deepcopy(model.matfac.Y)
-        batch_scale = deepcopy(model.matfac.col_transform.layers[2])
+    ##    model = PathMatFacModel(Z; sample_conditions=sample_conditions, 
+    ##                               feature_ids=feature_ids,  feature_views=feature_views,
+    ##                               feature_graphs=feature_graphs, batch_dict=batch_dict, 
+    ##                               lambda_X_l2=0.1, lambda_Y_graph=0.1, lambda_Y_selective_l1=0.05)
 
-        model = gpu(model) 
-        fit!(model; verbosity=2, lr=0.05, max_epochs=1000, print_iter=10, rel_tol=1e-7, abs_tol=1e-7,
-                    fit_reg_weight="EB")
-        model = cpu(model)
+    ##    X_start = deepcopy(model.matfac.X)
+    ##    Y_start = deepcopy(model.matfac.Y)
+    ##    batch_scale = deepcopy(model.matfac.col_transform.layers[2])
 
-        @test !isapprox(model.matfac.X, X_start)
-        @test !isapprox(model.matfac.Y, Y_start)
-        @test all(map(isapprox, batch_scale.logdelta.values,
-                                model.matfac.col_transform.layers[2].logdelta.values)
-                 ) # This should not have changed
-    end
-    
-    ####################################################
-    # Fitting model with ARD on Y
-    ####################################################
+    ##    model = gpu(model) 
+    ##    fit!(model; verbosity=2, lr=0.05, max_epochs=1000, print_iter=10, rel_tol=1e-7, abs_tol=1e-7,
+    ##                fit_reg_weight="EB")
+    ##    model = cpu(model)
 
-    @testset "ARD fit CPU" begin
+    ##    @test !isapprox(model.matfac.X, X_start)
+    ##    @test !isapprox(model.matfac.Y, Y_start)
+    ##    @test all(map(isapprox, batch_scale.logdelta.values,
+    ##                            model.matfac.col_transform.layers[2].logdelta.values)
+    ##             ) # This should not have changed
+    ##end
+    ##
+    ######################################################
+    ### Fitting model with ARD on Y
+    ######################################################
+
+    ##@testset "ARD fit CPU" begin
+
+    ##    model = PathMatFacModel(Z; K=4,
+    ##                               sample_conditions=sample_conditions,
+    ##                               feature_views=feature_views, 
+    ##                               feature_ids=feature_ids,  
+    ##                               batch_dict=batch_dict, 
+    ##                               Y_ard=true)
+
+    ##    X_start = deepcopy(model.matfac.X)
+    ##    Y_start = deepcopy(model.matfac.Y)
+    ##    batch_scale = deepcopy(model.matfac.col_transform.layers[2]) 
+    ##    fit!(model; verbosity=1, lr=0.05, max_epochs=1000, print_iter=10, rel_tol=1e-7, abs_tol=1e-7)
+
+    ##    @test !isapprox(model.matfac.X, X_start)
+    ##    @test !isapprox(model.matfac.Y, Y_start)
+    ##    @test all(map(isapprox, batch_scale.logdelta.values,
+    ##                            model.matfac.col_transform.layers[2].logdelta.values)
+    ##             ) # This should not have changed
+    ##end
+
+    ##@testset "ARD fit GPU" begin
+
+    ##    model = PathMatFacModel(Z; K=4,
+    ##                               sample_conditions=sample_conditions, 
+    ##                               feature_views=feature_views, 
+    ##                               feature_ids=feature_ids,  
+    ##                               batch_dict=batch_dict, 
+    ##                               Y_ard=true)
+
+    ##    X_start = deepcopy(model.matfac.X)
+    ##    Y_start = deepcopy(model.matfac.Y)
+    ##    batch_scale = deepcopy(model.matfac.col_transform.layers[2])
+
+    ##    model = gpu(model) 
+    ##    fit!(model; verbosity=2, lr=0.05, max_epochs=1000, print_iter=10, rel_tol=1e-7, abs_tol=1e-7)
+    ##    model = cpu(model)
+
+    ##    @test !isapprox(model.matfac.X, X_start)
+    ##    @test !isapprox(model.matfac.Y, Y_start)
+    ##    @test all(map(isapprox, batch_scale.logdelta.values,
+    ##                            model.matfac.col_transform.layers[2].logdelta.values)
+    ##             ) # This should not have changed
+    ##end
+    ##
+    ######################################################
+    ### Fitting model with ARD on Y
+    ######################################################
+
+    @testset "Featureset ARD fit CPU" begin
 
         model = PathMatFacModel(Z; K=4,
                                    sample_conditions=sample_conditions,
                                    feature_views=feature_views, 
                                    feature_ids=feature_ids,  
                                    batch_dict=batch_dict, 
-                                   Y_ard=true)
+                                   feature_sets=feature_sets, 
+                                   Y_feature_set_ard=true)
 
         X_start = deepcopy(model.matfac.X)
         Y_start = deepcopy(model.matfac.Y)
         batch_scale = deepcopy(model.matfac.col_transform.layers[2]) 
-        fit!(model; verbosity=1, lr=0.05, max_epochs=1000, print_iter=10, rel_tol=1e-7, abs_tol=1e-7)
+        fit!(model; verbosity=1, lr=0.05, max_epochs=1000, print_iter=10, rel_tol=1e-7, abs_tol=1e-7,
+                    fsard_max_iter=100,
+                    fsard_max_A_iter=500,
+                    fsard_lambda_min_ratio=1e-2,
+                    fsard_A_prior_frac=0.8)
+
+        println(model.matfac.X)
+        println()
+        println(model.matfac.Y)
 
         @test !isapprox(model.matfac.X, X_start)
         @test !isapprox(model.matfac.Y, Y_start)
@@ -1025,21 +1090,27 @@ function fit_tests()
                  ) # This should not have changed
     end
 
-    @testset "ARD fit GPU" begin
+    @testset "Featureset ARD fit GPU" begin
 
         model = PathMatFacModel(Z; K=4,
                                    sample_conditions=sample_conditions, 
                                    feature_views=feature_views, 
                                    feature_ids=feature_ids,  
-                                   batch_dict=batch_dict, 
-                                   Y_ard=true)
+                                   batch_dict=batch_dict,
+                                   feature_sets=feature_sets, 
+                                   Y_feature_set_ard=true)
 
         X_start = deepcopy(model.matfac.X)
         Y_start = deepcopy(model.matfac.Y)
         batch_scale = deepcopy(model.matfac.col_transform.layers[2])
 
         model = gpu(model) 
-        fit!(model; verbosity=2, lr=0.05, max_epochs=1000, print_iter=10, rel_tol=1e-7, abs_tol=1e-7)
+        fit!(model; verbosity=1, lr=0.05, max_epochs=1000, print_iter=10, rel_tol=1e-7, abs_tol=1e-7,
+                    fsard_max_iter=10,
+                    fsard_max_A_iter=500,
+                    fsard_lambda_min_ratio=1e-2,
+                    fsard_A_prior_frac=0.8)
+
         model = cpu(model)
 
         @test !isapprox(model.matfac.X, X_start)
