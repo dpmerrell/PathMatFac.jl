@@ -463,7 +463,7 @@ function fit_feature_set_ard!(model::PathMatFacModel; lr=0.05, opt=nothing,
                                                       verbosity=verbosity)
 
         # Re-fit the factors X, Y
-        basic_fit!(model; opt=opt, fit_factors=true, capacity=capacity,
+        basic_fit!(model; opt=opt, fit_factors=true, fit_joint=true, whiten=true, capacity=capacity,
                           verbosity=verbosity, print_prefix=n_pref,
                           kwargs...)
         

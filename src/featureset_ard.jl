@@ -281,11 +281,12 @@ function update_A!(reg::FeatureSetARDReg, Y::AbstractMatrix;
             v_println("Finished updating A; selected λ_A=", lambda; verbosity=verbosity, prefix=print_prefix)
             break
         end
-    end    
-    v_println("Warning: selected the smallest λ_A=", lambdas[end]; verbosity=verbosity, prefix=print_prefix)
-   
+    end
+    if isapprox(reg.A_opt.lambda[1], lambdas[end])
+        v_println("Warning: selected the smallest λ_A=", lambdas[end]; verbosity=verbosity, prefix=print_prefix)
+    end
+ 
     reg.beta =  reg.beta0 .* (1 .+ transpose(reg.A)*reg.S)
-
 end
 
 
