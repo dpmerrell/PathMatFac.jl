@@ -412,3 +412,77 @@ function csc_select(A, rng1::UnitRange, rng2::UnitRange)
     return sparse(coo_select(csc_to_coo(A)..., rng1, rng2)..., new_m, new_n) 
 end
 
+#########################################################
+# Other
+#########################################################
+
+# Binary search on a "well-behaved" nondecreasing function, f.
+# I.e., given a target value z, search for  x satisfying 
+#      f(x) = z
+# or, more accurately,
+#      |f(x) - z| < z_atol
+# We assume f is a function of **positive real numbers**.
+#
+# It may also terminate if it finds lower and upper bounds
+# satisfying (UB - LB) < x_atol.
+function func_binary_search(x_start, z_target, f; z_atol=1e-2, x_atol=1e-3, max_iter=20, 
+                                                  verbosity=1, print_prefix="")
+    UB = Inf
+    LB = -Inf
+    x = x_start
+    y = f(x)
+    iter = 0
+    # Obtain finite LB and UB.
+    # If f(x) too small, keep doubling x until we have a finite UB.
+    sz = sign(z_target)
+    if y < z_target - sz*z_atol
+        while (y < z_target) & (iter < max_iter)
+            LB = x
+            x *= 2
+            y = f(x)
+            iter += 1
+        end
+        UB = x
+    # If f(x) too big, keep halving x until we have a finite LB.
+    elseif y > z_target + sz*z_atol
+        while (y > z_target) & (iter < max_iter)
+            UB = x
+            x *= 0.5
+            y = f(x)
+            iter += 1
+        end
+        LB = x
+    end
+    # Check whether we hit the target during the bounding phase
+    if abs(y - z_target) < z_atol 
+        return x, y
+    end
+
+    # Now that we have finite LB and UB, search between them
+    # with standard binary search
+    while iter < max_iter
+        delta = UB - LB
+        if delta < x_atol
+            break
+        end
+        x = 0.5*(LB + UB)
+        y = f(x)
+        if y < z_target - sz*z_atol
+            LB = x
+        elseif y > z_target + sz*z_atol
+            UB = x
+        else
+            break
+        end 
+        iter += 1
+    end
+    
+    if iter >= max_iter
+        v_println("WARNING: binary search hit max_iter=", max_iter; verbosity=verbosity,
+                                                                    prefix=print_prefix)
+    end
+
+    return x, y
+end
+
+

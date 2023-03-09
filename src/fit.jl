@@ -419,11 +419,13 @@ end
 # Fit models with geneset ARD regularization on Y
 function fit_feature_set_ard!(model::PathMatFacModel; lr=0.05, opt=nothing,
                                                       fsard_max_iter=10,
-                                                      fsard_max_A_iter=500,
+                                                      fsard_max_A_iter=1000,
+                                                      fsard_n_lambda=20,
+                                                      fsard_lambda_atol=1e-3,
+                                                      fsard_frac_atol=1e-2,
                                                       fsard_A_prior_frac=0.5,
                                                       fsard_term_iter=5,
                                                       fsard_term_rtol=1e-5,
-                                                      fsard_lambda_min_ratio=1e-2,
                                                       verbosity=1, print_prefix="",
                                                       capacity=Int(10e8),
                                                       kwargs...)
@@ -442,6 +444,8 @@ function fit_feature_set_ard!(model::PathMatFacModel; lr=0.05, opt=nothing,
     # Next, put the FeatureSetARDReg back in place and
     # continue fitting the model.
     model.matfac.Y_reg = orig_reg
+    model.matfac.Y_reg.A_opt.lambda .= set_lambda_max(model.matfac.Y_reg, 
+                                                      model.matfac.Y)
 
     # Set alpha
     update_alpha!(model.matfac.Y_reg, model.matfac.Y)
@@ -454,16 +458,18 @@ function fit_feature_set_ard!(model::PathMatFacModel; lr=0.05, opt=nothing,
         # Fit A
         v_println("##### Featureset ARD outer iteration (", iter, ") #####"; verbosity=verbosity,
                                                                              prefix=print_prefix)
-        update_A!(model.matfac.Y_reg, model.matfac.Y; max_epochs=fsard_max_A_iter, term_iter=50,
-                                                      n_lambda=100, 
-                                                      lambda_min_ratio=fsard_lambda_min_ratio,
-                                                      score_threshold=fsard_A_prior_frac,
+        update_A!(model.matfac.Y_reg, model.matfac.Y; target_frac=fsard_A_prior_frac, 
+                                                      max_epochs=fsard_max_A_iter, term_iter=50,
+                                                      bin_search_max_iter=fsard_n_lambda,
+                                                      bin_search_frac_atol=fsard_frac_atol,
+                                                      bin_search_lambda_atol=fsard_lambda_atol,
                                                       print_prefix=n_pref,
                                                       print_iter=100,
                                                       verbosity=verbosity)
 
         # Re-fit the factors X, Y
-        basic_fit!(model; opt=opt, fit_factors=true, fit_joint=true, whiten=true, capacity=capacity,
+        basic_fit!(model; opt=opt, fit_factors=true, fit_joint=true, capacity=capacity,
+                          whiten=false,
                           verbosity=verbosity, print_prefix=n_pref,
                           kwargs...)
         
@@ -484,21 +490,7 @@ function fit_feature_set_ard!(model::PathMatFacModel; lr=0.05, opt=nothing,
         end
         
         X_old .= model.matfac.X
-        ## Compute components of the loss.
-        #A_loss = gamma_normal_loss(model.matfac.Y_reg.A, 
-        #                           model.matfac.Y_reg.S, 
-        #                           model.matfac.Y_reg.alpha, 
-        #                           model.matfac.Y_reg.beta0, 
-        #                           model.matfac.Y) 
-        #A_loss += sum(model.matfac.Y_reg.A_opt.lambda .* abs.(model.matfac.Y_reg.A))
 
-        #data_loss = MF.batched_data_loss(model.matfac, model.data; capacity=capacity)
-        #Y_reg_loss = model.matfac.Y_reg(model.matfac.Y) 
-        #X_reg_loss = model.matfac.X_reg(model.matfac.X)
-        #new_loss = sum([A_loss, data_loss, Y_reg_loss, X_reg_loss])
-
-        #v_println("##### Geneset ARD total loss: ", new_loss, " #####"; verbosity=verbosity,
-        #                                                    prefix=print_prefix)
         if iter == fsard_max_iter 
             v_println("##### Reached max iteration (", fsard_max_iter,"); #####"; verbosity=verbosity,
                                                                     prefix=print_prefix)

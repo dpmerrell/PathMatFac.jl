@@ -249,24 +249,19 @@ end
 
 function update_A!(reg::FeatureSetARDReg, Y::AbstractMatrix; 
                    max_epochs=500, term_iter=50,
-                   n_lambda=100, lambda_min_ratio=1e-3,
-                   score_threshold=0.7,
+                   target_frac=0.7,
                    print_iter=100,
+                   bin_search_max_iter=20,
+                   bin_search_frac_atol=0.1,
+                   bin_search_lambda_atol=1e-2,
                    verbosity=1, print_prefix="")
 
     n_pref = string(print_prefix, "    ")
 
-    # Compute the sequence of lambdas
-    lambda_max = set_lambda_max(reg, Y)
-    lambda_min = lambda_max*lambda_min_ratio
-    lambdas = exp.(collect(LinRange(log(lambda_max), 
-                                    log(lambda_min), 
-                                    n_lambda)))
- 
-    # For each lambda:
     v_println("Updating A and λ_A..."; verbosity=verbosity, prefix=print_prefix)
-    for (i,lambda) in enumerate(lambdas)
-
+    
+    i = 1
+    function eval_func(lambda)
         v_println("(", i,") Updating A with λ_A=", lambda; verbosity=verbosity-1, prefix=print_prefix)
         reg.A_opt.lambda .= lambda 
         update_A_inner!(reg, Y; max_epochs=max_epochs,
@@ -274,17 +269,21 @@ function update_A!(reg::FeatureSetARDReg, Y::AbstractMatrix;
                                 verbosity=verbosity-1,
                                 print_iter=print_iter, 
                                 print_prefix=n_pref)
-    
-        # If we pass the threshold, then
-        # we're finished!    
-        if score_A(reg.A) >= score_threshold
-            v_println("Finished updating A; selected λ_A=", lambda; verbosity=verbosity, prefix=print_prefix)
-            break
-        end
+        score = -score_A(reg.A)
+        v_println("Fraction=", -score; verbosity=verbosity-1, prefix=print_prefix)
+        i += 1 # Some statefulness... `reg`, and the number of iterations 
+        return score 
     end
-    if isapprox(reg.A_opt.lambda[1], lambdas[end])
-        v_println("Warning: selected the smallest λ_A=", lambdas[end]; verbosity=verbosity, prefix=print_prefix)
-    end
+
+    # Search for lambda that yields the desired score.
+    # This updates `reg` along the way.
+    lambda_start = mean(reg.A_opt.lambda)
+    lambda, score = func_binary_search(lambda_start, -target_frac, eval_func; max_iter=bin_search_max_iter,
+                                                                              z_atol=bin_search_frac_atol,
+                                                                              x_atol=bin_search_lambda_atol)
+    score *= -1
+
+    v_println("Finished updating A; selected λ_A=", lambda, "; A_fraction=", score; verbosity=verbosity, prefix=print_prefix)
  
     reg.beta =  reg.beta0 .* (1 .+ transpose(reg.A)*reg.S)
 end

@@ -322,19 +322,21 @@ mutable struct GroupRegularizer
     group_labels::AbstractVector
     group_idx::AbstractMatrix{Float32}
     group_weights::AbstractVector
+    central_weight::Float32
     group_sizes::AbstractVector
 end
 
 @functor GroupRegularizer
 
-function GroupRegularizer(group_labels::AbstractVector; weight=1.0, K=1)
+function GroupRegularizer(group_labels::AbstractVector; weight=1.0, centrality=0.1, K=1)
     unq_labels = unique(group_labels)
     idx = ids_to_ind_mat(group_labels)
     idx = sparse(idx)
     group_sizes = transpose(idx)*ones(length(group_labels))
     n_groups = size(idx, 2)
-    weights = fill(weight, n_groups)
-    return GroupRegularizer(unq_labels, idx, weights, group_sizes)
+    weights = fill((1-centrality)*weight, n_groups)
+    central_weight = centrality*weight
+    return GroupRegularizer(unq_labels, idx, weights, central_weight, group_sizes)
 end
 
 
@@ -367,7 +369,8 @@ function construct_new_group_reg(new_group_labels::AbstractVector,
     new_group_sizes = transpose(new_idx) * ones(length(new_group_labels))
 
     # Return the completed regularizer
-    return GroupRegularizer(unq_new_labels, new_idx, new_weights, new_group_sizes)
+    return GroupRegularizer(unq_new_labels, new_idx, new_weights, 
+                            old_reg_copy.central_weight, new_group_sizes)
 end
 
 function reweight_eb!(gr::GroupRegularizer, X::AbstractMatrix; mixture_p=1.0)
@@ -377,34 +380,47 @@ function reweight_eb!(gr::GroupRegularizer, X::AbstractMatrix; mixture_p=1.0)
     diffs = X .- mean_mat
     diff_sq = diffs.*diffs
     group_vars = transpose((diff_sq * gr.group_idx)) ./ gr.group_sizes
-    
+    group_vars = vec(mean(group_vars, dims=2))
+    X_var = var(X)
+
     # Set the group weights to their inverse variances
-    gr.group_weights .= mixture_p ./ vec(mean(group_vars, dims=2))
+    gr.group_weights .= mixture_p ./ group_vars
+    # Central weight comes from whatever variance in X
+    # isn't explained by group variances
+    avg_group_weight = dot(gr.group_sizes,gr.group_weights)./sum(gr.group_sizes)
+    gr.central_weight = mixture_p .* (1/X_var - avg_group_weight)
 end
 
 
 function (gr::GroupRegularizer)(X::AbstractMatrix)
 
+
+    group_weight_vec = gr.group_idx * gr.group_weights
+    full_weight_vec = group_weight_vec .+ gr.central_weight
+    shrinkage_vec = group_weight_vec ./ full_weight_vec
+
     means = transpose((X * gr.group_idx)) ./ gr.group_sizes
-    mean_mat = transpose(gr.group_idx * means)
-    weight_vec = gr.group_idx * gr.group_weights
+    mean_mat = transpose(gr.group_idx * means) .* transpose(shrinkage_vec)
     diffs = X .- mean_mat
 
-    return 0.5*sum(transpose(weight_vec) .* diffs.*diffs) 
+    return 0.5*sum(transpose(full_weight_vec) .* diffs.*diffs) 
 end
 
 
 function ChainRulesCore.rrule(gr::GroupRegularizer, X::AbstractMatrix)
 
+    group_weight_vec = gr.group_idx * gr.group_weights
+    full_weight_vec = group_weight_vec .+ gr.central_weight
+    shrinkage_vec = group_weight_vec ./ full_weight_vec
+
     means = transpose((X * gr.group_idx)) ./ gr.group_sizes
-    mean_mat = transpose(gr.group_idx * means)
-    weight_vec = gr.group_idx * gr.group_weights
+    mean_mat = transpose(gr.group_idx * means) .* transpose(shrinkage_vec)
     diffs = X .- mean_mat
-    g = transpose(weight_vec) .* diffs
+    g = transpose(full_weight_vec) .* diffs
 
     function group_reg_pullback(loss_bar)
         return ChainRulesCore.NoTangent(), 
-               loss_bar.* (g .* diffs)
+               loss_bar.* g 
     end
     loss = 0.5*sum(g .* diffs)
 
