@@ -44,7 +44,7 @@ function construct_optimizer(model, lr)
     return Flux.Optimise.AdaGrad(lr)
 end
 
-function init_mu!(model::PathMatFacModel, opt; capacity=Int(1e8), max_epochs=500,
+function init_mu!(model::PathMatFacModel, opt; capacity=Int(10e8), max_epochs=500,
                                                verbosity=1, print_prefix="", history=nothing, kwargs...)
     keep_history = (history != nothing)
     result = MF.compute_M_estimates(model.matfac, model.data;
@@ -66,7 +66,7 @@ function init_mu!(model::PathMatFacModel, opt; capacity=Int(1e8), max_epochs=500
 end
 
 
-function init_theta!(model::PathMatFacModel, opt; capacity=Int(1e8), max_epochs=500,
+function init_theta!(model::PathMatFacModel, opt; capacity=Int(10e8), max_epochs=500,
                                                   verbosity=1, print_prefix="", 
                                                   history=nothing, kwargs...)
     # Freeze everything except batch shift... 
@@ -82,7 +82,7 @@ function init_theta!(model::PathMatFacModel, opt; capacity=Int(1e8), max_epochs=
     history!(history, h; name="init_theta") 
 end
 
-function init_logsigma!(model::PathMatFacModel; capacity=Int(1e8), history=nothing)
+function init_logsigma!(model::PathMatFacModel; capacity=Int(10e8), history=nothing)
   
     # If applicable, account for batch shift when we compute these
     # column scales 
@@ -101,7 +101,7 @@ function init_logsigma!(model::PathMatFacModel; capacity=Int(1e8), history=nothi
 end
 
 
-function reweight_col_losses!(model::PathMatFacModel; capacity=Int(1e8), history=nothing)
+function reweight_col_losses!(model::PathMatFacModel; capacity=Int(10e8), history=nothing)
     
 
     # Freeze the model layers.
@@ -161,7 +161,7 @@ function basic_fit!(model::PathMatFacModel; fit_mu=false, fit_logsigma=false,
                                             fit_batch=false, fit_factors=false,
                                             fit_joint=false,
                                             whiten=false,
-                                            capacity=Int(1e8),
+                                            capacity=Int(10e8),
                                             opt=nothing, lr=0.05, max_epochs=1000, 
                                             verbosity=1, print_prefix="",
                                             history=nothing,
@@ -256,7 +256,7 @@ end
 
 
 function basic_fit_reg_weight_eb!(model::PathMatFacModel; 
-                                  capacity=Int(1e8), opt=nothing, lr=0.05, max_epochs=1000, 
+                                  capacity=Int(10e8), opt=nothing, lr=0.05, max_epochs=1000, 
                                   verbosity=1, print_prefix="", history=nothing, kwargs...) 
 
     n_pref = string(print_prefix, "    ")
@@ -306,7 +306,7 @@ end
 
 
 function basic_fit_reg_weight_crossval!(model::PathMatFacModel; 
-                                        capacity=Int(1e8),
+                                        capacity=Int(10e8),
                                         validation_frac=0.1,
                                         lr=0.05, opt=nothing, 
                                         use_gpu=true,
@@ -383,7 +383,7 @@ function basic_fit_reg_weight_crossval!(model::PathMatFacModel;
 end
 
 
-function fit_non_ard!(model::PathMatFacModel; fit_reg_weight="eb",
+function fit_non_ard!(model::PathMatFacModel; fit_reg_weight="EB",
                                               lambda_max=1.0, 
                                               n_lambda=8,
                                               lambda_min=1e-6,
@@ -459,6 +459,7 @@ function fit_feature_set_ard!(model::PathMatFacModel; lr=0.05, opt=nothing,
                                                       history=nothing,
                                                       capacity=Int(10e8),
                                                       kwargs...)
+
     n_pref = string(print_prefix, "    ")
     if opt == nothing
         opt = construct_optimizer(model, lr)
@@ -538,7 +539,7 @@ end
 # MASTER FUNCTION
 ###############################################################
 """ 
-    fit!(model::PathMatFacModel; capacity=Int(1e8),
+    fit!(model::PathMatFacModel; capacity=Int(10e8),
                                  verbosity=1, 
                                  lr=0.05,
                                  max_epochs=1000,
@@ -548,6 +549,16 @@ end
                                  n_lambda=8,
                                  lambda_min=1e-6,
                                  validation_frac=0.2,
+                                 fsard_max_iter=10,
+                                 fsard_max_A_iter=1000,
+                                 fsard_n_lambda=20,
+                                 fsard_lambda_atol=1e-3,
+                                 fsard_frac_atol=1e-2,
+                                 fsard_A_prior_frac=0.5,
+                                 fsard_term_iter=5,
+                                 fsard_term_rtol=1e-5,
+                                 verbosity=1, print_prefix="",
+                                 keep_history=false,
                                  kwargs...)
     
     Fit `model.matfac` on `model.data`. Keyword arguments control
@@ -556,14 +567,14 @@ end
     
 """
 function fit!(model::PathMatFacModel; opt=nothing, lr=0.05, 
-                                      history_json=nothing, kwargs...)
+                                      keep_history=false, kwargs...)
   
     if opt == nothing
         opt = construct_optimizer(model, lr) 
     end 
 
     hist=nothing
-    if history_json != nothing
+    if keep_history
         hist = MutableLinkedList()
         history!(hist; name="start")
     end   

@@ -58,7 +58,7 @@ function sif_to_edgelist(pwy_sif::Vector)
 end
 
 
-function sifs_to_edgelists(pwy_sifs::Vector{<:Vector{<:Vector}})
+function sifs_to_edgelists(pwy_sifs::Vector)
     return map(sif_to_edgelist, pwy_sifs)
 end
 
@@ -133,7 +133,7 @@ end
     construct edgelists that (1) include "central dogma edges"
     and (2) edges that connect to the features.
 """
-function extend_pathways(pwy_edgelists::Vector{Vector{T}} where T, 
+function extend_pathways(pwy_edgelists::Vector, 
                          feature_ids, feature_weights)
 
     feature_id_set = Set(feature_ids)
@@ -245,7 +245,7 @@ function sif_to_nodeset(pwy_sif::Vector)
 end
 
 
-function sifs_to_nodesets(pwy_sifs::Vector{<:Vector{<:Vector}})
+function sifs_to_nodesets(pwy_sifs::Vector)
     return map(sif_to_nodeset, pwy_sifs)
 end
 

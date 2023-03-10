@@ -1117,7 +1117,7 @@ function fit_tests()
                                    feature_ids=feature_ids,  
                                    batch_dict=batch_dict, 
                                    feature_sets=feature_sets, 
-                                   Y_feature_set_ard=true)
+                                   Y_fsard=true)
 
         X_start = deepcopy(model.matfac.X)
         Y_start = deepcopy(model.matfac.Y)
@@ -1150,7 +1150,7 @@ function fit_tests()
                                    feature_ids=feature_ids,  
                                    batch_dict=batch_dict,
                                    feature_sets=feature_sets, 
-                                   Y_feature_set_ard=true)
+                                   Y_fsard=true)
 
         X_start = deepcopy(model.matfac.X)
         Y_start = deepcopy(model.matfac.Y)

@@ -30,7 +30,6 @@ end
 @functor PathMatFacModel 
 
 
-
 #############################################################
 # Model assembly internals
 #############################################################
@@ -108,7 +107,7 @@ function PathMatFacModel(D::AbstractMatrix{<:Real};
                          lambda_Y_graph::Union{Real,Nothing}=nothing,
                          lambda_layer::Union{Real,Nothing}=1.0,
                          Y_ard::Bool=false,
-                         Y_feature_set_ard::Bool=false) 
+                         Y_fsard::Bool=false) 
       
     ################################################
     # Validate input
@@ -167,15 +166,15 @@ function PathMatFacModel(D::AbstractMatrix{<:Real};
     # Feature distributions
     if feature_distributions != nothing
         @assert length(feature_distributions) == N "`feature_distributions` must (a) be nothing or have length equal to size(D,2)"
-        all_distributions = set(keys(LOSS_ORDER))
+        all_distributions = Set(VALID_LOSSES)
         @assert all(map(x->in(x,all_distributions), feature_distributions)) string("Each entry of `feature_distributions` must be one of ", all_distributions)
     else
         feature_distributions = fill("normal", N)
     end
 
     # Check whether we're running feature set ARD
-    if Y_feature_set_ard
-        @assert feature_sets != nothing "`feature_sets` must be provided whenever `Y_feature_set_ard` is true."
+    if Y_fsard
+        @assert feature_sets != nothing "`feature_sets` must be provided whenever `Y_fsard` is true."
     end 
 
     ###############################
@@ -185,7 +184,7 @@ function PathMatFacModel(D::AbstractMatrix{<:Real};
                           batch_dict, feature_sets, feature_graphs, sample_graphs,
                           lambda_X_l2, lambda_X_condition, lambda_X_graph,
                           lambda_Y_l1, lambda_Y_selective_l1, lambda_Y_graph,
-                          Y_ard, Y_feature_set_ard, 
+                          Y_ard, Y_fsard, 
                           lambda_layer) 
 end
 

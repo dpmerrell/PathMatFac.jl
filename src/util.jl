@@ -69,7 +69,6 @@ end
 DOGMA_ORDER = ["dna", "mrna", "protein", "activation"]
 DOGMA_TO_IDX = Dict([v => i for (i,v) in enumerate(DOGMA_ORDER)])
 
-
 PWY_SIF_CODE = Dict("a" => "activation",
                     "d" => "dna",
                     "t" => "mrna",
@@ -78,6 +77,7 @@ PWY_SIF_CODE = Dict("a" => "activation",
                     "|" => -1
                    )
 
+VALID_LOSSES = ["normal", "bernoulli", "poisson", "ordinal3"]
 
 ###############################################
 # Index and ID utils
