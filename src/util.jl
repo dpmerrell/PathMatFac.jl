@@ -62,8 +62,7 @@ function v_println(args...; kwargs...)
 end
 
 ######################################################
-# Canonical relationships between 'omic assays,
-# pathway entities, and probability distributions
+# Canonical central dogma relationships 
 ######################################################
 
 
@@ -410,6 +409,55 @@ function csc_select(A, rng1::UnitRange, rng2::UnitRange)
     new_m = length(rng1)
     new_n = length(rng2)
     return sparse(coo_select(csc_to_coo(A)..., rng1, rng2)..., new_m, new_n) 
+end
+
+
+#########################################################
+# History utils
+#########################################################
+
+function history!(hist; kwargs...)
+    d = Dict()
+    for k in keys(kwargs)
+        d[string(k)] = kwargs[k]
+    end
+    d["time"] = time()
+    push!(hist, d)
+end
+
+function history!(hist, d::AbstractDict; kwargs...)
+    for k in keys(kwargs)
+        d[string(k)] = kwargs[k]
+    end
+    d["time"] = time()
+    push!(hist, d)
+end
+
+function finalize_history(hist)
+    return collect(hist)
+end
+
+function write_history(hist, json_path)
+    open(json_path, "w") do f
+        JSON.print(f, hist)
+    end
+end
+
+
+function history!(::Nothing; kwargs...)
+    return
+end
+
+function history!(::Nothing, d::Any; kwargs...)
+    return
+end
+
+function finalize_history(::Nothing)
+    return
+end
+
+function write_history(hist::Nothing, json_path)
+    return
 end
 
 #########################################################

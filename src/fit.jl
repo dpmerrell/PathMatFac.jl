@@ -16,20 +16,22 @@ function mf_fit!(model::PathMatFacModel; scale_column_losses=false,
                                          update_Y_reg=false,
                                          update_row_layers_reg=false,
                                          update_col_layers_reg=false,
+                                         keep_history=true,
                                          kwargs...)
 
     # Change some of the default kwarg values
-
-    MF.fit!(model.matfac, model.data; scale_column_losses=scale_column_losses, 
-                                      update_X=update_X,
-                                      update_Y=update_Y,
-                                      update_row_layers=update_row_layers,
-                                      update_col_layers=update_col_layers,
-                                      update_X_reg=update_X_reg,
-                                      update_Y_reg=update_Y_reg,
-                                      update_row_layers_reg=update_row_layers_reg,
-                                      update_col_layers_reg=update_col_layers_reg,
-                                      kwargs...)
+    h = MF.fit!(model.matfac, model.data; scale_column_losses=scale_column_losses, 
+                                          update_X=update_X,
+                                          update_Y=update_Y,
+                                          update_row_layers=update_row_layers,
+                                          update_col_layers=update_col_layers,
+                                          update_X_reg=update_X_reg,
+                                          update_Y_reg=update_Y_reg,
+                                          update_row_layers_reg=update_row_layers_reg,
+                                          update_col_layers_reg=update_col_layers_reg,
+                                          keep_history=keep_history,
+                                          kwargs...)
+    return h
 end
 
 
@@ -43,31 +45,44 @@ function construct_optimizer(model, lr)
 end
 
 function init_mu!(model::PathMatFacModel, opt; capacity=Int(1e8), max_epochs=500,
-                                               verbosity=1, print_prefix="", kwargs...)
+                                               verbosity=1, print_prefix="", history=nothing, kwargs...)
+    keep_history = (history != nothing)
+    result = MF.compute_M_estimates(model.matfac, model.data;
+                                    capacity=capacity, max_epochs=max_epochs,
+                                    opt=opt, verbosity=verbosity, print_prefix=print_prefix,
+                                    keep_history=keep_history) 
     
-    M_estimates = MF.compute_M_estimates(model.matfac, model.data;
-                                         capacity=capacity, max_epochs=max_epochs,
-                                         opt=opt, verbosity=verbosity, print_prefix=print_prefix) 
+    # Awkwardly handle the variable-length output
+    h = nothing
+    M_estimates = result
+    if keep_history
+        M_estimates = result[1]
+        h = result[2]
+        history!(history, h; name="init_mu")
+    end
+
     model.matfac.col_transform.layers[3].mu .= vec(M_estimates)
 
 end
 
 
 function init_theta!(model::PathMatFacModel, opt; capacity=Int(1e8), max_epochs=500,
-                                                  verbosity=1, print_prefix="", kwargs...)
+                                                  verbosity=1, print_prefix="", 
+                                                  history=nothing, kwargs...)
     # Freeze everything except batch shift... 
     freeze_layer!(model.matfac.col_transform, 1:3)
 
-    mf_fit!(model; update_col_layers=true, capacity=capacity,
-                   max_epochs=500, opt=opt,
-                   verbosity=verbosity-1,
-                   print_prefix=print_prefix)
-    
+    h = mf_fit!(model; update_col_layers=true, capacity=capacity,
+                       max_epochs=500, opt=opt,
+                       verbosity=verbosity-1,
+                       print_prefix=print_prefix,
+                       keep_history=(history != nothing))
     unfreeze_layer!(model.matfac.col_transform, 1:3)
 
+    history!(history, h; name="init_theta") 
 end
 
-function init_logsigma!(model::PathMatFacModel; capacity=Int(1e8))
+function init_logsigma!(model::PathMatFacModel; capacity=Int(1e8), history=nothing)
   
     # If applicable, account for batch shift when we compute these
     # column scales 
@@ -79,14 +94,14 @@ function init_logsigma!(model::PathMatFacModel; capacity=Int(1e8))
     col_scales = MF.batched_link_scale(model.matfac, model.data; 
                                        capacity=capacity,
                                        latent_map_fn=latent_map_fn) 
-    
     K = size(model.matfac.X, 1) 
     model.matfac.col_transform.layers[1].logsigma .= log.(col_scales ./ sqrt(K))
 
+    history!(history; name="init_logsigma") 
 end
 
 
-function reweight_col_losses!(model::PathMatFacModel; capacity=Int(1e8))
+function reweight_col_losses!(model::PathMatFacModel; capacity=Int(1e8), history=nothing)
     
 
     # Freeze the model layers.
@@ -117,6 +132,8 @@ function reweight_col_losses!(model::PathMatFacModel; capacity=Int(1e8))
 
     # Unfreeze the model layers
     unfreeze_layer!(model.matfac.col_transform, [1,2,4])
+    
+    history!(history; name="reweight_col_losses")
 end
 
 #######################################################################
@@ -147,11 +164,13 @@ function basic_fit!(model::PathMatFacModel; fit_mu=false, fit_logsigma=false,
                                             capacity=Int(1e8),
                                             opt=nothing, lr=0.05, max_epochs=1000, 
                                             verbosity=1, print_prefix="",
+                                            history=nothing,
                                             kwargs...)
 
     n_prefix = string(print_prefix, "    ")
     K,N = size(model.matfac.Y)
-    
+    keep_history = (history != nothing)
+ 
     # If an optimizer doesn't exist, then construct one. 
     # Its state will persist between calls to `mf_fit!`
     if opt == nothing
@@ -165,7 +184,8 @@ function basic_fit!(model::PathMatFacModel; fit_mu=false, fit_logsigma=false,
         init_mu!(model, opt; capacity=capacity, 
                              max_epochs=500,
                              verbosity=verbosity-1,
-                             print_prefix=n_prefix)
+                             print_prefix=n_prefix,
+                             history=history)
     end
 
     # If the model has batch parameters:
@@ -176,7 +196,8 @@ function basic_fit!(model::PathMatFacModel; fit_mu=false, fit_logsigma=false,
         init_theta!(model, opt; capacity=capacity, 
                                 max_epochs=500,
                                 verbosity=verbosity-1,
-                                print_prefix=n_prefix)
+                                print_prefix=n_prefix,
+                                history=history)
         
     end
 
@@ -199,10 +220,13 @@ function basic_fit!(model::PathMatFacModel; fit_mu=false, fit_logsigma=false,
     # Fit the factors X,Y
     if fit_factors
         v_println("Fitting linear factors X,Y..."; verbosity=verbosity, prefix=print_prefix)
-        mf_fit!(model; capacity=capacity, update_X=true, update_Y=true,
-                       opt=opt, max_epochs=max_epochs, 
-                       verbosity=verbosity, print_prefix=n_prefix,
-                       kwargs...)
+        h = mf_fit!(model; capacity=capacity, update_X=true, update_Y=true,
+                           opt=opt, max_epochs=max_epochs, 
+                           verbosity=verbosity, print_prefix=n_prefix,
+                           keep_history=keep_history,
+                           kwargs...)
+        history!(history, h; name="fit_factors")
+
     end
 
     # Finally: jointly fit X, Y, and batch shifts
@@ -210,13 +234,15 @@ function basic_fit!(model::PathMatFacModel; fit_mu=false, fit_logsigma=false,
         freeze_layer!(model.matfac.col_transform, 1:2) # batch and column scale 
         unfreeze_layer!(model.matfac.col_transform, 3:4) # batch and column shift 
         v_println("Jointly adjusting parameters..."; verbosity=verbosity, prefix=print_prefix)
-        mf_fit!(model; capacity=capacity, update_X=true, update_Y=true,
-                                          update_col_layers=true,
-                                          opt=opt,
-                                          max_epochs=max_epochs,
-                                          verbosity=verbosity,
-                                          print_prefix=n_prefix,
-                                          kwargs...)
+        h = mf_fit!(model; capacity=capacity, update_X=true, update_Y=true,
+                                              update_col_layers=true,
+                                              opt=opt,
+                                              max_epochs=max_epochs,
+                                              verbosity=verbosity,
+                                              print_prefix=n_prefix,
+                                              keep_history=keep_history,
+                                              kwargs...)
+        history!(history, h; name="fit_joint")
     end
 
     if whiten
@@ -231,7 +257,7 @@ end
 
 function basic_fit_reg_weight_eb!(model::PathMatFacModel; 
                                   capacity=Int(1e8), opt=nothing, lr=0.05, max_epochs=1000, 
-                                  verbosity=1, print_prefix="", kwargs...) 
+                                  verbosity=1, print_prefix="", history=nothing, kwargs...) 
 
     n_pref = string(print_prefix, "    ")
 
@@ -253,8 +279,9 @@ function basic_fit_reg_weight_eb!(model::PathMatFacModel;
                       whiten=true,
                       verbosity=verbosity, print_prefix=n_pref, 
                       capacity=capacity,
-                      opt=opt, lr=lr, max_epochs=max_epochs, kwargs...) 
-    
+                      opt=opt, lr=lr, max_epochs=max_epochs,
+                      history=history, kwargs...) 
+     
     # Restore the regularizers; reweight the regularizers.
     v_println("Setting regularizer weights via Empirical Bayes..."; prefix=print_prefix, 
                                                                     verbosity=verbosity)
@@ -264,12 +291,14 @@ function basic_fit_reg_weight_eb!(model::PathMatFacModel;
     reweight_eb!(model.matfac.col_transform_reg, model.matfac.col_transform)
     reweight_eb!(model.matfac.X_reg, model.matfac.X)
     reweight_eb!(model.matfac.Y_reg, model.matfac.Y)
+    history!(history; name="reweight_eb")
 
     # Re-fit the model with regularized factors
     v_println("Refitting with regularization..."; prefix=print_prefix, 
                                                   verbosity=verbosity)
     basic_fit!(model; fit_factors=true, fit_joint=true,
                       verbosity=verbosity, print_prefix=n_pref,
+                      history=history,
                       capacity=capacity,
                       opt=opt, lr=lr, max_epochs=max_epochs, kwargs...) 
 
@@ -427,6 +456,7 @@ function fit_feature_set_ard!(model::PathMatFacModel; lr=0.05, opt=nothing,
                                                       fsard_term_iter=5,
                                                       fsard_term_rtol=1e-5,
                                                       verbosity=1, print_prefix="",
+                                                      history=nothing,
                                                       capacity=Int(10e8),
                                                       kwargs...)
     n_pref = string(print_prefix, "    ")
@@ -439,7 +469,7 @@ function fit_feature_set_ard!(model::PathMatFacModel; lr=0.05, opt=nothing,
     model.matfac.Y_reg = ARDRegularizer()
     v_println("##### Pre-fitting with vanilla ARD... #####"; verbosity=verbosity,
                                                  prefix=print_prefix)
-    fit_ard!(model; opt=opt, verbosity=verbosity, print_prefix=n_pref, kwargs...)
+    fit_ard!(model; opt=opt, verbosity=verbosity, print_prefix=n_pref, history=history, kwargs...)
 
     # Next, put the FeatureSetARDReg back in place and
     # continue fitting the model.
@@ -458,19 +488,21 @@ function fit_feature_set_ard!(model::PathMatFacModel; lr=0.05, opt=nothing,
         # Fit A
         v_println("##### Featureset ARD outer iteration (", iter, ") #####"; verbosity=verbosity,
                                                                              prefix=print_prefix)
-        update_A!(model.matfac.Y_reg, model.matfac.Y; target_frac=fsard_A_prior_frac, 
+        update_A!(model.matfac.Y_reg, model.matfac.Y; target_frac=fsard_A_prior_frac,
                                                       max_epochs=fsard_max_A_iter, term_iter=50,
                                                       bin_search_max_iter=fsard_n_lambda,
                                                       bin_search_frac_atol=fsard_frac_atol,
                                                       bin_search_lambda_atol=fsard_lambda_atol,
                                                       print_prefix=n_pref,
                                                       print_iter=100,
-                                                      verbosity=verbosity)
+                                                      verbosity=verbosity,
+                                                      history=history) 
 
         # Re-fit the factors X, Y
         basic_fit!(model; opt=opt, fit_factors=true, fit_joint=true, capacity=capacity,
                           whiten=false,
                           verbosity=verbosity, print_prefix=n_pref,
+                          history=history, 
                           kwargs...)
         
         # Compute the relative change in X
@@ -483,7 +515,7 @@ function fit_feature_set_ard!(model::PathMatFacModel; lr=0.05, opt=nothing,
 
         if X_diff < fsard_term_rtol
             v_println("##### (ΔX)^2/(X)^2 < ", fsard_term_rtol," #####"; verbosity=verbosity,
-                                                                    prefix=print_prefix)
+                                                                         prefix=print_prefix)
             v_println("##### Terminating."; verbosity=verbosity,
                                             prefix=print_prefix)
             break 
@@ -523,20 +555,30 @@ end
     Empirical Bayes.
     
 """
-function fit!(model::PathMatFacModel; opt=nothing, lr=0.05, kwargs...)
+function fit!(model::PathMatFacModel; opt=nothing, lr=0.05, 
+                                      history_json=nothing, kwargs...)
   
     if opt == nothing
         opt = construct_optimizer(model, lr) 
     end 
-    
+
+    hist=nothing
+    if history_json != nothing
+        hist = MutableLinkedList()
+        history!(hist; name="start")
+    end   
+ 
     if isa(model.matfac.Y_reg, ARDRegularizer)
-        fit_ard!(model; opt=opt, kwargs...)
+        fit_ard!(model; opt=opt, history=hist, kwargs...)
     elseif isa(model.matfac.Y_reg, FeatureSetARDReg)
-        fit_feature_set_ard!(model; opt=opt, kwargs...)
+        fit_feature_set_ard!(model; opt=opt, history=hist, kwargs...)
     else
-        fit_non_ard!(model; opt=opt, kwargs...)
+        fit_non_ard!(model; opt=opt, history=hist, kwargs...)
     end
 
+    history!(hist; name="finish")
+    hist = finalize_history(hist)
+    return hist
 end
 
 

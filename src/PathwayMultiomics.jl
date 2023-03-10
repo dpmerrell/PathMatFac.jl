@@ -3,7 +3,7 @@ module PathwayMultiomics
 
 using MatFac, CUDA, SparseArrays, SuiteSparse, Statistics, StatsBase, Distributions, 
       HDF5, CSV, JSON, DataFrames, BSON, ChainRules, ChainRulesCore,
-      Zygote, Flux, Functors, LinearAlgebra, Krylov
+      Zygote, Flux, Functors, LinearAlgebra, Krylov, DataStructures
 
 MF = MatFac
 CuSparseMatrixCSC = CUDA.CUSPARSE.CuSparseMatrixCSC

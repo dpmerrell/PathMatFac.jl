@@ -254,7 +254,8 @@ function update_A!(reg::FeatureSetARDReg, Y::AbstractMatrix;
                    bin_search_max_iter=20,
                    bin_search_frac_atol=0.1,
                    bin_search_lambda_atol=1e-2,
-                   verbosity=1, print_prefix="")
+                   verbosity=1, print_prefix="",
+                   history=nothing)
 
     n_pref = string(print_prefix, "    ")
 
@@ -282,6 +283,7 @@ function update_A!(reg::FeatureSetARDReg, Y::AbstractMatrix;
                                                                               z_atol=bin_search_frac_atol,
                                                                               x_atol=bin_search_lambda_atol)
     score *= -1
+    history!(history; name="update_A", lambda_A=lambda, A_frac=score)
 
     v_println("Finished updating A; selected λ_A=", lambda, "; A_fraction=", score; verbosity=verbosity, prefix=print_prefix)
  
