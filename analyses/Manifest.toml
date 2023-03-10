@@ -500,6 +500,12 @@ git-tree-sha1 = "43032da5832754f58d14a91ffbe86d5f176acda9"
 uuid = "f7e6163d-2fa5-5f23-b69c-1db539e41963"
 version = "0.2.1+0"
 
+[[Krylov]]
+deps = ["LinearAlgebra", "Printf", "SparseArrays"]
+git-tree-sha1 = "dd90aacbfb622f898a97c2a4411ac49101ebab8a"
+uuid = "ba0b0d4f-ebba-5204-a429-3ac8c609bfb7"
+version = "0.9.0"
+
 [[LLVM]]
 deps = ["CEnum", "LLVMExtra_jll", "Libdl", "Printf", "Unicode"]
 git-tree-sha1 = "df115c31f5c163697eede495918d8e85045c8f04"
@@ -508,9 +514,9 @@ version = "4.16.0"
 
 [[LLVMExtra_jll]]
 deps = ["Artifacts", "JLLWrappers", "LazyArtifacts", "Libdl", "Pkg", "TOML"]
-git-tree-sha1 = "771bfe376249626d3ca12bcd58ba243d3f961576"
+git-tree-sha1 = "7718cf44439c676bc0ec66a87099f41015a522d6"
 uuid = "dad2f222-ce93-54a1-a47d-0025e8a3acab"
-version = "0.0.16+0"
+version = "0.0.16+2"
 
 [[LaTeXStrings]]
 git-tree-sha1 = "f2355693d6778a178ade15952b7ac47a4ff97996"
@@ -712,10 +718,8 @@ uuid = "69de0a69-1ddd-5017-9359-2bf0b02dc9f0"
 version = "2.5.6"
 
 [[PathwayMultiomics]]
-deps = ["BSON", "CSV", "CUDA", "ChainRules", "ChainRulesCore", "DataFrames", "Distributions", "Flux", "Functors", "HDF5", "JSON", "LinearAlgebra", "MatFac", "SparseArrays", "Statistics", "StatsBase", "Zygote"]
-git-tree-sha1 = "c5f9e2cf07b51cad2fa36d32e5cbb3649cc048c1"
-repo-rev = "master"
-repo-url = "https://github.com/dpmerrell/PathwayMultiomics.jl"
+deps = ["BSON", "CSV", "CUDA", "ChainRules", "ChainRulesCore", "DataFrames", "DataStructures", "Distributions", "Flux", "Functors", "HDF5", "JSON", "Krylov", "LinearAlgebra", "MatFac", "SparseArrays", "Statistics", "StatsBase", "SuiteSparse", "Zygote"]
+path = ".."
 uuid = "26ae61a0-bdaa-4ab9-b40a-f117d74136e1"
 version = "0.1.0"
 

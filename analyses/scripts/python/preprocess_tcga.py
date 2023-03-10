@@ -105,8 +105,10 @@ def preprocess_features(omic_matrix, feature_assays, sample_groups):
 
 
 def parse_opts(opt_ls, defaults):
-    
-    opt_kv = [opt.split("=") for opt in opt_ls]
+   
+    print(opt_ls) 
+    opt_kv = [opt.split("=") for opt in opt_ls if "=" in opt]
+    print(opt_kv)
     opt_k = [kv[0] for kv in opt_kv]
     opt_v = [kv[1].split(":") for kv in opt_kv]
     for i, v in enumerate(opt_v):

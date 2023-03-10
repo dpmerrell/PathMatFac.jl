@@ -111,11 +111,9 @@ TCGA_REGRESSION_PARAMS = {"methods": ["__".join(["method={}".format(m), l]) for 
                          }
 
 
-
 print("\nTCGA Runs:")
 for k, v in TCGA_REGRESSION_PARAMS.items():
     print("\t", k, ": ", v)
-
 
 
 ###################################################################################################
@@ -127,9 +125,9 @@ rule all:
        #sim_score_tables=[join(SIM_SCORE_DIR, "sim_scores", analysis, size+".tsv") for analysis, size in SIM_ANALYSES_SIZES],
        #sim_snr_lineplot=join(SIM_VIS_DIR, "snr-lineplot.png"),
        #sim_snr_heatmap=join(SIM_VIS_DIR, "snr-heatmap.png")
-       #exp_fitted=expand(join(EXP_FITTED_DIR,"{method}/{data}/{pathways}/fitted.hdf"),
-       #                  method=TCGA_REGRESSION_PARAMS["methods"], data=TCGA_REGRESSION_PARAMS["data"],
-       #                  pathways=TCGA_REGRESSION_PARAMS["pathways"]),
+       exp_fitted=expand(join(EXP_FITTED_DIR,"{method}/{data}/{pathways}/fitted.bson"),
+                         method=TCGA_REGRESSION_PARAMS["methods"], data=TCGA_REGRESSION_PARAMS["data"],
+                         pathways=TCGA_REGRESSION_PARAMS["pathways"]),
        #exp_scatters=expand(join(EXP_SCATTER_DIR,"{method}/{data}/{pathways}/scatter.html"),
        #                    method=TCGA_REGRESSION_PARAMS["methods"], data=TCGA_REGRESSION_PARAMS["data"],
        #                    pathways=TCGA_REGRESSION_PARAMS["pathways"]),
@@ -146,60 +144,10 @@ rule all:
        #                        transform=TCGA_REGRESSION_PARAMS["methods"], data=TCGA_REGRESSION_PARAMS["data"],
        #                        fold=TCGA_REGRESSION_PARAMS["folds"], target=TCGA_REGRESSION_PARAMS["targets"],
        #                        pathways=TCGA_REGRESSION_PARAMS["pathways"]),
-        score_tsv=join(EXP_REGRESSOR_SCORE_DIR, "scores.tsv"),
-        score_png=join(EXP_REGRESSOR_SCORE_DIR, "scores.png"),
-        pred_result_png=join(EXP_REGRESSOR_SCORE_DIR, "results.png"),
-        pred_embedding_png=join(EXP_REGRESSOR_SCORE_DIR, "embeddings.png")
-
-#####################################################################
-# Runs on real (TCGA) data
-#####################################################################
-
-rule exp_factor_plot:
-    input:
-        src="scripts/python/vis_pathway_factor_plot.py",
-        params_hdf=join(EXP_FITTED_DIR, "{method}/{data}/{pathways}/fitted.hdf"),
-        pwy_json=join(REACTOME_DIR, "{pathways}.json")
-    output:
-        factorplot=join(EXP_FACTORPLOT_DIR,"{method,[_.=0-9a-zA-Z]+}/{data,[_.=:0-9a-zA-Z]+}/{pathways,[_.=0-9a-zA-Z]+}/factors.html")
-    params:
-        plottedk=100
-    resources:
-        mem_mb=5000
-    shell:
-        "python {input.src} {input.params_hdf} {input.pwy_json} {output.factorplot} {params.plottedk}"
-
-
-rule exp_embedding_scatter:
-    input:
-        src="scripts/python/vis_embedding_scatter.py",
-        clinical_hdf=join(TCGA_DIR, "tcga_clinical.hdf"),
-        params_hdf=join(EXP_FITTED_DIR, "{method}/{data}/{pathways}/fitted.hdf"),
-    output:
-        scatter_html=join(EXP_SCATTER_DIR, "{method,[_.=0-9a-zA-Z]+}/{data,[_:.=0-9a-zA-Z]+}/{pathways,[_.=0-9a-zA-Z]+}/scatter.html")
-    resources:
-        mem_mb=5000
-    shell:
-        "python {input.src} {input.params_hdf} {input.clinical_hdf} 1 {output.scatter_html}"
-
-
-rule exp_fit_matfac:
-    input:
-        src="scripts/julia/fit_matfac.jl",
-        status_file="gpu_status.txt",
-        data=join(EXP_DATA_DIR, "{data}.hdf"),
-        pwy_json=join(REACTOME_DIR, "{pathways}.json"),
-    output:
-        inferred_bson=join(EXP_FITTED_DIR, "method=matfac__{method,[_.=0-9a-zA-Z]+}/{data,[_.:=0-9a-zA-Z]+}/{pathways,[_.=0-9a-zA-Z]+}/fitted.bson"),
-        inferred_hdf=join(EXP_FITTED_DIR, "method=matfac__{method,[_.=0-9a-zA-Z]+}/{data,[_.=:0-9a-zA-Z]+}/{pathways,[_.=0-9a-zA-Z]+}/fitted.hdf"),
-        history_json=join(EXP_HISTORY_DIR, "method=matfac__{method,[_.=0-9a-zA-Z]+}/{data,[_.=:0-9a-zA-Z]+}/{pathways,[_.=0-9a-zA-Z]+}/history.json"),
-    resources:
-        mem_mb=10000,
-        gpu=1
-    params:
-        matfac_kwargs=lambda wc: " ".join(wc["method"].split("__"))
-    shell:
-        "julia --project=. -t 1 {input.src} {input.data} {input.pwy_json} {output.inferred_bson} {output.inferred_hdf} {params.matfac_kwargs} history_json={output.history_json} gpu_status_file={input.status_file}"
+       # score_tsv=join(EXP_REGRESSOR_SCORE_DIR, "scores.tsv"),
+       # score_png=join(EXP_REGRESSOR_SCORE_DIR, "scores.png"),
+       # pred_result_png=join(EXP_REGRESSOR_SCORE_DIR, "results.png"),
+       # pred_embedding_png=join(EXP_REGRESSOR_SCORE_DIR, "embeddings.png")
 
 
 #############################################################
@@ -345,19 +293,21 @@ rule exp_transform_matfac:
     output:
         transformed_test=join(EXP_TRANS_TEST_DIR, "method=matfac__{method_params,[_.=:0-9a-zA-Z]+}/{data,[_.=:0-9a-zA-Z]+}/{pathways,[_.=:0-9a-zA-Z]+}/transformed.hdf")
     shell:
-        "Rscript {input.src} {input.test_set} {input.fitted_rds} {output.transformed_test}"
+        ""
 
 rule exp_fit_matfac:
     input:
         src="scripts/julia/fit_matfac.jl",
         util="scripts/julia/script_util.jl",
-        data_hdf=join(EXP_DATA_DIR, "{data}__train.hdf"),
-        pwy_json=join()
+        data_hdf=join(EXP_DATA_DIR, "{data}.hdf"),
+        pwy_json=join(REACTOME_DIR, "{pathways}.json")
     output:
-        fitted_bson=join(EXP_FITTED_DIR, "method=matfac__k={k}__var_filter={vf,[.0-9]+}/{data,[_.=:0-9a-zA-Z]+}/{pathways,[_.=0-9a-zA-Z]+}/fitted.bson"),
-        trans_train_hdf=join(EXP_TRANS_TRAIN_DIR, "method=matfac__k={k,[0-9]+}__var_filter={vf,[.0-9]+}/{data,[_.=:0-9a-zA-Z]+}/{pathways,[_.=0-9a-zA-Z]+}/transformed.hdf")
+        fitted_bson=join(EXP_FITTED_DIR, "method=matfac__{params,[_=.a-zA-Z0-9]+}/{data,[_.=:0-9a-zA-Z]+}/{pathways,[_.=0-9a-zA-Z]+}/fitted.bson"),
+        trans_train_hdf=join(EXP_TRANS_TRAIN_DIR, "method=matfac__{params,[_=.a-zA-Z0-9]+}/{data,[_.=:0-9a-zA-Z]+}/{pathways,[_.=0-9a-zA-Z]+}/transformed.hdf")
+    params:
+        kwargs=lambda wc: " ".join(wc["params"].split("__"))
     shell:
-        "julia {input.src} "
+        "julia --project=. {input.src} {input.data_hdf} {input.pwy_json} {output.fitted_bson} {output.trans_train_hdf} {params.kwargs}"
 
 
 #############################################################
@@ -389,6 +339,7 @@ rule exp_fit_mofa:
     threads: 4
     shell:
         "Rscript {input.src} {input.data_hdf} {output.fitted_rds} {output.trans_train_hdf} --output_dim {wildcards.k} --variance_filter {wildcards.vf} --mofa_python {MOFA_PYTHON}"
+
 
 
 #############################################################

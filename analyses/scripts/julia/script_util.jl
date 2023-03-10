@@ -1,5 +1,5 @@
 
-using HDF5, StatsBase, PathwayMultiomics
+using HDF5, StatsBase, PathwayMultiomics, JSON
 
 PM = PathwayMultiomics
 
@@ -7,7 +7,7 @@ PM = PathwayMultiomics
 DISTRIBUTION_MAP = Dict("mrnaseq" => "normal",
                         "methylation" => "normal",
                         "mutation" => "bernoulli",
-                        "cna" => "ordinal",
+                        "cna" => "ordinal3",
                         "rppa" => "normal")
 
 DOGMA_MAP = Dict("mrnaseq" => "mrna",
@@ -22,6 +22,67 @@ WEIGHT_MAP = Dict("mrnaseq" => 1.0,
                   "cna" => 1.0,
                   "rppa" => 1.0)
 
+
+function column_variances(data::AbstractMatrix)
+    nan_idx = (!isfinite).(data)
+    M = size(data, 1)
+    col_counts = vec(M .- sum(nan_idx, dims=1))
+
+    data[nan_idx] .= 0
+    col_sums = vec(sum(data, dims=1))
+    col_means = col_sums ./ col_counts 
+
+    col_sq_sums = vec(sum(data.*data, dims=1))
+    col_sq_means = col_sq_sums ./ col_counts
+
+    col_variances = col_sq_sums .- (col_means.*col_means)
+    empty_cols = (col_counts .== 0)
+    col_variances[empty_cols] .= 0
+
+    data[nan_idx] .= NaN
+
+    return vec(col_variances)
+end
+
+
+function groups_to_idxs(feature_groups)
+    result = Dict()
+    for (i,g) in enumerate(feature_groups)
+        s = get!(result, g, Set())
+        push!(s, i)
+    end
+    for (k,v) in result
+        result[k] = sort(collect(v))
+    end
+    return result
+end
+
+ 
+function var_filter(data, feature_groups, frac)
+    
+    q = 1 - frac
+
+    col_var = column_variances(data)
+    gp_to_idx = groups_to_idxs(feature_groups)
+
+    keep_idx = Set()
+    for (g, idx) in gp_to_idx
+        g_var = col_var[idx]
+        threshold = quantile(g_var, q)
+        best_gp_idx = idx[(g_var .>= threshold)]
+        union!(keep_idx, best_gp_idx)
+    end
+
+    return sort(collect(keep_idx))
+end
+
+function apply_idx_filter(x::AbstractVector, idx)
+    return x[idx]
+end
+
+function apply_idx_filter(x::AbstractMatrix, idx)
+    return x[:,idx]
+end
 
 function get_omic_feature_genes(omic_hdf)
 
@@ -118,7 +179,7 @@ function save_omic_data(output_hdf, feature_assays, feature_genes,
 end
 
 
-function parse_opts!(defaults, opt_list)
+function parse_opts(opt_list)
 
     opts_k = [Symbol(split(opt,"=")[1]) for opt in opt_list]
     opts_v = [join(split(opt,"=")[2:end],"=") for opt in opt_list]
@@ -132,7 +193,11 @@ function parse_opts!(defaults, opt_list)
             try
                 new_v = parse(Float64, v)
             catch ArgumentError
-                new_v = string(v)
+                try
+                    new_v = parse(Bool, v)
+                catch ArgumentError
+                    new_v = string(v)
+                end
             end
         finally
             push!(parsed_v, new_v)
@@ -141,12 +206,19 @@ function parse_opts!(defaults, opt_list)
 
     opt_d = Dict([ opts_k[i] => parsed_v[i] for i=1:length(opts_k)])
 
-    for (opt_k, opt_v) in opt_d
-        defaults[opt_k] = opt_v
-    end
-
-    return defaults
+    return opt_d
 end
+
+# Wherever the keys of new_opts intersect
+# the keys of defaults, update the defaults
+function update_opts!(defaults, new_opts)
+    for k in keys(new_opts)
+        if haskey(defaults, k)
+            defaults[k] = new_opts[k]
+        end
+    end
+end
+
 
 nanmean(x) = mean(filter(!isnan, x))
 nanvar(x) = var(filter(!isnan, x))
