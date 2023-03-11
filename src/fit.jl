@@ -44,14 +44,20 @@ function construct_optimizer(model, lr)
     return Flux.Optimise.AdaGrad(lr)
 end
 
-function init_mu!(model::PathMatFacModel, opt; capacity=Int(10e8), max_epochs=500,
+function init_mu!(model::PathMatFacModel, opt; capacity=Int(10e8), max_epochs=500, lr=0.25,
                                                verbosity=1, print_prefix="", history=nothing, kwargs...)
+    
+    col_means, col_vars = MF.batched_column_meanvar(model.data)
     keep_history = (history != nothing)
+
+    orig_eta = opt.eta
+    opt.eta = lr
     result = MF.compute_M_estimates(model.matfac, model.data;
                                     capacity=capacity, max_epochs=max_epochs,
                                     opt=opt, verbosity=verbosity, print_prefix=print_prefix,
-                                    keep_history=keep_history) 
-    
+                                    keep_history=keep_history,
+                                    rel_tol=1e-6, abs_tol=1e-3) 
+   
     # Awkwardly handle the variable-length output
     h = nothing
     M_estimates = result
@@ -61,6 +67,7 @@ function init_mu!(model::PathMatFacModel, opt; capacity=Int(10e8), max_epochs=50
         history!(history, h; name="init_mu")
     end
 
+    opt.eta = orig_eta
     model.matfac.col_transform.layers[3].mu .= vec(M_estimates)
 
 end
@@ -84,16 +91,8 @@ end
 
 function init_logsigma!(model::PathMatFacModel; capacity=Int(10e8), history=nothing)
   
-    # If applicable, account for batch shift when we compute these
-    # column scales 
-    latent_map_fn = (m,D) -> D
-    if isa(model.matfac.col_transform.layers[4], BatchShift)
-        latent_map_fn=(m,d)-> d - m.col_transform.layers[4].theta
-    end
- 
-    col_scales = MF.batched_link_scale(model.matfac, model.data; 
-                                       capacity=capacity,
-                                       latent_map_fn=latent_map_fn) 
+    col_scales = MF.link_scale(model.matfac.noise_model, model.data; 
+                               capacity=capacity)
     K = size(model.matfac.X, 1) 
     model.matfac.col_transform.layers[1].logsigma .= log.(col_scales ./ sqrt(K))
 
@@ -310,11 +309,16 @@ function basic_fit_reg_weight_crossval!(model::PathMatFacModel;
                                         validation_frac=0.1,
                                         lr=0.05, opt=nothing, 
                                         use_gpu=true,
-                                        lambda_max=1.0, 
+                                        lambda_max=nothing, 
                                         n_lambda=8,
                                         lambda_min_frac=1e-8,
                                         verbosity=1, print_prefix="", 
                                         kwargs...)
+
+    # TODO set this to something principled
+    if lambda_max == nothing
+        lambda_max = 1.0
+    end
     n_pref = string(print_prefix, "    ")
 
     if opt == nothing
@@ -384,9 +388,9 @@ end
 
 
 function fit_non_ard!(model::PathMatFacModel; fit_reg_weight="EB",
-                                              lambda_max=1.0, 
+                                              lambda_max=nothing, 
                                               n_lambda=8,
-                                              lambda_min=1e-6,
+                                              lambda_min_frac=1e-3,
                                               kwargs...)
 
     if fit_reg_weight=="EB"
@@ -394,7 +398,7 @@ function fit_non_ard!(model::PathMatFacModel; fit_reg_weight="EB",
     elseif fit_reg_weight=="crossval"
         basic_fit_reg_weight_crossval!(model; lambda_max=lambda_max,
                                               n_lambda=n_lambda,
-                                              lambda_min=lambda_min,
+                                              lambda_min_frac=lambda_min_frac,
                                               kwargs...)
     else
         basic_fit!(model; fit_mu=true, fit_logsigma=true, reweight_losses=true,
@@ -546,8 +550,6 @@ end
                                  opt=nothing, 
                                  fit_reg_weight="EB",
                                  lambda_max=1.0, 
-                                 n_lambda=8,
-                                 lambda_min=1e-6,
                                  validation_frac=0.2,
                                  fsard_max_iter=10,
                                  fsard_max_A_iter=1000,
@@ -566,7 +568,11 @@ end
     Empirical Bayes.
     
 """
-function fit!(model::PathMatFacModel; opt=nothing, lr=0.05, 
+function fit!(model::PathMatFacModel; opt=nothing, lr=0.05,
+                                      fit_reg_weight="EB",
+                                      n_lambda=8,
+                                      lambda_max=nothing,
+                                      lambda_min_frac=1e-3, 
                                       keep_history=false, kwargs...)
   
     if opt == nothing
@@ -584,7 +590,12 @@ function fit!(model::PathMatFacModel; opt=nothing, lr=0.05,
     elseif isa(model.matfac.Y_reg, FeatureSetARDReg)
         fit_feature_set_ard!(model; opt=opt, history=hist, kwargs...)
     else
-        fit_non_ard!(model; opt=opt, history=hist, kwargs...)
+        fit_non_ard!(model; opt=opt, history=hist, 
+                            fit_reg_weight=fit_reg_weight, 
+                            lambda_max=lambda_max, 
+                            n_lambda=n_lambda, 
+                            lambda_min_frac=lambda_min_frac,
+                            kwargs...)
     end
 
     history!(hist; name="finish")

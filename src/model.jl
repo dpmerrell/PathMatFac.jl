@@ -57,18 +57,20 @@ function assemble_model(D, K, sample_ids, sample_conditions,
                             lambda_Y_l1, lambda_Y_selective_l1, lambda_Y_graph,
                             Y_ard, Y_feature_set_ard)
 
-    # Construct MatFacModel
-    matfac = MatFacModel(M, N, K, feature_distributions;
-                         col_transform=col_layers,
-                         X_reg=X_reg, Y_reg=Y_reg, 
-                         col_transform_reg=layer_reg)
 
     # If necessary, rearrange features such that 
     # their distributions and views are in contiguous blocks
     data_idx = sortperm(collect(zip(feature_distributions, feature_views)))
     feature_ids .= feature_ids[data_idx]
     feature_views .= feature_views[data_idx]
+    feature_distributions .= feature_distributions[data_idx]
     D .= D[:,data_idx]
+
+    # Construct MatFacModel
+    matfac = MatFacModel(M, N, K, feature_distributions;
+                         col_transform=col_layers,
+                         X_reg=X_reg, Y_reg=Y_reg, 
+                         col_transform_reg=layer_reg)
 
     # Construct the PathMatFacModel
     model = PathMatFacModel(matfac, D, 

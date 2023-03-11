@@ -276,9 +276,10 @@ tcga_regressions:
             K: [5]
             max_epochs: [1000]
             capacity: [25000000]
-            lr: [0.05]
+            lr: [0.1]
             print_iter: [1]
             var_filter: [0.05]
+            verbosity: [2]
         #pca:
         #    k: [5]
         #    var_filter: [0.05]

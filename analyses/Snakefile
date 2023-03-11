@@ -306,8 +306,9 @@ rule exp_fit_matfac:
         trans_train_hdf=join(EXP_TRANS_TRAIN_DIR, "method=matfac__{params,[_=.a-zA-Z0-9]+}/{data,[_.=:0-9a-zA-Z]+}/{pathways,[_.=0-9a-zA-Z]+}/transformed.hdf")
     params:
         kwargs=lambda wc: " ".join(wc["params"].split("__"))
+    threads: 4
     shell:
-        "julia --project=. {input.src} {input.data_hdf} {input.pwy_json} {output.fitted_bson} {output.trans_train_hdf} {params.kwargs}"
+        "julia --threads=4 --project=. {input.src} {input.data_hdf} {input.pwy_json} {output.fitted_bson} {output.trans_train_hdf} {params.kwargs}"
 
 
 #############################################################
