@@ -218,14 +218,19 @@ function basic_fit!(model::PathMatFacModel; fit_mu=false, fit_logsigma=false,
 
     # Fit the factors X,Y
     if fit_factors
+        freeze_layer!(model.matfac.col_transform, 1:4)
+        #Profile.init(delay=0.005, n=10^7) 
         v_println("Fitting linear factors X,Y..."; verbosity=verbosity, prefix=print_prefix)
+        #@profile (
         h = mf_fit!(model; capacity=capacity, update_X=true, update_Y=true,
                            opt=opt, max_epochs=max_epochs, 
                            verbosity=verbosity, print_prefix=n_prefix,
                            keep_history=keep_history,
                            kwargs...)
+        #)
+        ProfileSVG.save("fit_factors_profile.svg")
         history!(history, h; name="fit_factors")
-
+        unfreeze_layer!(model.matfac.col_transform, 1:4)
     end
 
     # Finally: jointly fit X, Y, and batch shifts
@@ -573,7 +578,16 @@ function fit!(model::PathMatFacModel; opt=nothing, lr=0.05,
                                       n_lambda=8,
                                       lambda_max=nothing,
                                       lambda_min_frac=1e-3, 
-                                      keep_history=false, kwargs...)
+                                      keep_history=false, 
+                                      fsard_max_iter=10,
+                                      fsard_max_A_iter=1000,
+                                      fsard_n_lambda=20,
+                                      fsard_lambda_atol=1e-3,
+                                      fsard_frac_atol=1e-2,
+                                      fsard_A_prior_frac=0.5,
+                                      fsard_term_iter=5,
+                                      fsard_term_rtol=1e-5,
+                                      kwargs...)
   
     if opt == nothing
         opt = construct_optimizer(model, lr) 
@@ -588,7 +602,16 @@ function fit!(model::PathMatFacModel; opt=nothing, lr=0.05,
     if isa(model.matfac.Y_reg, ARDRegularizer)
         fit_ard!(model; opt=opt, history=hist, kwargs...)
     elseif isa(model.matfac.Y_reg, FeatureSetARDReg)
-        fit_feature_set_ard!(model; opt=opt, history=hist, kwargs...)
+        fit_feature_set_ard!(model; opt=opt, history=hist, 
+                                             fsard_max_iter=10,
+                                             fsard_max_A_iter=1000,
+                                             fsard_n_lambda=20,
+                                             fsard_lambda_atol=1e-3,
+                                             fsard_frac_atol=1e-2,
+                                             fsard_A_prior_frac=0.5,
+                                             fsard_term_iter=5,
+                                             fsard_term_rtol=1e-5,
+                                             kwargs...)
     else
         fit_non_ard!(model; opt=opt, history=hist, 
                             fit_reg_weight=fit_reg_weight, 

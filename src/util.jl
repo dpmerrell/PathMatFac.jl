@@ -404,11 +404,37 @@ function coo_select(I,J,V, rng1::UnitRange, rng2::UnitRange)
     return I_new, J_new, V_new
 end
 
+
 function csc_select(A, rng1::UnitRange, rng2::UnitRange)
 
     new_m = length(rng1)
     new_n = length(rng2)
     return sparse(coo_select(csc_to_coo(A)..., rng1, rng2)..., new_m, new_n) 
+end
+
+
+function construct_row_selector(rs::SparseMatrixCSC, idx::UnitRange)
+    M = length(idx)
+    N = rs.n
+    I = collect(1:M)
+    J = collect(idx)
+    V = ones(Bool, M)
+    return sparse(I, J, V, M, N)
+end
+
+
+function construct_row_selector(rs::CUDA.CUSPARSE.CuSparseMatrixCSC, idx::UnitRange)
+
+    M = length(idx)
+    N = rs.dims[2]
+    I = similar(rs.rowVal, M)
+    I .= 1
+    I .= cumsum(I)
+    J = cu(collect(idx))
+    V = CUDA.ones(Bool, M)
+
+    coo = CUDA.CUSPARSE.CuSparseMatrixCOO(I,J,V,(M,N),M)
+    return CUDA.CUSPARSE.CuSparseMatrixCSC(coo)
 end
 
 
