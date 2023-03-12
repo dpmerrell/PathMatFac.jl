@@ -51,6 +51,8 @@ end
 # I/O Utils
 #####################################################
 
+FIT_START_TIME = time()
+
 function v_print(args...; verbosity=1, level=1, prefix="")
     if verbosity >= level
         print(string(prefix, args...))
@@ -58,7 +60,7 @@ function v_print(args...; verbosity=1, level=1, prefix="")
 end
 
 function v_println(args...; kwargs...)
-    v_print(args..., "\n"; kwargs...)
+    v_print(args..., " (", Int(round(time() - FIT_START_TIME)), "s elapsed)\n"; kwargs...)
 end
 
 ######################################################
@@ -442,12 +444,13 @@ end
 # History utils
 #########################################################
 
+
 function history!(hist; kwargs...)
     d = Dict()
     for k in keys(kwargs)
         d[string(k)] = kwargs[k]
     end
-    d["time"] = time()
+    d["time"] = time() - FIT_START_TIME
     push!(hist, d)
 end
 

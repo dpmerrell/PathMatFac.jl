@@ -123,18 +123,22 @@ function batch_array_tests()
         # Constructor
         ba = PM.BatchArray(col_batches, row_batches, values)
         @test ba.col_ranges == (1:3, 4:5, 6:6)
-        test_row_batches = (Bool[1 0; 1 0; 1 0; 0 1; 0 1],
-                            Bool[1 0; 1 0; 0 1; 0 1; 0 1],
-                            Bool[1 0; 1 0; 1 0; 1 0; 0 1])
-        @test ba.row_batches == test_row_batches 
+        test_row_batches = (sparse(Bool[1 0; 1 0; 1 0; 0 1; 0 1]),
+                            sparse(Bool[1 0; 1 0; 0 1; 0 1; 0 1]),
+                            sparse(Bool[1 0; 1 0; 1 0; 1 0; 0 1]))
+        @test all(map(isapprox, ba.row_batches, test_row_batches)) 
         @test ba.values == ([3.14, 2.7], [0.0, 0.5], [-1.0, 1.0])
 
         ##############################
         # View
         ba_view = view(ba, 2:4, 2:5)
         @test ba_view.col_ranges == (1:2, 3:4)
-        @test ba_view.row_batches == test_row_batches[1:2]
-        @test ba_view.row_idx == ba.row_idx[2:4]
+        @test ba_view.row_batches == map(b->b[2:4,:], test_row_batches[1:2])
+        @test isapprox(ba_view.row_selector, sparse([0 1 0 0 0;
+                                                     0 0 1 0 0;
+                                                     0 0 0 1 0]
+                                                    )
+                      )
         @test ba_view.values == ([3.14, 2.7],[0.0,0.5])
 
         ###############################
@@ -182,8 +186,12 @@ function batch_array_tests()
         # view
         ba_d_view = view(ba_d, 2:4, 2:5)
         @test ba_d_view.col_ranges == (1:2, 3:4)
-        @test ba_d_view.row_batches == ba_d.row_batches[1:2]
-        @test ba_d_view.row_idx == ba_d.row_idx[2:4]
+        @test ba_d_view.row_batches == map(b->gpu(b[2:4,:]), test_row_batches[1:2])
+        @test isapprox(ba_d_view.row_selector, gpu(sparse([0 1 0 0 0;
+                                                           0 0 1 0 0;
+                                                           0 0 0 1 0]
+                                                          ))
+                      )
         @test ba_d_view.values == (gpu([3.14, 2.7]),gpu([0.0,0.5]))
 
         # zero 
@@ -747,7 +755,7 @@ function featureset_ard_tests()
 
         @test !isapprox(reg.A, zero(reg.A))
 
-        println(reg.A)
+        #println(reg.A)
     end
 end
 
@@ -948,52 +956,52 @@ function fit_tests()
     L = 50
     feature_sets = [Set(rand(feature_ids, 4)) for _=1:L]
  
-    #####################################################
-    ## Basic fitting
-    #####################################################
-    #
-    #@testset "Basic fit CPU" begin
+    ####################################################
+    # Basic fitting
+    ####################################################
+    
+    @testset "Basic fit CPU" begin
 
-    #    model = PathMatFacModel(Z; sample_conditions=sample_conditions, 
-    #                               feature_ids=feature_ids,  feature_views=feature_views,
-    #                               feature_graphs=feature_graphs, batch_dict=batch_dict, 
-    #                               lambda_X_l2=0.1, lambda_Y_graph=0.1, lambda_Y_selective_l1=0.05)
+        model = PathMatFacModel(Z; sample_conditions=sample_conditions, 
+                                   feature_ids=feature_ids,  feature_views=feature_views,
+                                   feature_graphs=feature_graphs, batch_dict=batch_dict, 
+                                   lambda_X_l2=0.1, lambda_Y_graph=0.1, lambda_Y_selective_l1=0.05)
 
-    #    X_start = deepcopy(model.matfac.X)
-    #    Y_start = deepcopy(model.matfac.Y)
-    #    batch_scale = deepcopy(model.matfac.col_transform.layers[2]) 
-    #    fit!(model; verbosity=2, lr=0.05, max_epochs=1000, print_iter=10, rel_tol=1e-7, abs_tol=1e-7,
-    #                fit_reg_weight=false)
+        X_start = deepcopy(model.matfac.X)
+        Y_start = deepcopy(model.matfac.Y)
+        batch_scale = deepcopy(model.matfac.col_transform.layers[2]) 
+        fit!(model; verbosity=2, lr=0.05, max_epochs=1000, print_iter=10, rel_tol=1e-7, abs_tol=1e-7,
+                    fit_reg_weight=false)
 
-    #    @test !isapprox(model.matfac.X, X_start)
-    #    @test !isapprox(model.matfac.Y, Y_start)
-    #    @test all(map(isapprox, batch_scale.logdelta.values,
-    #                            model.matfac.col_transform.layers[2].logdelta.values)
-    #             ) # This should not have changed
-    #end
+        @test !isapprox(model.matfac.X, X_start)
+        @test !isapprox(model.matfac.Y, Y_start)
+        @test all(map(isapprox, batch_scale.logdelta.values,
+                                model.matfac.col_transform.layers[2].logdelta.values)
+                 ) # This should not have changed
+    end
 
-    #@testset "Basic fit GPU" begin
+    @testset "Basic fit GPU" begin
 
-    #    model = PathMatFacModel(Z; sample_conditions=sample_conditions, 
-    #                               feature_ids=feature_ids,  feature_views=feature_views,
-    #                               feature_graphs=feature_graphs, batch_dict=batch_dict, 
-    #                               lambda_X_l2=0.1, lambda_Y_graph=0.1, lambda_Y_selective_l1=0.05)
+        model = PathMatFacModel(Z; sample_conditions=sample_conditions, 
+                                   feature_ids=feature_ids,  feature_views=feature_views,
+                                   feature_graphs=feature_graphs, batch_dict=batch_dict, 
+                                   lambda_X_l2=0.1, lambda_Y_graph=0.1, lambda_Y_selective_l1=0.05)
 
-    #    X_start = deepcopy(model.matfac.X)
-    #    Y_start = deepcopy(model.matfac.Y)
-    #    batch_scale = deepcopy(model.matfac.col_transform.layers[2])
+        X_start = deepcopy(model.matfac.X)
+        Y_start = deepcopy(model.matfac.Y)
+        batch_scale = deepcopy(model.matfac.col_transform.layers[2])
 
-    #    model = gpu(model) 
-    #    fit!(model; verbosity=2, lr=0.05, max_epochs=1000, print_iter=10, rel_tol=1e-7, abs_tol=1e-7,
-    #                fit_reg_weight=false)
-    #    model = cpu(model)
+        model = gpu(model) 
+        fit!(model; verbosity=2, lr=0.05, max_epochs=1000, print_iter=10, rel_tol=1e-7, abs_tol=1e-7,
+                    fit_reg_weight=false)
+        model = cpu(model)
 
-    #    @test !isapprox(model.matfac.X, X_start)
-    #    @test !isapprox(model.matfac.Y, Y_start)
-    #    @test all(map(isapprox, batch_scale.logdelta.values,
-    #                            model.matfac.col_transform.layers[2].logdelta.values)
-    #             ) # This should not have changed
-    #end
+        @test !isapprox(model.matfac.X, X_start)
+        @test !isapprox(model.matfac.Y, Y_start)
+        @test all(map(isapprox, batch_scale.logdelta.values,
+                                model.matfac.col_transform.layers[2].logdelta.values)
+                 ) # This should not have changed
+    end
 
     ####################################################
     # Empirical Bayes fitting
@@ -1009,14 +1017,16 @@ function fit_tests()
         X_start = deepcopy(model.matfac.X)
         Y_start = deepcopy(model.matfac.Y)
         batch_scale = deepcopy(model.matfac.col_transform.layers[2]) 
-        fit!(model; verbosity=2, lr=0.05, max_epochs=1000, print_iter=10, rel_tol=1e-7, abs_tol=1e-7,
-                    fit_reg_weight="EB", history_json="test_history.json")
+        h = fit!(model; verbosity=2, lr=0.05, max_epochs=1000, print_iter=10, rel_tol=1e-7, abs_tol=1e-7,
+                        fit_reg_weight="EB", keep_history=true)
 
         @test !isapprox(model.matfac.X, X_start)
         @test !isapprox(model.matfac.Y, Y_start)
         @test all(map(isapprox, batch_scale.logdelta.values,
                                 model.matfac.col_transform.layers[2].logdelta.values)
                  ) # This should not have changed
+        @test isa(h, AbstractVector)
+        @test isa(h[1], AbstractDict)
     end
 
     @testset "Empirical Bayes fit GPU" begin
@@ -1060,11 +1070,11 @@ function fit_tests()
         batch_scale = deepcopy(model.matfac.col_transform.layers[2]) 
         fit!(model; verbosity=1, lr=0.05, max_epochs=1000, print_iter=10, rel_tol=1e-7, abs_tol=1e-7)
 
-        println(model.matfac.X)
-        println()
-        println(model.matfac.Y)
-        println()
-        println(model.matfac.col_transform.layers[3].mu)
+        #println(model.matfac.X)
+        #println()
+        #println(model.matfac.Y)
+        #println()
+        #println(model.matfac.col_transform.layers[3].mu)
 
         @test !isapprox(model.matfac.X, X_start)
         @test !isapprox(model.matfac.Y, Y_start)
@@ -1088,14 +1098,14 @@ function fit_tests()
 
         model = gpu(model) 
         fit!(model; verbosity=2, lr=0.05, max_epochs=1000, print_iter=10, rel_tol=1e-7, abs_tol=1e-7,
-                    history_json="test_history.json")
+                    keep_history=true)
         model = cpu(model)
         
-        println(model.matfac.X)
-        println()
-        println(model.matfac.Y)
-        println()
-        println(model.matfac.col_transform.layers[3].mu)
+        #println(model.matfac.X)
+        #println()
+        #println(model.matfac.Y)
+        #println()
+        #println(model.matfac.col_transform.layers[3].mu)
 
 
         @test !isapprox(model.matfac.X, X_start)
@@ -1129,11 +1139,11 @@ function fit_tests()
                     fsard_A_prior_frac=0.5,
                     fsard_frac_atol=0.25, fsard_lambda_atol=1e-2)
 
-        println(model.matfac.X)
-        println()
-        println(model.matfac.Y)
-        println()
-        println(model.matfac.col_transform.layers[3].mu)
+        #println(model.matfac.X)
+        #println()
+        #println(model.matfac.Y)
+        #println()
+        #println(model.matfac.col_transform.layers[3].mu)
 
         @test !isapprox(model.matfac.X, X_start)
         @test !isapprox(model.matfac.Y, Y_start)
@@ -1166,11 +1176,11 @@ function fit_tests()
 
         model = cpu(model)
 
-        println(model.matfac.X)
-        println()
-        println(model.matfac.Y)
-        println()
-        println(model.matfac.col_transform.layers[3].mu)
+        #println(model.matfac.X)
+        #println()
+        #println(model.matfac.Y)
+        #println()
+        #println(model.matfac.col_transform.layers[3].mu)
 
         @test !isapprox(model.matfac.X, X_start)
         @test !isapprox(model.matfac.Y, Y_start)
@@ -1346,14 +1356,14 @@ end
 
 function main()
 
-    #util_tests()
-    #batch_array_tests()
-    #layers_tests()
-    #preprocess_tests()
-    #reg_tests()
-    #featureset_ard_tests()
-    #model_tests()
-    #score_tests()
+    util_tests()
+    batch_array_tests()
+    layers_tests()
+    preprocess_tests()
+    reg_tests()
+    featureset_ard_tests()
+    model_tests()
+    score_tests()
     fit_tests()
     transform_tests()
     model_io_tests()

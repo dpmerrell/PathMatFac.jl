@@ -228,7 +228,7 @@ function basic_fit!(model::PathMatFacModel; fit_mu=false, fit_logsigma=false,
                            keep_history=keep_history,
                            kwargs...)
         #)
-        ProfileSVG.save("fit_factors_profile.svg")
+        #ProfileSVG.save("fit_factors_profile.svg")
         history!(history, h; name="fit_factors")
         unfreeze_layer!(model.matfac.col_transform, 1:4)
     end
@@ -596,7 +596,10 @@ function fit!(model::PathMatFacModel; opt=nothing, lr=0.05,
     hist=nothing
     if keep_history
         hist = MutableLinkedList()
+        global FIT_START_TIME = time()
         history!(hist; name="start")
+    else
+        global FIT_START_TIME = time()
     end   
  
     if isa(model.matfac.Y_reg, ARDRegularizer)
