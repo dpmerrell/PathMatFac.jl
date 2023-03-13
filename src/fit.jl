@@ -30,6 +30,7 @@ function mf_fit!(model::PathMatFacModel; scale_column_losses=false,
                                           update_row_layers_reg=update_row_layers_reg,
                                           update_col_layers_reg=update_col_layers_reg,
                                           keep_history=keep_history,
+                                          t_start=FIT_START_TIME,
                                           kwargs...)
     return h
 end
@@ -44,7 +45,7 @@ function construct_optimizer(model, lr)
     return Flux.Optimise.AdaGrad(lr)
 end
 
-function init_mu!(model::PathMatFacModel, opt; capacity=Int(10e8), max_epochs=500, lr=0.25,
+function init_mu!(model::PathMatFacModel, opt; capacity=Int(10e8), max_epochs=500, lr=0.5,
                                                verbosity=1, print_prefix="", history=nothing, kwargs...)
     
     col_means, col_vars = MF.batched_column_meanvar(model.data)
@@ -219,16 +220,12 @@ function basic_fit!(model::PathMatFacModel; fit_mu=false, fit_logsigma=false,
     # Fit the factors X,Y
     if fit_factors
         freeze_layer!(model.matfac.col_transform, 1:4)
-        #Profile.init(delay=0.005, n=10^7) 
         v_println("Fitting linear factors X,Y..."; verbosity=verbosity, prefix=print_prefix)
-        #@profile (
         h = mf_fit!(model; capacity=capacity, update_X=true, update_Y=true,
                            opt=opt, max_epochs=max_epochs, 
                            verbosity=verbosity, print_prefix=n_prefix,
                            keep_history=keep_history,
                            kwargs...)
-        #)
-        #ProfileSVG.save("fit_factors_profile.svg")
         history!(history, h; name="fit_factors")
         unfreeze_layer!(model.matfac.col_transform, 1:4)
     end

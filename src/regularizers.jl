@@ -609,7 +609,11 @@ function construct_Y_reg(K, N, feature_ids, feature_views, feature_sets, feature
         end
     end
 
-    mixture_p ./= sum(mixture_p)
+    s = sum(mixture_p)
+    if s == 0
+        s = 1
+    end
+    mixture_p ./= s
     return construct_composite_reg(regularizers, mixture_p) 
 end
 
