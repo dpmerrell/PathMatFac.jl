@@ -224,6 +224,48 @@ nanmean(x) = mean(filter(!isnan, x))
 nanvar(x) = var(filter(!isnan, x))
 nanmean_and_var(x) = mean_and_var(filter(!isnan, x))
 
+function pretty_print(a; prefix="")
+    print(string(prefix, a))
+end
+
+function pretty_print(args...; prefix="")
+    print(prefix)
+    for arg in args
+        pretty_print(arg)
+    end
+end
+
+function pretty_print(l::Union{AbstractVector,AbstractSet}; n=5, prefix="")
+    if length(l) < n
+        print(string(prefix, l))
+    else
+        n_pref = string("\t", prefix)
+        pretty_print(typeof(l), ": \n"; prefix=prefix)
+        i = 0
+        for v in l
+            pretty_print(v; prefix=n_pref)
+            i += 1
+            if i >= n
+                pretty_print("... (", length(l), " entries)")
+                break
+            end
+            print(",\n")
+        end
+        
+    end
+end
+
+
+function pretty_print(d::AbstractDict; prefix="")
+    pretty_print(typeof(d), "\n"; prefix=prefix)
+    n_pref = string(prefix, "\t")
+    nn_pref = string(n_pref, "\t")
+    for (k,v) in d
+        pretty_print(k, ":\n"; prefix=n_pref)
+        pretty_print(v, "\n"; prefix=nn_pref)
+    end
+end
+
 
 ######################################
 # GPU management
@@ -258,6 +300,5 @@ function get_available_device(; status_file="gpu_status.txt")
     status_str = get_device_statuses(status_file=status_file)
     return findfirst('0', status_str)
 end
-
 
 

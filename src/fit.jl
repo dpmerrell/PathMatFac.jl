@@ -45,7 +45,7 @@ function construct_optimizer(model, lr)
     return Flux.Optimise.AdaGrad(lr)
 end
 
-function init_mu!(model::PathMatFacModel, opt; capacity=Int(10e8), max_epochs=500, lr=0.5,
+function init_mu!(model::PathMatFacModel, opt; capacity=Int(10e8), max_epochs=500, lr=0.25,
                                                verbosity=1, print_prefix="", history=nothing, kwargs...)
     
     col_means, col_vars = MF.batched_column_meanvar(model.data)

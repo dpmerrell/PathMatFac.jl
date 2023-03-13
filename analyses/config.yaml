@@ -266,6 +266,7 @@ tcga_regressions:
     data:
         heldout_ctypes: ["OV:GBM:LAML"]
         kept_ctypes: ["HNSC:CESC:ESCA:STAD"]
+        #kept_ctypes: ["HNSC"]
     targets: ["pathologic_stage", "hpv_status", "survival", "ctype"] 
     cross_val_folds: 5
     pathways:
@@ -275,11 +276,12 @@ tcga_regressions:
             configuration: ["fsard"]
             K: [5]
             max_epochs: [1000]
-            capacity: [25000000]
-            lr: [0.1]
+            capacity: [100000000000]
+            lr: [0.05]
             print_iter: [1]
             var_filter: [0.05]
             verbosity: [2]
+            fit_reg_weight: ["none"]
         #pca:
         #    k: [5]
         #    var_filter: [0.05]

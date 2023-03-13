@@ -5,6 +5,7 @@ using PathwayMultiomics
 using CUDA
 using JSON
 using Flux
+#using Profile, ProfileSVG
 
 include("script_util.jl")
 
@@ -49,6 +50,14 @@ function load_batches(omic_hdf, omic_types)
     return result
 end
 
+function save_transformed(transformed_X, instances, instance_groups, target, output_hdf)
+
+    h5write(transformed_X, output_hdf, "X")
+    h5write(instances, output_hdf, "instances")
+    h5write(instance_groups, output_hdf, "instance_groups")
+    h5write(target, output_hdf, "target")
+
+end
 
 function main(args)
 
@@ -67,58 +76,55 @@ function main(args)
     end
 
     script_opts = Dict{Symbol,Any}(:configuration => "fsard", # {fsard, ard, graph, basic}
-                            :use_batch => true,
-                            :use_conditions => true,
-                            :history_json => nothing,
-                            :omic_types => "mrnaseq,methylation,cna,mutation",
-                            :use_gpu => true,
-                            :var_filter => 0.05
-                            )
+                                   :use_batch => true,
+                                   :use_conditions => true,
+                                   :history_json => nothing,
+                                   :omic_types => "mrnaseq,methylation,cna,mutation",
+                                   :gpu_status_file => nothing,
+                                   :use_gpu => true,
+                                   :var_filter => 0.05
+                                   )
 
     update_opts!(script_opts, cli_opts)
 
     model_kwargs = Dict{Symbol,Any}(:K=>20,
-                             :sample_ids => nothing, 
-                             :sample_conditions => nothing,
-                             :feature_ids => nothing, 
-                             :feature_views => nothing,
-                             :feature_distributions => nothing,
-                             :batch_dict => nothing,
-                             :sample_graphs => nothing,
-                             :feature_sets => nothing,
-                             :feature_graphs => nothing,
-                             :lambda_X_l2 => nothing,
-                             :lambda_X_condition => 1.0,
-                             :lambda_X_graph => 1.0, 
-                             :lambda_Y_l1 => nothing,
-                             :lambda_Y_selective_l1 => nothing,
-                             :lambda_Y_graph => nothing,
-                             :lambda_layer => 1.0,
-                             :Y_ard => false,
-                             :Y_fsard => false
-                             )
+                                    :sample_ids => nothing, 
+                                    :sample_conditions => nothing,
+                                    :feature_ids => nothing, 
+                                    :feature_views => nothing,
+                                    :feature_distributions => nothing,
+                                    :batch_dict => nothing,
+                                    :sample_graphs => nothing,
+                                    :feature_sets => nothing,
+                                    :feature_graphs => nothing,
+                                    :lambda_X_l2 => nothing,
+                                    :lambda_X_condition => 1.0,
+                                    :lambda_X_graph => 1.0, 
+                                    :lambda_Y_l1 => nothing,
+                                    :lambda_Y_selective_l1 => nothing,
+                                    :lambda_Y_graph => nothing,
+                                    :lambda_layer => 1.0,
+                                    :Y_ard => false,
+                                    :Y_fsard => false
+                                    )
     update_opts!(model_kwargs, cli_opts)
  
     fit_kwargs = Dict{Symbol,Any}(:capacity => Int(10e8),
-                           :verbosity => 1, 
-                           :lr => 0.1,
-                           :max_epochs => 1000,
-                           :fit_reg_weight => "EB",
-                           :lambda_max => 1.0, 
-                           :n_lambda => 8,
-                           :lambda_min => 1e-6,
-                           :validation_frac => 0.2,
-                           :fsard_max_iter => 10,
-                           :fsard_max_A_iter => 1000,
-                           :fsard_n_lambda => 20,
-                           :fsard_lambda_atol => 1e-2,
-                           :fsard_frac_atol => 0.1,
-                           :fsard_A_prior_frac => 0.7,
-                           :fsard_term_iter => 10,
-                           :fsard_term_rtol => 1e-5,
-                           :keep_history => false,
-                           :verbosity => 1
-                             )
+                                  :verbosity => 1, 
+                                  :lr => 0.1,
+                                  :max_epochs => 1000,
+                                  :fit_reg_weight => "EB",
+                                  :fsard_max_iter => 10,
+                                  :fsard_max_A_iter => 1000,
+                                  :fsard_n_lambda => 20,
+                                  :fsard_lambda_atol => 1e-2,
+                                  :fsard_frac_atol => 0.1,
+                                  :fsard_A_prior_frac => 0.7,
+                                  :fsard_term_iter => 10,
+                                  :fsard_term_rtol => 1e-5,
+                                  :keep_history => false,
+                                  :verbosity => 1
+                                    )
     update_opts!(fit_kwargs, cli_opts)
 
     #################################################
@@ -131,6 +137,13 @@ function main(args)
     D, 
     sample_ids, sample_conditions, 
     feature_genes, feature_assays = load_omic_data(omic_hdf, omic_types)
+
+    target = ones(size(D,1))
+    try
+        target = h5read(omic_hdf, "target")
+    catch e
+        println("No 'target' field in data HDF; using dummy")
+    end
 
     filter_idx = var_filter(D, feature_assays, script_opts[:var_filter])
     D, feature_genes, feature_assays = map(x->apply_idx_filter(x, filter_idx), [D, feature_genes, feature_assays])
@@ -165,6 +178,11 @@ function main(args)
                                                                  feature_ids=feature_ids)
         model_kwargs[:feature_sets] = feature_sets
         model_kwargs[:feature_ids] = new_feature_ids
+        model_kwargs[:Y_fsard] = true
+    end
+
+    if script_opts[:configuration] == "ard"
+        model_kwargs[:Y_ard] = true
     end
 
     if script_opts[:configuration] == "graph"
@@ -178,132 +196,80 @@ function main(args)
         model_kwargs[:feature_ids] = new_feature_ids
     end
 
+    if script_opts[:history_json] != nothing
+        fit_kwargs[:keep_history] = true
+    end
+
     #################################################
     # Construct PathMatFac
     #################################################
-    println("CONSTRUCTING MODEL")
 
     model = PathMatFacModel(D; model_kwargs...)
+    
+    #######################################################
+    # SELECT A GPU (IF APPLICABLE)
+    #######################################################
+    # If a gpu_status file is provided, use it to 
+    # select an unoccupied GPU
+    status_file = nothing
+    gpu_idx = nothing
+    use_gpu = script_opts[:use_gpu]
+
+    if script_opts[:gpu_status_file] != nothing
+        status_file = script_opts[:gpu_status_file]
+        gpu_idx = get_available_device(status_file=status_file)
+        update_device_status(gpu_idx, '1'; status_file=status_file)
+
+        if gpu_idx != nothing
+            CUDA.device!(gpu_idx-1)
+            println(string("Using CUDA device ", gpu_idx-1))
+        end
+    end
 
     #######################################################
-    ## LOAD OMIC DATA
+    # FIT THE MODEL 
     #######################################################
-    #println("Loading data...")
+    try
+        # Move to GPU (if applicable)
+        if use_gpu
+            model_d = gpu(model)
+            model = nothing
+        else
+            model_d = model
+        end
+        
+        start_time = time()
+        PM.fit!(model_d; fit_kwargs...)
+        end_time = time()
 
-    ## Load the 'omic data itself
-    #feature_assays = get_omic_feature_assays(omic_hdf_filename)
-    #feature_genes = get_omic_feature_genes(omic_hdf_filename)
-
-    #sample_names = get_omic_instances(omic_hdf_filename)
-    #sample_conditions = get_cancer_types(omic_hdf_filename)
-    #omic_data = get_omic_data(omic_hdf_filename)
-
-    ## Obtain some column attributes
-    #feature_distributions = map(x->DISTRIBUTION_MAP[x], feature_assays)
-    #feature_weights = map(x->WEIGHT_MAP[x], feature_assays)
-    #feature_dogmas = map(x->DOGMA_MAP[x], feature_assays)
-
-    ## Load the batch information
-    #barcodes = get_barcodes(omic_hdf_filename)
-    #batch_dict = barcodes_to_batches(barcodes) 
-
-   
-    ########################################################
-    ## LOAD PATHWAYS
-    ######################################################## 
-
-    ## Load pathway edgelists
-    #pwy_dict = JSON.parsefile(pwy_json) 
-    #pwys = pwy_dict["pathways"]
-    #pwy_names = pwy_dict["names"]
-    #pwy_names = convert(Vector{String}, pwy_names)
-    #pwys = convert(Vector{Vector{Vector{Any}}}, pwys)
-
-    ## Preprocess them
-    #pathway_graphs, feature_ids = prep_pathway_graphs(pwys, feature_genes,
-    #                                                        feature_dogmas;
-    #                                                  feature_weights=feature_weights)
-
-    ########################################################
-    ## ASSEMBLE MODEL 
-    ######################################################## 
-    #println("Assembling model...")
-    #model = PathMatFacModel(, 
-    #                        sample_names, sample_conditions,
-    #                        feature_genes, feature_assays,
-    #                        batch_dict;
-    #                        lambda_X_l2=lambda_X_l2, lambda_X_condition=lambda_X_condition, 
-    #                        lambda_Y_l1=lambda_Y_l1, lambda_Y_selective_l1=lambda_Y_selective_l1,
-    #                        lambda_Y_graph=lambda_Y_graph,
-    #                        lambda_layer=lambda_layer)
+        println("ELAPSED TIME (s):")
+        println(end_time - start_time)
+    
+        # Move model back to CPU; save to disk
+        model = cpu(model_d)
+    catch e
+        if status_file != nothing
+            update_device_status(gpu_idx, '0'; status_file=status_file) 
+        end
+        throw(e)
+    end
 
 
     ########################################################
-    ## SELECT A GPU (IF APPLICABLE)
+    # RELEASE GPU (IF APPLICABLE)
     ########################################################
-    ## If a gpu_status file is provided, use it to 
-    ## select an unoccupied GPU
-    #status_file = nothing
-    #gpu_idx = nothing
-    #if haskey(opts, :gpu_status_file) 
-    #    status_file = pop!(opts, :gpu_status_file)
-    #    gpu_idx = get_available_device(status_file=status_file)
-    #    update_device_status(gpu_idx, '1'; status_file=status_file)
-
-    #    if gpu_idx != nothing
-    #        CUDA.device!(gpu_idx-1)
-    #        println(string("Using CUDA device ", gpu_idx-1))
-    #    end
-    #end
-
-
-    ########################################################
-    ## FIT THE MODEL 
-    ########################################################
-    #try
-    #    # Move to GPU (if applicable)
-    #    if use_gpu == 1
-    #        omic_data_d = gpu(omic_data)
-    #        model_d = gpu(model)
-    #        omic_data = nothing
-    #        model = nothing
-    #    else
-    #        omic_data_d = omic_data
-    #        model_d = model
-    #    end
-
-    #    # Construct the outer callback object
-    #    callback = PathwayMultiomics.OuterCallback(history_json=history_json)
-
-    #    start_time = time()
-    #    PM.fit!(model_d, omic_data_d; outer_callback=callback, opts...)
-    #    end_time = time()
-
-    #    println("ELAPSED TIME (s):")
-    #    println(end_time - start_time)
-    #
-    #    # Move model back to CPU; save to disk
-    #    model = cpu(model_d)
-    #catch e
-    #    if status_file != nothing
-    #        update_device_status(gpu_idx, '0'; status_file=status_file) 
-    #    end
-    #    throw(e)
-    #end
-
-
-    #########################################################
-    ## RELEASE GPU (IF APPLICABLE)
-    #########################################################
-    #if status_file != nothing
-    #    update_device_status(gpu_idx, '0'; status_file=status_file) 
-    #end
+    if status_file != nothing
+        update_device_status(gpu_idx, '0'; status_file=status_file) 
+    end
    
  
-    #########################################################
-    ## SAVE RESULTS 
-    #########################################################
-    #save_model(model, out_bson)
+    ########################################################
+    # SAVE RESULTS 
+    ########################################################
+    save_model(model, fitted_bson)
+    save_transformed_X(transpose(model.matfac.X), 
+                       sample_ids, sample_groups, 
+                       target, transformed_hdf)
 
 end
 

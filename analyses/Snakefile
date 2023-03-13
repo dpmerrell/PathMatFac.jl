@@ -308,7 +308,7 @@ rule exp_fit_matfac:
         kwargs=lambda wc: " ".join(wc["params"].split("__"))
     threads: 4
     shell:
-        "julia --threads=4 --project=. {input.src} {input.data_hdf} {input.pwy_json} {output.fitted_bson} {output.trans_train_hdf} {params.kwargs}"
+        "julia --threads 4 --project=. {input.src} {input.data_hdf} {input.pwy_json} {output.fitted_bson} {output.trans_train_hdf} {params.kwargs}"
 
 
 #############################################################
