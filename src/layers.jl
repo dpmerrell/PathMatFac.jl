@@ -101,7 +101,9 @@ end
 function BatchScale(col_batches, batch_dict)
 
     unq_cbi = unique(col_batches)
-    values = [Dict(urb => 0.0 for urb in unique(batch_dict[k])) for k in unq_cbi]
+    col_ranges = ids_to_ranges(col_batches)
+    #values = [Dict(urb => 0.0 for urb in unique(batch_dict[k])) for k in unq_cbi]
+    values = [Dict(urb => zeros(length(cr)) for urb in unique(batch_dict[cbid])) for (cr, cbid) in zip(col_ranges, unq_cbi)]
     logdelta = BatchArray(col_batches, batch_dict, values)
 
     return BatchScale(logdelta)
@@ -151,7 +153,9 @@ end
 function BatchShift(col_batches, batch_dict)
     
     unq_cbi = unique(col_batches)
-    values = [Dict(urb => 0.0 for urb in unique(batch_dict[k])) for k in unq_cbi]
+    col_ranges = ids_to_ranges(col_batches)
+    #values = [Dict(urb => 0.0 for urb in unique(batch_dict[k])) for k in unq_cbi]
+    values = [Dict(urb => zeros(length(cr)) for urb in unique(batch_dict[cbid])) for (cr, cbid) in zip(col_ranges, unq_cbi)]
     theta = BatchArray(col_batches, batch_dict, values)
 
     return BatchShift(theta)

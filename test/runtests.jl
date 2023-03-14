@@ -116,7 +116,7 @@ function batch_array_tests()
 
         col_batches = ["cat", "cat", "cat", "dog", "dog", "fish"]
         row_batches = Dict("cat"=>[1,1,1,2,2], "dog"=>[1,1,2,2,2], "fish"=>[1,1,1,1,2])
-        values = [Dict(1=>3.14, 2=>2.7), Dict(1=>0.0, 2=>0.5), Dict(1=>-1.0, 2=>1.0)]
+        values = [Dict(1=>fill(3.14,3), 2=>fill(2.7,3)), Dict(1=>fill(0.0,2), 2=>fill(0.5,2)), Dict(1=>fill(-1.0,1), 2=>fill(1.0,1))]
         A = zeros(5,6)
 
         ##############################
@@ -127,7 +127,9 @@ function batch_array_tests()
                             sparse(Bool[1 0; 1 0; 0 1; 0 1; 0 1]),
                             sparse(Bool[1 0; 1 0; 1 0; 1 0; 0 1]))
         @test all(map(isapprox, ba.row_batches, test_row_batches)) 
-        @test ba.values == ([3.14, 2.7], [0.0, 0.5], [-1.0, 1.0])
+        @test ba.values == (repeat([3.14, 2.7], inner=(1,3)), 
+                            repeat([0.0, 0.5], inner=(1,2)),
+                            repeat([-1.0, 1.0], inner=(1,1)))
 
         ##############################
         # View
@@ -139,14 +141,18 @@ function batch_array_tests()
                                                      0 0 0 1 0]
                                                     )
                       )
-        @test ba_view.values == ([3.14, 2.7],[0.0,0.5])
+        @test ba_view.values == (repeat([3.14, 2.7], inner=(1,2)),
+                                 repeat([0.0,0.5], inner=(1,2)))
 
         ###############################
         # zero
         ba_zero = zero(ba)
         @test ba_zero.col_ranges == ba.col_ranges
         @test ba_zero.row_batches == ba.row_batches
-        @test ba_zero.values == ([0.0, 0.0], [0.0, 0.0], [0.0, 0.0])
+        @test ba_zero.values == (repeat([0.0, 0.0], inner=(1,3)), 
+                                 repeat([0.0, 0.0], inner=(1,2)), 
+                                 repeat([0.0, 0.0], inner=(1,1))
+                                )
 
         ###############################
         # Addition
@@ -159,7 +165,10 @@ function batch_array_tests()
         @test Z == test_mat
         (A_grad, ba_grad) = Zygote.gradient((x,y)->sum(x+y), A, ba)
         @test A_grad == ones(size(A)...)
-        @test ba_grad.values == ([9., 6.], [4., 6.], [4., 1.])
+        @test ba_grad.values == (repeat([3., 2.], inner=(1,3)), 
+                                 repeat([2., 3.], inner=(1,2)),
+                                 repeat([4., 1.], inner=(1,1))
+                                )
 
         ################################
         # Multiplication
@@ -167,21 +176,28 @@ function batch_array_tests()
         @test Z == test_mat
         (A_grad, ba_grad) = Zygote.gradient((x,y)->sum(x*y), ones(5,6), ba)
         @test A_grad == Z
-        @test ba_grad.values == ([9.0, 6.0],[4.0, 6.0],[4.0, 1.0])
+        @test ba_grad.values == (repeat([3., 2.], inner=(1,3)), 
+                                 repeat([2., 3.], inner=(1,2)),
+                                 repeat([4., 1.], inner=(1,1))
+                                )
 
         ################################
         # Exponentiation
         ba_exp = exp(ba)
         @test (ones(5,6) * ba_exp) == exp.(test_mat)
         (ba_grad,) = Zygote.gradient(x->sum(ones(5,6) * exp(x)), ba)
-        @test ba_grad.values == ([9. * exp(3.14), 6. * exp(2.7)],
-                                 [4. * exp(0.0), 6. * exp(0.5)],
-                                 [4. * exp(-1.0), 1. * exp(1.0)])
+        @test ba_grad.values == (repeat([3.0*exp(3.14), 2.0*exp(2.7)], inner=(1,3)), 
+                                 repeat([2.0*exp(0.0), 3.0*exp(0.5)], inner=(1,2)),
+                                 repeat([4.0*exp(-1.0), 1.0*exp(1.0)], inner=(1,1))
+                                )
 
         #################################
         # GPU
         ba_d = gpu(ba)
-        @test ba.values == ([3.14, 2.7], [0.0, 0.5], [-1.0, 1.0])
+        @test ba_d.values == map(gpu, (repeat([3.14, 2.7], inner=(1,3)), 
+                                       repeat([0.0, 0.5], inner=(1,2)),
+                                       repeat([-1.0, 1.0], inner=(1,1)))
+                                )
        
         # view
         ba_d_view = view(ba_d, 2:4, 2:5)
@@ -192,13 +208,18 @@ function batch_array_tests()
                                                            0 0 0 1 0]
                                                           ))
                       )
-        @test ba_d_view.values == (gpu([3.14, 2.7]),gpu([0.0,0.5]))
+        @test ba_d_view.values == map(gpu, (repeat([3.14, 2.7], inner=(1,2)),
+                                            repeat([0.0,0.5], inner=(1,2)))
+                                     )
 
         # zero 
         ba_d_zero = zero(ba_d)
         @test ba_d_zero.col_ranges == ba_d.col_ranges
         @test ba_d_zero.row_batches == ba_d.row_batches
-        @test ba_d_zero.values == map(gpu, ([0.0, 0.0], [0.0, 0.0], [0.0, 0.0]))
+        @test ba_d_zero.values == map(gpu, (repeat([0.0, 0.0], inner=(1,3)), 
+                                            repeat([0.0, 0.0], inner=(1,2)), 
+                                            repeat([0.0, 0.0], inner=(1,1))
+                                            ))
 
         # addition
         A_d = gpu(A)
@@ -207,22 +228,32 @@ function batch_array_tests()
         @test Z_d == test_mat_d
         (A_grad, ba_grad) = Zygote.gradient((x,y)->sum(x+y), A_d, ba_d)
         @test A_grad == gpu(ones(size(A)...))
-        @test ba_grad.values == map(gpu, ([9., 6.], [4., 6.], [4., 1.]))
+        @test ba_grad.values == map(gpu, (repeat([3., 2.], inner=(1,3)), 
+                                          repeat([2., 3.], inner=(1,2)),
+                                          repeat([4., 1.], inner=(1,1))
+                                          ))
+
 
         # multiplication
         Z_d = gpu(ones(5,6)) * ba_d
         @test Z_d == test_mat_d
         (A_grad, ba_grad) = Zygote.gradient((x,y)->sum(x*y), gpu(ones(5,6)), ba_d)
         @test A_grad == Z_d
-        @test ba_grad.values == map(gpu, ([9.0, 6.0],[4.0, 6.0],[4.0, 1.0]))
+        @test ba_grad.values == map(gpu, (repeat([3., 2.], inner=(1,3)), 
+                                          repeat([2., 3.], inner=(1,2)),
+                                          repeat([4., 1.], inner=(1,1))
+                                    ))
+
 
         # exponentiation
         ba_d_exp = exp(ba_d)
         @test isapprox((gpu(ones(5,6)) * ba_d_exp), exp.(test_mat_d))
         (ba_grad,) = Zygote.gradient(x->sum(gpu(ones(5,6)) * exp(x)), ba_d)
-        @test all(map(isapprox, ba_grad.values, map(gpu, ([9. * exp(3.14), 6. * exp(2.7)],
-                                                          [4. * exp(0.0), 6. * exp(0.5)],
-                                                          [4. * exp(-1.0), 1. * exp(1.0)]))))
+        @test ba_grad.values == map(gpu, (repeat([3.0*exp(3.14), 2.0*exp(2.7)], inner=(1,3)), 
+                                          repeat([2.0*exp(0.0), 3.0*exp(0.5)], inner=(1,2)),
+                                          repeat([4.0*exp(-1.0), 1.0*exp(1.0)], inner=(1,1))
+                                         ))
+
 
 
     end
@@ -277,22 +308,22 @@ function layers_tests()
 
         bscale = PM.BatchScale(col_batches, batch_dict)
         @test length(bscale.logdelta.values) == n_col_batches
-        @test size(bscale.logdelta.values[1]) == (n_row_batches,)
-        @test bscale(xy)[1:div(M,n_row_batches),1:div(N,n_col_batches)] == xy[1:div(M,n_row_batches),1:div(N,n_col_batches)] .* exp(bscale.logdelta.values[1][1])
+        @test size(bscale.logdelta.values[1]) == (n_row_batches, div(N, n_col_batches))
+        @test bscale(xy)[1:div(M,n_row_batches),1:div(N,n_col_batches)] == xy[1:div(M,n_row_batches),1:div(N,n_col_batches)] .* transpose(exp.(bscale.logdelta.values[1][1,:]))
 
         bscale_grads = Zygote.gradient((f,x)->sum(f(x)), bscale, xy)
-        @test isapprox(bscale_grads[1].logdelta.values[end][end], sum(xy[16:20,16:30].*exp(bscale.logdelta.values[end][end])))
+        @test isapprox(bscale_grads[1].logdelta.values[end][end,:], vec(sum(xy[16:20,16:30].*transpose(exp.(bscale.logdelta.values[end][end,:])), dims=1)))
         @test bscale_grads[2] == zeros(M,N) + exp(bscale.logdelta)
 
         ##################################
         # Batch Shift
         bshift = PM.BatchShift(col_batches, batch_dict)
         @test length(bshift.theta.values) == n_col_batches
-        @test size(bshift.theta.values[1]) == (n_row_batches,)
-        @test bshift(xy)[1:div(M,n_row_batches),1:div(N,n_col_batches)] == xy[1:div(M,n_row_batches),1:div(N,n_col_batches)] .+ bshift.theta.values[1][1]
+        @test size(bshift.theta.values[1]) == (n_row_batches, div(N, n_col_batches))
+        @test bshift(xy)[1:div(M,n_row_batches),1:div(N,n_col_batches)] == xy[1:div(M,n_row_batches),1:div(N,n_col_batches)] .+ transpose(bshift.theta.values[1][1,:])
 
         bshift_grads = Zygote.gradient((f,x)->sum(f(x)), bshift, xy)
-        @test bshift_grads[1].theta.values == Tuple(ones(n_row_batches).*(div(M,n_row_batches)*div(N,n_col_batches)) for j=1:n_col_batches)
+        @test bshift_grads[1].theta.values == Tuple(ones(n_row_batches, div(N,n_col_batches)).*div(M,n_row_batches) for j=1:n_col_batches)
         @test bshift_grads[2] == ones(M,N)
 
         ###################################
@@ -642,7 +673,7 @@ function reg_tests()
     @testset "BatchArray regularizers" begin
         col_batches = ["cat", "cat", "cat", "dog", "dog", "fish"]
         row_batches = Dict("cat"=>[1,1,1,2,2], "dog"=>[1,1,2,2,2], "fish"=>[1,1,1,1,2])
-        values = [Dict(1=>3.14, 2=>2.7), Dict(1=>0.0, 2=>0.5), Dict(1=>-1.0, 2=>1.0)]
+        values = [Dict(1=>fill(3.14,3), 2=>fill(2.7,3)), Dict(1=>fill(0.0,2), 2=>fill(0.5,2)), Dict(1=>fill(-1.0,1), 2=>fill(1.0,1))]
         
         ba = PM.BatchArray(col_batches, row_batches, values)
         ba_reg = PM.BatchArrayReg(ba; weight=1.0)

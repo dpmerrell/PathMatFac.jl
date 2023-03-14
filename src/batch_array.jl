@@ -11,7 +11,7 @@ mutable struct BatchArray
                        # vector for a batch. Should
                        # balance space-efficiency and performance
     row_batch_ids::Tuple  # Names of row batches, for each column range
-    values::Tuple # vectors of numbers
+    values::Tuple # Matrices of numbers
 end
 
 @functor BatchArray
@@ -24,20 +24,23 @@ function BatchArray(col_batch_ids::Vector, row_batch_dict::AbstractDict,
     unq_cbi = unique(col_batch_ids)
     row_batch_ids = [row_batch_dict[b] for b in unq_cbi]
 
-    n_rows = length(row_batch_ids[1])
-    
-    col_ranges = ids_to_ranges(col_batch_ids)
-    col_range_ids = unique(col_ranges)
-
-    row_batches = [sparse(ids_to_ind_mat(rbv)) for rbv in row_batch_ids]
-    row_selector = spzeros(Bool, n_rows,n_rows)
-
     unq_row_batch_ids = [unique(rbv) for rbv in row_batch_ids]
+    col_ranges = ids_to_ranges(col_batch_ids)
 
-    values = [[vd[ub] for ub in unique(rbi)] for (vd,rbi) in zip(value_dicts,row_batch_ids)]
+    values = [zeros(length(urb),length(cr)) for (urb, cr) in zip(unq_row_batch_ids, col_ranges)]
+    for (v, vd, urbi) in zip(values, value_dicts, unq_row_batch_ids)
+        for (i,rb) in enumerate(urbi)
+            v[i,:] .= vd[rb]
+        end
+    end
+    #values = [[vd[ub] for ub in urbi] for (vd,urbi) in zip(value_dicts, unq_row_batch_ids)]
+
+    n_rows = length(row_batch_ids[1])
+    row_selector = spzeros(Bool, n_rows,n_rows)
+    row_batches = [sparse(ids_to_ind_mat(rbv)) for rbv in row_batch_ids]
 
     return BatchArray(Tuple(col_ranges),
-                      col_range_ids, 
+                      unq_cbi, 
                       row_selector,
                       Tuple(row_batches), 
                       Tuple(unq_row_batch_ids),
@@ -48,18 +51,18 @@ end
 function view(ba::BatchArray, idx1, idx2::AbstractRange)
 
     new_col_ranges, r_min, r_max = subset_ranges(ba.col_ranges, idx2)
-    new_col_ranges = shift_range.(new_col_ranges, 1 - new_col_ranges[1].start)
+    shifted_new_col_ranges = shift_range.(new_col_ranges, 1 - new_col_ranges[1].start)
     new_col_range_ids = ba.col_range_ids[r_min:r_max]
 
-    #new_row_idx = ba.row_idx[idx1]
     new_row_selector = construct_row_selector(ba.row_selector, idx1)
 
-    #new_row_batches = ba.row_batches[r_min:r_max]
     new_row_batches = map(b -> new_row_selector*b, ba.row_batches[r_min:r_max])
     new_row_batch_ids = ba.row_batch_ids[r_min:r_max]
-    new_values = ba.values[r_min:r_max]
+    
+    value_col_ranges = map(cr -> shift_range(cr, 1 - cr.start), new_col_ranges)
+    new_values = map((a,cr) -> view(a, :, cr), ba.values[r_min:r_max], value_col_ranges)
 
-    return BatchArray(new_col_ranges, new_col_range_ids, new_row_selector, 
+    return BatchArray(shifted_new_col_ranges, new_col_range_ids, new_row_selector, 
                       new_row_batches, new_row_batch_ids,
                       new_values)
 end
@@ -80,12 +83,8 @@ end
 function Base.:(+)(A::AbstractMatrix, B::BatchArray)
 
     result = copy(A)
-    col_buffer = similar(A, size(A,1))
-
     for (j,cr) in enumerate(B.col_ranges)
-        #col_buffer .= view(B.row_batches[j], B.row_idx, :) * B.values[j]
-        col_buffer .= B.row_batches[j] * B.values[j]
-        view(result, :, cr) .+= col_buffer
+        view(result, :, cr) .+= B.row_batches[j] * B.values[j]
     end
 
     return result
@@ -102,8 +101,8 @@ function ChainRulesCore.rrule(::typeof(+), A::AbstractMatrix, B::BatchArray)
         values_bar = map(zero, B.values) # Just sum the result tangents corresponding
                                          # to each value of B
         for (j, cbr) in enumerate(B.col_ranges)
-            #values_bar[j] .= vec(sum(transpose(view(B.row_batches[j], B.row_idx, :)) * view(result_bar,:,cbr); dims=2)) 
-            values_bar[j] .= vec(sum(transpose(B.row_batches[j]) * view(result_bar,:,cbr); dims=2)) 
+            #values_bar[j] .= vec(sum(transpose(B.row_batches[j]) * view(result_bar,:,cbr); dims=2)) 
+            values_bar[j] .= transpose(B.row_batches[j]) * view(result_bar,:,cbr) 
         end
         B_bar = Tangent{BatchArray}(values=values_bar)
         return ChainRulesCore.NoTangent(), A_bar, B_bar 
@@ -118,7 +117,6 @@ function Base.:(-)(A::AbstractMatrix, B::BatchArray)
 
     result = copy(A)
     for (j,cbr) in enumerate(B.col_ranges)
-        #view(result, :, cbr) .-= (view(B.row_batches[j], B.row_idx, :)*B.values[j])
         view(result, :, cbr) .-= B.row_batches[j]*B.values[j]
     end
     return result
@@ -147,7 +145,6 @@ end
 
 function ChainRulesCore.rrule(::typeof(*), A::AbstractMatrix, B::BatchArray)
     
-    #result = A * B
     buffers = map((rb,v)->rb*v, B.row_batches, B.values)
     result = copy(A)
     for (j,cbr) in enumerate(B.col_ranges)
@@ -159,13 +156,12 @@ function ChainRulesCore.rrule(::typeof(*), A::AbstractMatrix, B::BatchArray)
         for (j, cbr) in enumerate(B.col_ranges)
             A_bar[:,cbr] .= result_bar[:,cbr].*buffers[j]
         end
-        #(result_bar .+ zero(A)) * B 
 
         values_bar = map(zero, B.values) 
         for (j, cbr) in enumerate(B.col_ranges)
             view(A, :, cbr) .*= view(result_bar, :, cbr)
-            #values_bar[j] .= vec(sum(transpose(view(B.row_batches[j], B.row_idx, :)) * view(A, :, cbr); dims=2)) 
-            values_bar[j] .= vec(sum(transpose(B.row_batches[j]) * view(A, :, cbr); dims=2)) 
+            #values_bar[j] .= vec(sum(transpose(B.row_batches[j]) * view(A, :, cbr); dims=2)) 
+            values_bar[j] .= transpose(B.row_batches[j]) * view(A, :, cbr)
         end
         B_bar = Tangent{BatchArray}(values=values_bar)
         return ChainRulesCore.NoTangent(), A_bar, B_bar 

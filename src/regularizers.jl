@@ -494,9 +494,9 @@ function ChainRulesCore.rrule(ard::ARDRegularizer, X::AbstractMatrix)
 end
 
 
-#################################################
-# Struct representing a mixture of regularizers 
-#################################################
+#######################################################
+# Struct representing a weighted sum of regularizers 
+#######################################################
 
 mutable struct CompositeRegularizer
     regularizers::Tuple
