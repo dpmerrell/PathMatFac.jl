@@ -100,6 +100,7 @@ function init_logsigma!(model::PathMatFacModel; capacity=Int(10e8), history=noth
     history!(history; name="init_logsigma") 
 end
 
+#TODO INIT LOGDELTA
 
 function reweight_col_losses!(model::PathMatFacModel; capacity=Int(10e8), history=nothing)
     
@@ -155,7 +156,8 @@ end
 
 ################################
 # Procedures for simple models
-
+# TODO: REVISIT INIT_LOGSIGMA AND INIT_LOGDELTA; 
+# INTERACTIONS BETWEEN BATCH PARAMETERS AND EB REWEIGHTING 
 function basic_fit!(model::PathMatFacModel; fit_mu=false, fit_logsigma=false,
                                             reweight_losses=false,
                                             fit_batch=false, fit_factors=false,

@@ -115,7 +115,7 @@ function main(args)
                                   :max_epochs => 1000,
                                   :fit_reg_weight => "EB",
                                   :fsard_max_iter => 10,
-                                  :fsard_max_A_iter => 1000,
+                                  :fsard_max_A_iter => 10000,
                                   :fsard_n_lambda => 20,
                                   :fsard_lambda_atol => 1e-2,
                                   :fsard_frac_atol => 0.1,
@@ -267,9 +267,9 @@ function main(args)
     # SAVE RESULTS 
     ########################################################
     save_model(model, fitted_bson)
-    save_transformed_X(transpose(model.matfac.X), 
-                       sample_ids, sample_groups, 
-                       target, transformed_hdf)
+    save_transformed(transpose(model.matfac.X), 
+                     sample_ids, sample_conditions, 
+                     target, transformed_hdf)
 
 end
 
