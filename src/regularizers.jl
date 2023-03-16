@@ -315,7 +315,8 @@ end
  
 
 ##########################################################
-# Group Regularizer
+# Group Regularizer -- meant to regularize X when 
+# the samples share conditions
 ##########################################################
 
 mutable struct GroupRegularizer
@@ -427,34 +428,71 @@ function ChainRulesCore.rrule(gr::GroupRegularizer, X::AbstractMatrix)
     return loss, group_reg_pullback
 end
 
-# Define behaviors on various types
-
-function (gr::GroupRegularizer)(x::AbstractVector)
-    return gr(transpose(x))
-end
-
-function (gr::GroupRegularizer)(layer::ColScale)
-    return gr(layer.logsigma)
-end
-
-function (gr::GroupRegularizer)(layer::ColShift)
-    return gr(layer.mu)
-end
-
 function (gr::GroupRegularizer)(layer::FrozenLayer)
     return 0.0
 end
 
-function reweight_eb!(gr::GroupRegularizer, x::AbstractVector; mixture_p=1.0)
-    reweight_eb!(gr, transpose(x); mixture_p=mixture_p)
+##############################################
+# ColParamReg
+##############################################
+
+mutable struct ColParamReg
+    col_ranges::Tuple
+    weights::Tuple
+    centers::Tuple
 end
 
-function reweight_eb!(gr::GroupRegularizer, cs::ColShift; mixture_p=1.0)
-    reweight_eb!(gr, cs.mu; mixture_p=mixture_p)
+
+@functor ColParamReg
+Flux.trainable(cpr::ColParamReg) = ()
+
+
+function ColParamReg(feature_views; weight=1.0, center=0.0)
+    col_ranges = Tuple(ids_to_ranges(feature_views))
+    n_range = length(col_ranges)
+    weights = Tuple(fill(weight, n_range))
+    centers = Tuple(fill(center, n_range))
+    return ColParamReg(col_ranges, weights, centers)
 end
 
-function reweight_eb!(gr::GroupRegularizer, cs::ColScale; mixture_p=1.0)
-    reweight_eb!(gr, cs.logsigma; mixture_p=mixture_p)
+
+function (cpr::ColParamReg)(v::AbstractVector)
+    return 0.5*sum(map((c,w,r)->w*sum((v[r] .- c).^2), cpr.centers,
+                                                       cpr.weights,
+                                                       cpr.col_ranges)
+                  )
+end
+
+
+function reweight_eb!(cpr::ColParamReg, v::AbstractVector; mixture_p=1.0)
+    new_centers = map(r->mean(v[r]), cpr.col_ranges)
+    new_vars = map(r->var(v[r]), cpr.col_ranges)
+    new_weights = mixture_p ./ new_vars
+    
+    cpr.centers = new_centers
+    cpr.weights = new_weights
+end
+
+
+function (cpr::ColParamReg)(cs::ColShift)
+    return cpr(cs.mu)
+end
+
+function (cpr::ColParamReg)(cs::ColScale)
+    return cpr(cs.logsigma)
+end
+
+function (cpr::ColParamReg)(fl::FrozenLayer)
+    return 0.0
+end
+
+## Define behaviors on various types
+function reweight_eb!(cpr::ColParamReg, cs::ColShift; mixture_p=1.0)
+    reweight_eb!(cpr, cs.mu; mixture_p=mixture_p)
+end
+
+function reweight_eb!(cpr::ColParamReg, cs::ColScale; mixture_p=1.0)
+    reweight_eb!(cpr, cs.logsigma; mixture_p=mixture_p)
 end
 
 
@@ -623,31 +661,35 @@ end
 ##########################################################
 
 mutable struct BatchArrayReg 
-    weights::Tuple
+    centers::Tuple # Tuple of vectors -- centers of quadratic regularization 
+    weights::Tuple # Tuple of vectors -- strengths of quadratic regularization
 end
 
 @functor BatchArrayReg 
 
-function BatchArrayReg(ba::BatchArray; weight=1.0)
-    N_col_batches = length(ba.col_ranges)
-    return BatchArrayReg(Tuple(fill(weight, N_col_batches))) 
+function BatchArrayReg(ba::BatchArray; center=0.0, weight=1.0)
+    N_batches = map(v -> size(v,1), ba.values)
+    return BatchArrayReg(map( n -> fill(center, n), N_batches),
+                         map( n -> fill(weight, n), N_batches)) 
 end
 
 
-function BatchArrayReg(feature_views::AbstractVector; weight=1.0)
-    unq_feature_views = unique(feature_views)
-    return BatchArrayReg(Tuple(fill(weight, length(unq_feature_views))))
-end
+#function BatchArrayReg(feature_views::AbstractVector; weight=1.0)
+#    unq_feature_views = unique(feature_views)
+#    return BatchArrayReg(Tuple(fill(weight, length(unq_feature_views))))
+#end
 
 
 function (reg::BatchArrayReg)(ba::BatchArray)
-    return 0.5*sum(map((w,v)->w*sum(v .* v), reg.weights, ba.values))
+    diffs = map((v,c) -> v.-c, ba.values, reg.centers)
+    return 0.5*sum(map((w,d)->sum(w .* d .* d), reg.weights, diffs))
 end
 
 
 function ChainRulesCore.rrule(reg::BatchArrayReg, ba::BatchArray)
 
-    grad = map((w,v)->w.*v, reg.weights, ba.values)
+    diffs = map((v,c) -> v.-c, ba.values, reg.centers)
+    grad = map((w,d)->w.*d, reg.weights, diffs)
 
     function batcharray_reg_pullback(loss_bar)
         val_bar = loss_bar .* grad
@@ -655,25 +697,23 @@ function ChainRulesCore.rrule(reg::BatchArrayReg, ba::BatchArray)
                ChainRulesCore.Tangent{BatchArray}(values=val_bar)
 
     end
-    lss = 0.5*sum(map((g,v) -> sum(g .* v), grad, ba.values))
+    lss = 0.5*sum(map((g,d) -> sum(g .* d), grad, diffs))
 
     return lss, batcharray_reg_pullback
 end
 
 
 function reweight_eb!(reg::BatchArrayReg, A::BatchArray; mixture_p=1.0)
-    n_col_range = length(A.col_ranges)
-    new_weights = zeros(n_col_range)
-     
-    for i=1:n_col_range
-        M, n_batches = size(A.row_batches[i])
-        batch_sizes = ones(1, M) * A.row_batches[i]
-        all_values = A.row_batches[i] * A.values[i]
-        batch_param_var = var(all_values)
-        new_weights[i] = mixture_p ./ batch_param_var
-    end
 
-    reg.weights = Tuple(new_weights)
+    n_col_range = length(A.col_ranges)    
+    new_weights = map(zero, reg.weights)
+   
+    new_centers = map(v -> vec(mean(v, dims=2)), A.values)
+    new_vars = map(v -> vec(var(v, dims=2)), A.values)
+
+    reg.centers = new_centers
+    reg.weights = map(v -> mixture_p ./ v, new_vars)
+
 end
 
 
@@ -684,23 +724,25 @@ function construct_new_batch_reg!(new_batch_array::BatchArray,
                                   old_batch_array_reg::BatchArrayReg,
                                   old_batch_array)
  
-    # Make a copy of the old regularizer, and update its weights
-    # in an empirical Bayes fashion. 
-    old_reg_copy = deepcopy(old_batch_array)
-    reweight_eb!(old_reg_copy, old_batch_array)
- 
-    # By default the new regularizer's weights will be the mean of the old weights
-    new_weights = fill(mean(old_reg_copy.weights), length(new_batch_array.col_ranges))
+    ## Make a copy of the old regularizer, and update its weights
+    ## in an empirical Bayes fashion. 
+    #old_reg_copy = deepcopy(old_batch_array)
+    #reweight_eb!(old_reg_copy, old_batch_array)
 
-    # Set the new regularizer's weight to match the old weight,
-    # whenever appropriate
-    old_col_intersect, new_col_intersect = keymatch(old_batch_array.col_range_ids,
-                                                    new_batch_array.col_range_ids)
-    for (i_old, i_new) in zip(old_value_intersect, new_value_intersect)
-        new_weights[i_new] = old_reg_copy.weights[i_old] 
-    end
+    ## Look for intersecting column ranges between the new and old batch array
+    #old_col_intersect, new_col_intersect = keymatch(old_batch_array.col_range_ids,
+    #                                                new_batch_array.col_range_ids)
+    #for (i_old, i_new) in zip(old_col_intersect, new_col_intersect)
 
-    return BatchArrayReg(Tuple(new_weights))
+    #    old_rowbatch_intersect, new_rowbatch_intersect = keymatch(old_batch_array.row_batch_ids[i_old],
+    #                                                              new_batch_array.row_batch_ids[i_new])        
+
+    #    old_row_intersect, 
+    #    new_weights[i_new] = old_reg_copy.weights[i_old] 
+    #end
+
+    #return BatchArrayReg(Tuple(new_weights))
+    return BatchArrayReg(new_batch_array)
 end
 
 # Behaviors on various other types
@@ -721,7 +763,7 @@ function (reg::BatchArrayReg)(layer::BatchShift)
     return reg(layer.theta)
 end
 
-function (cr::BatchArrayReg)(layer::FrozenLayer)
+function (reg::BatchArrayReg)(layer::FrozenLayer)
     return 0.0
 end
 
@@ -742,21 +784,21 @@ function (reg::SequenceReg)(seq)
 end
 
 
-function construct_layer_reg(feature_views, batch_dict, lambda_layer)
+function construct_layer_reg(feature_views, batch_dict, layers, lambda_layer)
 
     # Start with the regularizers for logsigma and mu
     # (the column parameters)
     regs = Any[x->0.0, x->0.0, x->0.0, x->0.0]
     if feature_views != nothing
-        regs[1] = GroupRegularizer(feature_views; weight=lambda_layer)
-        regs[2] = GroupRegularizer(feature_views; weight=lambda_layer)
+        regs[1] = ColParamReg(feature_views; weight=lambda_layer)
+        regs[3] = ColParamReg(feature_views; weight=lambda_layer)
     end
  
     # If a batch_dict is provided, add regularizers for
     # logdelta and theta (the batch parameters)
     if batch_dict != nothing
-        regs[2] = BatchArrayReg(feature_views; weight=lambda_layer)
-        regs[4] = BatchArrayReg(feature_views; weight=lambda_layer)
+        regs[2] = BatchArrayReg(layers.layers[2].logdelta; weight=lambda_layer)
+        regs[4] = BatchArrayReg(layers.layers[4].theta; weight=lambda_layer)
     end
 
     return SequenceReg(Tuple(regs))    

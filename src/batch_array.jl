@@ -33,7 +33,6 @@ function BatchArray(col_batch_ids::Vector, row_batch_dict::AbstractDict,
             v[i,:] .= vd[rb]
         end
     end
-    #values = [[vd[ub] for ub in urbi] for (vd,urbi) in zip(value_dicts, unq_row_batch_ids)]
 
     n_rows = length(row_batch_ids[1])
     row_selector = spzeros(Bool, n_rows,n_rows)

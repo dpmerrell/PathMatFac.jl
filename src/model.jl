@@ -47,7 +47,7 @@ function assemble_model(D, K, sample_ids, sample_conditions,
 
     # Construct the column layers and their regularizer
     col_layers = construct_model_layers(feature_views, batch_dict) 
-    layer_reg = construct_layer_reg(feature_views, batch_dict, lambda_layer) 
+    layer_reg = construct_layer_reg(feature_views, batch_dict, col_layers, lambda_layer) 
 
     # Construct regularizers for X and Y
     X_reg = construct_X_reg(K, M, sample_ids, sample_conditions, sample_graphs, 
