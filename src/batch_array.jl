@@ -230,5 +230,24 @@ function deepcopy(ba::BatchArray)
 end
 
 
+###########################################
+# Map
+# Apply a function to each batch in ba, and to the
+# corresponding views of each subsequent arg.
+# Returns a tuple of matrices corresponding to ba.values.
+function ba_map(map_func, ba::BatchArray, args...)
+
+    result = map(zero, ba.values)
+    for (v, rb, cr, r) in zip(ba.values, ba.row_batches, ba.col_ranges, result)
+        for k=1:size(rb,2)
+            b_idx = rb[:,k]
+            b_v = transpose(v[k,:])
+
+            views = map(a->view(a, b_idx, cr), args)
+            r[k,:] .= map_func(b_v, views...)
+        end
+    end
+    return result
+end
 
 

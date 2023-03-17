@@ -36,7 +36,6 @@ function mf_fit!(model::PathMatFacModel; scale_column_losses=false,
 end
 
 
-
 ########################################################################
 # PARAMETER INITIALIZATION
 ########################################################################
@@ -45,14 +44,12 @@ function construct_optimizer(model, lr)
     return Flux.Optimise.AdaGrad(lr)
 end
 
-function init_mu!(model::PathMatFacModel, opt; capacity=Int(10e8), max_epochs=500, lr=0.25,
+
+function init_mu!(model::PathMatFacModel, opt; capacity=Int(10e8), max_epochs=500, 
                                                verbosity=1, print_prefix="", history=nothing, kwargs...)
     
-    col_means, col_vars = MF.batched_column_meanvar(model.data)
     keep_history = (history != nothing)
 
-    orig_eta = opt.eta
-    opt.eta = lr
     result = MF.compute_M_estimates(model.matfac, model.data;
                                     capacity=capacity, max_epochs=max_epochs,
                                     opt=opt, verbosity=verbosity, print_prefix=print_prefix,
@@ -68,7 +65,6 @@ function init_mu!(model::PathMatFacModel, opt; capacity=Int(10e8), max_epochs=50
         history!(history, h; name="init_mu")
     end
 
-    opt.eta = orig_eta
     model.matfac.col_transform.layers[3].mu .= vec(M_estimates)
 
 end
@@ -90,17 +86,17 @@ function init_theta!(model::PathMatFacModel, opt; capacity=Int(10e8), max_epochs
     history!(history, h; name="init_theta") 
 end
 
+
 function init_logsigma!(model::PathMatFacModel; capacity=Int(10e8), history=nothing)
   
-    col_scales = MF.link_scale(model.matfac.noise_model, model.data; 
-                               capacity=capacity)
+    col_vars = MF.link_col_sqerr(model.matfac.noise_model, model.matfac, model.data; 
+                                   capacity=capacity)
     K = size(model.matfac.X, 1) 
-    model.matfac.col_transform.layers[1].logsigma .= log.(col_scales ./ sqrt(K))
+    model.matfac.col_transform.layers[1].logsigma .= log.(sqrt.(col_scales) ./ sqrt(K))
 
     history!(history; name="init_logsigma") 
 end
 
-#TODO INIT LOGDELTA
 
 function reweight_col_losses!(model::PathMatFacModel; capacity=Int(10e8), history=nothing)
     
@@ -137,6 +133,95 @@ function reweight_col_losses!(model::PathMatFacModel; capacity=Int(10e8), histor
     history!(history; name="reweight_col_losses")
 end
 
+
+########################################################################
+# BATCH EFFECT MODELING
+########################################################################
+
+
+function init_batch_effects!(model::PathMatFacModel, opt; capacity=Int(10e8), 
+                                                          max_epochs=1000,
+                                                          verbosity=1, print_prefix="",
+                                                          history=nothing, kwargs...)
+
+    n_pref = string(print_prefix, "    ")
+
+    # Set up a matrix factorization model with the sole
+    # purpose of initializing batch effects. 
+    batch_model = copy(model)
+    batch_model.matfac = deepcopy(model.matfac)
+    batch_model.data = model.data
+
+    # Its X matrix will store sample conditions;
+    # its Y matrix will regress each column against them.
+    condition_mat = ids_to_ind_mat(batch_model.sample_conditions)
+    M, K_conditions = size(condition_mat)
+    N = size(batch_model.matfac.Y,2)
+    batch_model.matfac.X = similar(batch_model.matfac.X, K_conditions, M)
+    batch_model.matfac.X .= condition_mat
+    batch_model.matfac.Y .= zero(batch_model.matfac.X, K_conditions, N)
+
+    v_println("Fitting column shifts..."; verbosity=verbosity,
+                                          prefix=print_prefix)
+    # Fit its column shifts
+    init_mu!(batch_model, opt; capacity=capacity, max_epochs=max_epochs, 
+                               verbosity=verbosity, print_prefix=n_pref,
+                               history=history, kwargs...)
+
+    v_println("Regressing against sample conditions..."; verbosity=verbosity,
+                                                         prefix=print_prefix)
+    # Fit its Y factor (without regularization).
+    batch_model.matfac.Y_reg = y->0.0
+    h = mf_fit!(batch_model; capacity=capacity, max_epochs=max_epochs,
+                             verbosity=verbosity, print_prefix=n_pref,
+                             scale_column_losses=false,
+                             update_X=false,
+                             update_Y=true,
+                             update_col_layers=false,
+                             reg_relative_weighting=false,
+                             update_X_reg=false,
+                             update_Y_reg=false,
+                             update_row_layers_reg=false,
+                             update_col_layers_reg=false,
+                             keep_history=(history != nothing))
+    history!(history, h; name="regress_against_sample_conditions")
+
+    # Fit its batch shift (without regularization)
+    v_println("Fitting batch shift..."; verbosity=verbosity,
+                                        prefix=print_prefix)
+    batch_model.matfac.col_transform_reg = l->0.0
+    freeze_layer!(batch_model.matfac.col_transform_reg, 1:3) 
+    init_theta!(batch_model, opt; capacity=capacity, max_epochs=max_epochs,
+                                  verbosity=verbosity, print_prefix=n_pref, 
+                                  history=history, kwargs...)
+
+    # Set its column scales
+    v_println("Setting column scales..."; verbosity=verbosity,
+                                          prefix=print_prefix)
+    reduce_start = similar(batch_model.matfac.Y, 1, N)
+    reduce_start .= 0 
+    col_vars = MF.link_col_sqerr(batch_model.noise_model,
+                                 batch_model.matfac,
+                                 batch_model.data; capacity=capacity)
+    col_vars ./= MF.column_nonnan(batch_model.data)
+
+    # Set its batch scales
+    v_println("Setting batch scales..."; verbosity=verbosity,
+                                         prefix=print_prefix)
+    ba_vars = ba_map((ba, m, d) -> MF.link_col_sqerr(m.noise_model,m,d) ./ MF.column_nonnan(d),
+                     batch_model.matfac.col_transform.layers[4].theta,
+                     batch_model.matfac, batch_model.data)
+   
+    # Divide batch vars by column vars to obtain "raw" deltas
+
+    # Update the estimated batch parameters in an EB fashion
+
+    # Set the model's parameters to the fitted values
+
+    # Reweight the model's regularizers
+
+end
+
 #######################################################################
 # POSTPROCESSING FUNCTIONS
 #######################################################################
@@ -156,11 +241,10 @@ end
 
 ################################
 # Procedures for simple models
-# TODO: REVISIT INIT_LOGSIGMA AND INIT_LOGDELTA; 
-# INTERACTIONS BETWEEN BATCH PARAMETERS AND EB REWEIGHTING 
-function basic_fit!(model::PathMatFacModel; fit_mu=false, fit_logsigma=false,
+function basic_fit!(model::PathMatFacModel; fit_batch=false, 
+                                            fit_mu=false, fit_logsigma=false,
                                             reweight_losses=false,
-                                            fit_batch=false, fit_factors=false,
+                                            fit_factors=false,
                                             fit_joint=false,
                                             whiten=false,
                                             capacity=Int(10e8),
@@ -179,36 +263,38 @@ function basic_fit!(model::PathMatFacModel; fit_mu=false, fit_logsigma=false,
         opt = construct_optimizer(model, lr)
     end
 
-    if fit_mu
-        # Initialize mu with the column M-estimates.
-        v_println("Fitting column shifts..."; verbosity=verbosity,
-                                              prefix=print_prefix)
-        init_mu!(model, opt; capacity=capacity, 
-                             max_epochs=500,
-                             verbosity=verbosity-1,
-                             print_prefix=n_prefix,
-                             history=history)
-    end
+    # Things differ pretty radically if we're fitting batch parameters
+    # vs. only column parameters
+    if fit_batch
 
-    # If the model has batch parameters:
-    if (fit_batch & isa(model.matfac.col_transform.layers[4], BatchShift))
+        @assert isa(model.matfac.col_transform.layers[2], BatchScale) "Model must have batch parameters whenever `fit_batch` is true"
+        @assert isa(model.matfac.col_transform.layers[4], BatchShift) "Model must have batch parameters whenever `fit_batch` is true"
         # Fit the batch shift parameters.
         v_println("Fitting batch parameters..."; verbosity=verbosity,
                                                  prefix=print_prefix)
-        init_theta!(model, opt; capacity=capacity, 
-                                max_epochs=500,
-                                verbosity=verbosity-1,
-                                print_prefix=n_prefix,
-                                history=history)
-        
-    end
-
-    # Choose column scales in a way that encourages
-    # columns of Y to have similar magnitudes.
-    if fit_logsigma
-        v_println("Fitting column scales..."; verbosity=verbosity,
-                                              prefix=print_prefix)
-        init_logsigma!(model; capacity=capacity)
+        init_batch_effects!(model, opt; capacity=capacity, 
+                                        max_epochs=max_epochs,
+                                        verbosity=verbosity-1,
+                                        print_prefix=n_prefix,
+                                        history=history)
+    else
+        if fit_mu
+            # Initialize mu with the column M-estimates.
+            v_println("Fitting column shifts..."; verbosity=verbosity,
+                                                  prefix=print_prefix)
+            init_mu!(model, opt; capacity=capacity, 
+                                 max_epochs=500,
+                                 verbosity=verbosity-1,
+                                 print_prefix=n_prefix,
+                                 history=history)
+        end
+        # Choose column scales in a way that encourages
+        # columns of Y to have similar magnitudes.
+        if fit_logsigma
+            v_println("Fitting column scales..."; verbosity=verbosity,
+                                                  prefix=print_prefix)
+            init_logsigma!(model; capacity=capacity)
+        end
     end
 
     # Reweight the column losses so that they exert 
