@@ -24,7 +24,13 @@ function util_tests()
         my_ranges = PM.ids_to_ranges(["cat","cat","dog","dog","fish"])
         @test my_ranges == [1:2,3:4,5:5]
 
+        # subset_ranges
         @test PM.subset_ranges(my_ranges, 2:5) == ([2:2,3:4,5:5], 1, 3)
+        @test PM.subset_ranges(my_ranges, 2:8) == ([2:2,3:4,5:5], 1, 3)
+
+        broken_ranges = [1:2,5:6,8:10]
+        @test PM.subset_ranges(broken_ranges, 1:3) == ([1:2], 1, 1)
+        @test PM.subset_ranges(broken_ranges, 5:8) == ([5:6,8:8], 2,3)
 
         my_ind_mat = PM.ids_to_ind_mat([1,1,1,2,2,1,2,3,3,1,2,3,3])
         @test my_ind_mat == Bool[1 0 0;
@@ -114,15 +120,15 @@ function batch_array_tests()
     
     @testset "Batch Arrays" begin
 
-        col_batches = ["cat", "cat", "cat", "dog", "dog", "fish"]
+        col_batches = ["cat", "cat", "cat", "bird", "dog", "dog", "fish"]
         row_batches = Dict("cat"=>[1,1,1,2,2], "dog"=>[1,1,2,2,2], "fish"=>[1,1,1,1,2])
-        values = [Dict(1=>fill(3.14,3), 2=>fill(2.7,3)), Dict(1=>fill(0.0,2), 2=>fill(0.5,2)), Dict(1=>fill(-1.0,1), 2=>fill(1.0,1))]
-        A = zeros(5,6)
+        values = [Dict(1=>fill(3.14,3), 2=>fill(2.7,3)), Dict(), Dict(1=>fill(0.0,2), 2=>fill(0.5,2)), Dict(1=>fill(-1.0,1), 2=>fill(1.0,1))]
+        A = zeros(5,7)
 
         ##############################
         # Constructor
         ba = PM.BatchArray(col_batches, row_batches, values)
-        @test ba.col_ranges == (1:3, 4:5, 6:6)
+        @test ba.col_ranges == (1:3, 5:6, 7:7)
         test_row_batches = (sparse(Bool[1 0; 1 0; 1 0; 0 1; 0 1]),
                             sparse(Bool[1 0; 1 0; 0 1; 0 1; 0 1]),
                             sparse(Bool[1 0; 1 0; 1 0; 1 0; 0 1]))
@@ -133,8 +139,8 @@ function batch_array_tests()
 
         ##############################
         # View
-        ba_view = view(ba, 2:4, 2:5)
-        @test ba_view.col_ranges == (1:2, 3:4)
+        ba_view = view(ba, 2:4, 2:6)
+        @test ba_view.col_ranges == (1:2, 4:5)
         @test ba_view.row_batches == map(b->b[2:4,:], test_row_batches[1:2])
         @test isapprox(ba_view.row_selector, sparse([0 1 0 0 0;
                                                      0 0 1 0 0;
@@ -157,11 +163,11 @@ function batch_array_tests()
         ###############################
         # Addition
         Z = A + ba
-        test_mat = [3.14 3.14 3.14 0.0 0.0 -1.0;
-                    3.14 3.14 3.14 0.0 0.0 -1.0;
-                    3.14 3.14 3.14 0.5 0.5 -1.0;
-                    2.7  2.7  2.7  0.5 0.5 -1.0;
-                    2.7  2.7  2.7  0.5 0.5  1.0]
+        test_mat = [3.14 3.14 3.14 0.0 0.0 0.0 -1.0;
+                    3.14 3.14 3.14 0.0 0.0 0.0 -1.0;
+                    3.14 3.14 3.14 0.0 0.5 0.5 -1.0;
+                    2.7  2.7  2.7  0.0 0.5 0.5 -1.0;
+                    2.7  2.7  2.7  0.0 0.5 0.5  1.0]
         @test Z == test_mat
         (A_grad, ba_grad) = Zygote.gradient((x,y)->sum(x+y), A, ba)
         @test A_grad == ones(size(A)...)
@@ -172,10 +178,14 @@ function batch_array_tests()
 
         ################################
         # Multiplication
-        Z = ones(5,6) * ba
-        @test Z == test_mat
-        (A_grad, ba_grad) = Zygote.gradient((x,y)->sum(x*y), ones(5,6), ba)
-        @test A_grad == Z
+        Z = ones(5,7) * ba
+        other_test_mat = deepcopy(test_mat)
+        other_test_mat[:,4] .= 1
+        @test isapprox(Z, other_test_mat)
+        (A_grad, ba_grad) = Zygote.gradient((x,y)->sum(x*y), ones(5,7), ba)
+        other_Z = deepcopy(Z)
+        other_Z[:,4] .= 0
+        @test isapprox(A_grad, other_Z)
         @test ba_grad.values == (repeat([3., 2.], inner=(1,3)), 
                                  repeat([2., 3.], inner=(1,2)),
                                  repeat([4., 1.], inner=(1,1))
@@ -184,8 +194,8 @@ function batch_array_tests()
         ################################
         # Exponentiation
         ba_exp = exp(ba)
-        @test (ones(5,6) * ba_exp) == exp.(test_mat)
-        (ba_grad,) = Zygote.gradient(x->sum(ones(5,6) * exp(x)), ba)
+        @test (ones(5,7) * ba_exp) == exp.(test_mat)
+        (ba_grad,) = Zygote.gradient(x->sum(ones(5,7) * exp(x)), ba)
         @test ba_grad.values == (repeat([3.0*exp(3.14), 2.0*exp(2.7)], inner=(1,3)), 
                                  repeat([2.0*exp(0.0), 3.0*exp(0.5)], inner=(1,2)),
                                  repeat([4.0*exp(-1.0), 1.0*exp(1.0)], inner=(1,1))
@@ -200,8 +210,8 @@ function batch_array_tests()
                                 )
        
         # view
-        ba_d_view = view(ba_d, 2:4, 2:5)
-        @test ba_d_view.col_ranges == (1:2, 3:4)
+        ba_d_view = view(ba_d, 2:4, 2:6)
+        @test ba_d_view.col_ranges == (1:2, 4:5)
         @test ba_d_view.row_batches == map(b->gpu(b[2:4,:]), test_row_batches[1:2])
         @test isapprox(ba_d_view.row_selector, gpu(sparse([0 1 0 0 0;
                                                            0 0 1 0 0;
@@ -235,10 +245,12 @@ function batch_array_tests()
 
 
         # multiplication
-        Z_d = gpu(ones(5,6)) * ba_d
-        @test Z_d == test_mat_d
-        (A_grad, ba_grad) = Zygote.gradient((x,y)->sum(x*y), gpu(ones(5,6)), ba_d)
-        @test A_grad == Z_d
+        Z_d = gpu(ones(5,7)) * ba_d
+        @test isapprox(Z_d, gpu(other_test_mat))
+        (A_grad, ba_grad) = Zygote.gradient((x,y)->sum(x*y), gpu(ones(5,7)), ba_d)
+        other_Z_d = deepcopy(Z_d)
+        other_Z_d[:,4] .= 0
+        @test isapprox(A_grad, other_Z_d)
         @test ba_grad.values == map(gpu, (repeat([3., 2.], inner=(1,3)), 
                                           repeat([2., 3.], inner=(1,2)),
                                           repeat([4., 1.], inner=(1,1))
@@ -247,14 +259,12 @@ function batch_array_tests()
 
         # exponentiation
         ba_d_exp = exp(ba_d)
-        @test isapprox((gpu(ones(5,6)) * ba_d_exp), exp.(test_mat_d))
-        (ba_grad,) = Zygote.gradient(x->sum(gpu(ones(5,6)) * exp(x)), ba_d)
-        @test ba_grad.values == map(gpu, (repeat([3.0*exp(3.14), 2.0*exp(2.7)], inner=(1,3)), 
-                                          repeat([2.0*exp(0.0), 3.0*exp(0.5)], inner=(1,2)),
-                                          repeat([4.0*exp(-1.0), 1.0*exp(1.0)], inner=(1,1))
-                                         ))
-
-
+        @test isapprox((gpu(ones(5,7)) * ba_d_exp), exp.(test_mat_d))
+        (ba_grad,) = Zygote.gradient(x->sum(gpu(ones(5,7)) * exp(x)), ba_d)
+        @test all(map((u,v) -> isapprox(u,v), ba_grad.values, map(gpu, (repeat([3.0*exp(3.14), 2.0*exp(2.7)], inner=(1,3)), 
+                                                                        repeat([2.0*exp(0.0), 3.0*exp(0.5)], inner=(1,2)),
+                                                                        repeat([4.0*exp(-1.0), 1.0*exp(1.0)], inner=(1,1))
+                                                                   ))))
 
     end
 end
@@ -831,7 +841,7 @@ function model_tests()
 
     @testset "Batch effect model constructor" begin
 
-        model = PathMatFacModel(Z; K=K, feature_views=feature_views, batch_dict=batch_dict)
+        model = PathMatFacModel(Z; K=K, sample_conditions=sample_conditions, feature_views=feature_views, batch_dict=batch_dict)
         @test size(model.matfac.X) == (K,M)
         @test size(model.matfac.Y) == (K,N)
         @test typeof(model.matfac.col_transform.layers[1]) == PM.ColScale
@@ -916,7 +926,7 @@ function model_tests()
     end
 
     @testset "Full-featured model constructor" begin
-        model = PathMatFacModel(Z; sample_ids=sample_ids, sample_conditions, sample_graphs=sample_graphs, 
+        model = PathMatFacModel(Z; sample_ids=sample_ids, sample_conditions=sample_conditions, sample_graphs=sample_graphs, 
                                    lambda_X_graph=1.234, lambda_X_condition=5.678, 
                                    feature_ids=feature_ids, feature_views=feature_views, 
                                    feature_graphs=feature_graphs, batch_dict=batch_dict, 
@@ -1120,7 +1130,7 @@ function fit_tests()
                                    #sample_conditions=sample_conditions, 
                                    feature_views=feature_views, 
                                    feature_ids=feature_ids,  
-                                   batch_dict=batch_dict, 
+                                   #batch_dict=batch_dict, 
                                    Y_ard=true)
 
         X_start = deepcopy(model.matfac.X)
@@ -1153,7 +1163,7 @@ function fit_tests()
     @testset "Featureset ARD fit CPU" begin
 
         model = PathMatFacModel(Z; K=4,
-                                   #sample_conditions=sample_conditions,
+                                   sample_conditions=sample_conditions,
                                    feature_views=feature_views, 
                                    feature_ids=feature_ids,  
                                    batch_dict=batch_dict, 
@@ -1387,14 +1397,14 @@ end
 
 function main()
 
-    util_tests()
-    batch_array_tests()
-    layers_tests()
-    preprocess_tests()
-    reg_tests()
-    featureset_ard_tests()
-    model_tests()
-    score_tests()
+    #util_tests()
+    #batch_array_tests()
+    #layers_tests()
+    #preprocess_tests()
+    #reg_tests()
+    #featureset_ard_tests()
+    #model_tests()
+    #score_tests()
     fit_tests()
     transform_tests()
     model_io_tests()

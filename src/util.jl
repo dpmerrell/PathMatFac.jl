@@ -164,10 +164,11 @@ function ids_to_ind_mat(id_vec)
 end
 
 
+# Assume ranges are nonoverlapping, and in sorted order.
 function subset_ranges(ranges::Vector, rng::UnitRange) 
    
-    r_min = rng.start
-    r_max = rng.stop
+    r_min = max(rng.start, ranges[1].start)
+    r_max = min(rng.stop, ranges[end].stop)
     @assert r_min <= r_max
 
     @assert r_min >= ranges[1].start
@@ -175,15 +176,23 @@ function subset_ranges(ranges::Vector, rng::UnitRange)
 
     starts = [rr.start for rr in ranges]
     r_min_idx = searchsorted(starts, r_min).stop
-    
+    if (r_min > ranges[r_min_idx].stop)
+        r_min_idx += 1
+        r_min = ranges[r_min_idx].start
+    end
+
     stops = [rr.stop for rr in ranges]
     r_max_idx = searchsorted(stops, r_max).start
+    if (r_max < ranges[r_max_idx].start)
+        r_max_idx -= 1
+        r_max = ranges[r_max_idx].stop
+    end
 
-    new_ranges = collect(ranges[r_min_idx:r_max_idx])
+    new_ranges = ranges[r_min_idx:r_max_idx]
     new_ranges[1] = r_min:new_ranges[1].stop
-    new_ranges[end] = new_ranges[end].start:r_max
-
+    new_ranges[end] = new_ranges[end].start:r_max 
     return new_ranges, r_min_idx, r_max_idx
+
 end
 
 function subset_ranges(ranges::Tuple, rng::UnitRange)
@@ -414,6 +423,14 @@ function csc_select(A, rng1::UnitRange, rng2::UnitRange)
     return sparse(coo_select(csc_to_coo(A)..., rng1, rng2)..., new_m, new_n) 
 end
 
+function construct_row_selector(rs::SparseMatrixCSC, idx::AbstractVector{Int})
+    M = length(idx)
+    N = rs.n
+    I = collect(1:M)
+    J = collect(idx)
+    V = ones(Bool, M)
+    return sparse(I, J, V, M, N)
+end
 
 function construct_row_selector(rs::SparseMatrixCSC, idx::UnitRange)
     M = length(idx)

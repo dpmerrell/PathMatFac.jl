@@ -18,17 +18,23 @@ end
 
 Flux.trainable(ba::BatchArray) = (values=ba.values,)
 
-function BatchArray(col_batch_ids::Vector, row_batch_dict::AbstractDict, 
+function BatchArray(feature_views::Vector, row_batch_dict::AbstractDict, 
                     value_dicts::Vector{<:AbstractDict})
 
-    unq_cbi = unique(col_batch_ids)
-    row_batch_ids = [row_batch_dict[b] for b in unq_cbi]
-
+    unq_views = unique(feature_views)
+    unq_view_idx = Int[i for (i,v) in enumerate(unq_views) if in(v, keys(row_batch_dict))]
+    kept_views = unq_views[unq_view_idx]
+    
+    row_batch_ids = [row_batch_dict[b] for b in kept_views]
     unq_row_batch_ids = [unique(rbv) for rbv in row_batch_ids]
-    col_ranges = ids_to_ranges(col_batch_ids)
 
-    values = [zeros(length(urb),length(cr)) for (urb, cr) in zip(unq_row_batch_ids, col_ranges)]
-    for (v, vd, urbi) in zip(values, value_dicts, unq_row_batch_ids)
+    col_ranges = ids_to_ranges(feature_views)
+    kept_col_ranges = col_ranges[unq_view_idx]
+
+    kept_value_dicts = value_dicts[unq_view_idx]
+
+    values = [zeros(length(urb),length(cr)) for (urb, cr) in zip(unq_row_batch_ids, kept_col_ranges)]
+    for (v, vd, urbi) in zip(values, kept_value_dicts, unq_row_batch_ids)
         for (i,rb) in enumerate(urbi)
             v[i,:] .= vd[rb]
         end
@@ -38,8 +44,8 @@ function BatchArray(col_batch_ids::Vector, row_batch_dict::AbstractDict,
     row_selector = spzeros(Bool, n_rows,n_rows)
     row_batches = [sparse(ids_to_ind_mat(rbv)) for rbv in row_batch_ids]
 
-    return BatchArray(Tuple(col_ranges),
-                      unq_cbi, 
+    return BatchArray(Tuple(kept_col_ranges),
+                      unq_views, 
                       row_selector,
                       Tuple(row_batches), 
                       Tuple(unq_row_batch_ids),
@@ -47,10 +53,10 @@ function BatchArray(col_batch_ids::Vector, row_batch_dict::AbstractDict,
 end
 
 
-function view(ba::BatchArray, idx1, idx2::AbstractRange)
+function view(ba::BatchArray, idx1, idx2::UnitRange)
 
     new_col_ranges, r_min, r_max = subset_ranges(ba.col_ranges, idx2)
-    shifted_new_col_ranges = shift_range.(new_col_ranges, 1 - new_col_ranges[1].start)
+    shifted_new_col_ranges = shift_range.(new_col_ranges, 1 - idx2.start)
     new_col_range_ids = ba.col_range_ids[r_min:r_max]
 
     new_row_selector = construct_row_selector(ba.row_selector, idx1)
@@ -64,6 +70,12 @@ function view(ba::BatchArray, idx1, idx2::AbstractRange)
     return BatchArray(shifted_new_col_ranges, new_col_range_ids, new_row_selector, 
                       new_row_batches, new_row_batch_ids,
                       new_values)
+end
+
+
+function view(ba::BatchArray, idx1::Colon, idx2::UnitRange)
+    M = size(ba.row_batches[1], 1)
+    return view(ba, 1:M, idx2)
 end
 
 
@@ -151,7 +163,7 @@ function ChainRulesCore.rrule(::typeof(*), A::AbstractMatrix, B::BatchArray)
     end
  
     function ba_mult_pullback(result_bar)
-        A_bar = similar(A)
+        A_bar = zero(A)
         for (j, cbr) in enumerate(B.col_ranges)
             A_bar[:,cbr] .= result_bar[:,cbr].*buffers[j]
         end
@@ -159,7 +171,6 @@ function ChainRulesCore.rrule(::typeof(*), A::AbstractMatrix, B::BatchArray)
         values_bar = map(zero, B.values) 
         for (j, cbr) in enumerate(B.col_ranges)
             view(A, :, cbr) .*= view(result_bar, :, cbr)
-            #values_bar[j] .= vec(sum(transpose(B.row_batches[j]) * view(A, :, cbr); dims=2)) 
             values_bar[j] .= transpose(B.row_batches[j]) * view(A, :, cbr)
         end
         B_bar = Tangent{BatchArray}(values=values_bar)
@@ -237,10 +248,13 @@ end
 # Returns a tuple of matrices corresponding to ba.values.
 function ba_map(map_func, ba::BatchArray, args...)
 
+    M = size(ba.row_selector, 1) 
+    idx = collect(1:M)
+
     result = map(zero, ba.values)
     for (v, rb, cr, r) in zip(ba.values, ba.row_batches, ba.col_ranges, result)
         for k=1:size(rb,2)
-            b_idx = rb[:,k]
+            b_idx = idx[rb[:,k]]
             b_v = transpose(v[k,:])
 
             views = map(a->view(a, b_idx, cr), args)

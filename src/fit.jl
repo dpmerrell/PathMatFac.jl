@@ -138,6 +138,10 @@ end
 # BATCH EFFECT MODELING
 ########################################################################
 
+function delta_theta_fixpoint(delta2_ba, theta_ba, batch_sizes)
+    
+end
+
 
 function init_batch_effects!(model::PathMatFacModel, opt; capacity=Int(10e8), 
                                                           max_epochs=1000,
@@ -148,31 +152,31 @@ function init_batch_effects!(model::PathMatFacModel, opt; capacity=Int(10e8),
 
     # Set up a matrix factorization model with the sole
     # purpose of initializing batch effects. 
-    batch_model = copy(model)
-    batch_model.matfac = deepcopy(model.matfac)
-    batch_model.data = model.data
+    orig_matfac = model.matfac
+    model.matfac = deepcopy(orig_matfac)
 
     # Its X matrix will store sample conditions;
     # its Y matrix will regress each column against them.
-    condition_mat = ids_to_ind_mat(batch_model.sample_conditions)
+    condition_mat = ids_to_ind_mat(model.sample_conditions)
     M, K_conditions = size(condition_mat)
-    N = size(batch_model.matfac.Y,2)
-    batch_model.matfac.X = similar(batch_model.matfac.X, K_conditions, M)
-    batch_model.matfac.X .= condition_mat
-    batch_model.matfac.Y .= zero(batch_model.matfac.X, K_conditions, N)
+    N = size(model.matfac.Y,2)
+    model.matfac.X = similar(model.matfac.X, K_conditions, M)
+    model.matfac.X .= transpose(condition_mat)
+    model.matfac.Y = similar(model.matfac.X, K_conditions, N)
+    model.matfac.Y .= 0
 
     v_println("Fitting column shifts..."; verbosity=verbosity,
                                           prefix=print_prefix)
     # Fit its column shifts
-    init_mu!(batch_model, opt; capacity=capacity, max_epochs=max_epochs, 
+    init_mu!(model, opt; capacity=capacity, max_epochs=max_epochs, 
                                verbosity=verbosity, print_prefix=n_pref,
                                history=history, kwargs...)
 
     v_println("Regressing against sample conditions..."; verbosity=verbosity,
                                                          prefix=print_prefix)
     # Fit its Y factor (without regularization).
-    batch_model.matfac.Y_reg = y->0.0
-    h = mf_fit!(batch_model; capacity=capacity, max_epochs=max_epochs,
+    model.matfac.Y_reg = y->0.0
+    h = mf_fit!(model; capacity=capacity, max_epochs=max_epochs,
                              verbosity=verbosity, print_prefix=n_pref,
                              scale_column_losses=false,
                              update_X=false,
@@ -189,37 +193,42 @@ function init_batch_effects!(model::PathMatFacModel, opt; capacity=Int(10e8),
     # Fit its batch shift (without regularization)
     v_println("Fitting batch shift..."; verbosity=verbosity,
                                         prefix=print_prefix)
-    batch_model.matfac.col_transform_reg = l->0.0
-    freeze_layer!(batch_model.matfac.col_transform_reg, 1:3) 
-    init_theta!(batch_model, opt; capacity=capacity, max_epochs=max_epochs,
+    model.matfac.col_transform_reg = l->0.0
+    freeze_layer!(model.matfac.col_transform, 1:3) 
+    init_theta!(model, opt; capacity=capacity, max_epochs=max_epochs,
                                   verbosity=verbosity, print_prefix=n_pref, 
                                   history=history, kwargs...)
+    theta_ba = deepcopy(model.matfac.col_transform.layers[4].theta)
 
     # Set its column scales
     v_println("Setting column scales..."; verbosity=verbosity,
                                           prefix=print_prefix)
-    reduce_start = similar(batch_model.matfac.Y, 1, N)
+    reduce_start = similar(model.matfac.Y, 1, N)
     reduce_start .= 0 
-    col_vars = MF.link_col_sqerr(batch_model.noise_model,
-                                 batch_model.matfac,
-                                 batch_model.data; capacity=capacity)
-    col_vars ./= MF.column_nonnan(batch_model.data)
+    col_vars = MF.link_col_sqerr(model.matfac.noise_model,
+                                 model.matfac,
+                                 model.data; capacity=capacity)
+    col_vars ./= MF.column_nonnan(model.data)
 
     # Set its batch scales
     v_println("Setting batch scales..."; verbosity=verbosity,
                                          prefix=print_prefix)
     ba_vars = ba_map((ba, m, d) -> MF.link_col_sqerr(m.noise_model,m,d) ./ MF.column_nonnan(d),
-                     batch_model.matfac.col_transform.layers[4].theta,
-                     batch_model.matfac, batch_model.data)
+                     theta_ba, model.matfac, model.data)
    
-    # Divide batch vars by column vars to obtain "raw" deltas
+    # Divide batch vars by column vars to obtain "raw" delta^2's
+    col_ranges = theta_ba.col_ranges
+    delta2_ba = deepcopy(theta_ba)
+    delta2_ba.values = map((v, cr) -> v ./ view(col_vars, cr), ba_vars, col_ranges)
 
     # Update the estimated batch parameters in an EB fashion
+    
 
     # Set the model's parameters to the fitted values
 
     # Reweight the model's regularizers
-
+    
+    model.matfac = orig_matfac
 end
 
 #######################################################################
