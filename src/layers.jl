@@ -102,7 +102,12 @@ function BatchScale(col_batches, batch_dict)
 
     unq_cbi = unique(col_batches)
     col_ranges = ids_to_ranges(col_batches)
-    values = [Dict(urb => zeros(length(cr)) for urb in unique(batch_dict[cbid])) for (cr, cbid) in zip(col_ranges, unq_cbi)]
+
+    used_idx = Int[i for (i, cbi) in enumerate(unq_cbi) if haskey(batch_dict, cbi)]
+    used_col_ranges = col_ranges[used_idx]
+    used_cbi = unq_cbi[used_idx]
+
+    values = [Dict(urb => zeros(length(cr)) for urb in unique(batch_dict[cbid])) for (cr, cbid) in zip(used_col_ranges, used_cbi)]
     logdelta = BatchArray(col_batches, batch_dict, values)
 
     return BatchScale(logdelta)
@@ -116,7 +121,11 @@ end
 
 function view(bs::BatchScale, idx1, idx2)
     if typeof(idx2) == Colon
-        idx2 = 1:bs.logdelta.col_ranges[end].stop
+        stp = 0
+        if length(bs.logdelta.col_ranges) > 0
+            stp = bs.logdelta.col_ranges[end].stop
+        end
+        idx2 = 1:stp
     end
     return BatchScale(view(bs.logdelta, idx1, idx2)) 
 end
@@ -153,8 +162,12 @@ function BatchShift(col_batches, batch_dict)
     
     unq_cbi = unique(col_batches)
     col_ranges = ids_to_ranges(col_batches)
-    #values = [Dict(urb => 0.0 for urb in unique(batch_dict[k])) for k in unq_cbi]
-    values = [Dict(urb => zeros(length(cr)) for urb in unique(batch_dict[cbid])) for (cr, cbid) in zip(col_ranges, unq_cbi)]
+    
+    used_idx = Int[i for (i, cbi) in enumerate(unq_cbi) if haskey(batch_dict, cbi)]
+    used_col_ranges = col_ranges[used_idx]
+    used_cbi = unq_cbi[used_idx]
+
+    values = [Dict(urb => zeros(length(cr)) for urb in unique(batch_dict[cbid])) for (cr, cbid) in zip(used_col_ranges, used_cbi)]
     theta = BatchArray(col_batches, batch_dict, values)
 
     return BatchShift(theta)
@@ -168,7 +181,11 @@ end
 
 function view(bs::BatchShift, idx1, idx2)
     if typeof(idx2) == Colon
-        idx2 = 1:bs.theta.col_ranges[end].stop
+        stp = 0
+        if length(bs.theta.col_ranges) > 0
+            stp = bs.theta.col_ranges[end].stop
+        end
+        idx2 = 1:stp
     end
     return BatchShift(view(bs.theta, idx1, idx2))
 end

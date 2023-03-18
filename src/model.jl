@@ -153,7 +153,7 @@ function PathMatFacModel(D::AbstractMatrix{<:Real};
     if batch_dict != nothing
         @assert feature_views != nothing "`feature_views` must be provided whenever `batch_dict` is provided"
         @assert sample_conditions != nothing "`sample_conditions` must be provided whenever `batch_dict` is provided"
-        @assert Set(keys(batch_dict)) == Set(unique(feature_views)) "The `batch_dict` keys must match the set of `feature_views`"
+        @assert issubset(Set(keys(batch_dict)), Set(unique(feature_views))) "The `batch_dict` keys must be a subset of `feature_views`"
         for v in values(batch_dict)
             @assert length(v) == M "Each value of `batch_dict` must be a vector of length size(D,1)"
         end

@@ -321,23 +321,20 @@ end
 
 mutable struct GroupRegularizer
     group_labels::AbstractVector
-    group_idx::AbstractMatrix{Float32}
-    group_weights::AbstractVector
-    central_weight::Float32
-    group_sizes::AbstractVector
+    group_idx::Tuple
+    group_weights::Tuple
+    group_centers::Tuple
 end
 
 @functor GroupRegularizer
 
-function GroupRegularizer(group_labels::AbstractVector; weight=1.0, centrality=0.1, K=1)
+function GroupRegularizer(group_labels::AbstractVector; weight=1.0, K=1)
     unq_labels = unique(group_labels)
-    idx = ids_to_ind_mat(group_labels)
-    idx = sparse(idx)
-    group_sizes = transpose(idx)*ones(length(group_labels))
-    n_groups = size(idx, 2)
-    weights = fill((1-centrality)*weight, n_groups)
-    central_weight = centrality*weight
-    return GroupRegularizer(unq_labels, idx, weights, central_weight, group_sizes)
+    idx = ids_to_ranges(group_labels)
+    n_groups = length(unq_labels)
+    weights = fill(weight, n_groups)
+    centers = [zeros(K) for _=1:n_groups]
+    return GroupRegularizer(unq_labels, Tuple(idx), Tuple(weights), Tuple(centers))
 end
 
 
@@ -345,6 +342,9 @@ function construct_new_group_reg(new_group_labels::AbstractVector,
                                  old_regularizer::GroupRegularizer, 
                                  old_array::AbstractMatrix; 
                                  mixture_p=1.0)
+
+    K = size(old_array, 1)
+
     # Make a copy of the old regularizer and reweight it in an
     # empirical Bayes fashion.
     old_reg_copy = deepcopy(old_regularizer)
@@ -362,71 +362,44 @@ function construct_new_group_reg(new_group_labels::AbstractVector,
 
     # Copy weights from the old regularizer to the new one,
     # whenever appropriate
-    new_weights[new_intersect_idx] .= old_reg_copy.group_weights[old_intersect_idx]
+    new_weights[new_intersect_idx] .= collect(old_reg_copy.group_weights[old_intersect_idx])
+
+    # Construct a vector of group centers for the new regularizer.
+    # By default, set it to the mean of the old centers.
+    expected_center = sum(old_reg_copy.group_centers) ./ length(old_reg_copy.group_centers)
+    new_centers = [copy(expected_center) for _=1:length(unq_new_labels)]
+    for (ni, oi) in zip(new_intersect_idx, old_intersect_idx)
+        new_centers[ni] .= old_reg_copy.group_centers[oi]
+    end
 
     # Finally: construct the sparse index matrix for the new regularizer
-    new_idx = ids_to_ind_mat(new_group_labels)
-    new_idx = sparse(new_idx)
-    new_group_sizes = transpose(new_idx) * ones(length(new_group_labels))
+    new_group_idx = ids_to_ranges(new_group_labels)
 
     # Return the completed regularizer
-    return GroupRegularizer(unq_new_labels, new_idx, new_weights, 
-                            old_reg_copy.central_weight, new_group_sizes)
+    return GroupRegularizer(unq_new_labels, 
+                            Tuple(new_group_idx), 
+                            Tuple(new_weights), 
+                            Tuple(new_centers))
 end
 
-function reweight_eb!(gr::GroupRegularizer, X::AbstractMatrix; mixture_p=1.0)
-    # Compute the group-wise variances from X
-    means = transpose((X * gr.group_idx)) ./ gr.group_sizes
-    mean_mat = transpose(gr.group_idx * means)
-    diffs = X .- mean_mat
-    diff_sq = diffs.*diffs
-    group_vars = transpose((diff_sq * gr.group_idx)) ./ gr.group_sizes
-    group_vars = vec(mean(group_vars, dims=2))
-    X_var = var(X)
 
-    # Set the group weights to their inverse variances
-    gr.group_weights .= mixture_p ./ group_vars
-    # Central weight comes from whatever variance in X
-    # isn't explained by group variances
-    avg_group_weight = dot(gr.group_sizes,gr.group_weights)./sum(gr.group_sizes)
-    gr.central_weight = mixture_p .* (1/X_var - avg_group_weight)
+function reweight_eb!(gr::GroupRegularizer, X::AbstractMatrix; mixture_p=1.0)
+    new_centers = map(idx -> vec(mean(view(X,:,idx), dims=2)), gr.group_idx)
+    new_vars = map(idx -> var(view(X,:,idx)), gr.group_idx)
+    new_weights = map(v -> 1/v, new_vars)
+    
+    gr.group_centers = new_centers
+    gr.group_weights = new_weights
 end
 
 
 function (gr::GroupRegularizer)(X::AbstractMatrix)
-
-
-    group_weight_vec = gr.group_idx * gr.group_weights
-    full_weight_vec = group_weight_vec .+ gr.central_weight
-    shrinkage_vec = group_weight_vec ./ full_weight_vec
-
-    means = transpose((X * gr.group_idx)) ./ gr.group_sizes
-    mean_mat = transpose(gr.group_idx * means) .* transpose(shrinkage_vec)
-    diffs = X .- mean_mat
-
-    return 0.5*sum(transpose(full_weight_vec) .* diffs.*diffs) 
+    return 0.5*sum( map((c, w, idx)->w*sum((view(X,:,idx) .- c).^2), 
+                         gr.group_centers, gr.group_weights, gr.group_idx
+                        ) 
+                  )
 end
 
-
-function ChainRulesCore.rrule(gr::GroupRegularizer, X::AbstractMatrix)
-
-    group_weight_vec = gr.group_idx * gr.group_weights
-    full_weight_vec = group_weight_vec .+ gr.central_weight
-    shrinkage_vec = group_weight_vec ./ full_weight_vec
-
-    means = transpose((X * gr.group_idx)) ./ gr.group_sizes
-    mean_mat = transpose(gr.group_idx * means) .* transpose(shrinkage_vec)
-    diffs = X .- mean_mat
-    g = transpose(full_weight_vec) .* diffs
-
-    function group_reg_pullback(loss_bar)
-        return ChainRulesCore.NoTangent(), 
-               loss_bar.* g 
-    end
-    loss = 0.5*sum(g .* diffs)
-
-    return loss, group_reg_pullback
-end
 
 function (gr::GroupRegularizer)(layer::FrozenLayer)
     return 0.0

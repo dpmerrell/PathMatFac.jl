@@ -166,9 +166,16 @@ end
 
 # Assume ranges are nonoverlapping, and in sorted order.
 function subset_ranges(ranges::Vector, rng::UnitRange) 
-   
+
+    if length(ranges) == 0
+        return UnitRange[], 1, 0
+    end  
+ 
     r_min = max(rng.start, ranges[1].start)
     r_max = min(rng.stop, ranges[end].stop)
+    if r_min > r_max
+        return UnitRange[], 1, 0 
+    end
     @assert r_min <= r_max
 
     @assert r_min >= ranges[1].start
@@ -186,6 +193,10 @@ function subset_ranges(ranges::Vector, rng::UnitRange)
     if (r_max < ranges[r_max_idx].start)
         r_max_idx -= 1
         r_max = ranges[r_max_idx].stop
+    end
+
+    if r_min_idx > r_max_idx
+        return UnitRange[], 1, 0
     end
 
     new_ranges = ranges[r_min_idx:r_max_idx]
@@ -425,16 +436,18 @@ end
 
 function construct_row_selector(rs::SparseMatrixCSC, idx::AbstractVector{Int})
     M = length(idx)
-    N = rs.n
+    #N = rs.n
+    N = rs.m
     I = collect(1:M)
-    J = collect(idx)
+    J = idx
     V = ones(Bool, M)
     return sparse(I, J, V, M, N)
 end
 
 function construct_row_selector(rs::SparseMatrixCSC, idx::UnitRange)
     M = length(idx)
-    N = rs.n
+    #N = rs.n
+    N = rs.m
     I = collect(1:M)
     J = collect(idx)
     V = ones(Bool, M)
@@ -445,7 +458,7 @@ end
 function construct_row_selector(rs::CUDA.CUSPARSE.CuSparseMatrixCSC, idx::UnitRange)
 
     M = length(idx)
-    N = rs.dims[2]
+    N = rs.dims[1]
     I = similar(rs.rowVal, M)
     I .= 1
     I .= cumsum(I)

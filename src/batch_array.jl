@@ -206,6 +206,12 @@ function exp(ba::BatchArray)
 end
 
 
+# Not sure why ChainRulesCore doesn't handle this case as-is... 
+function Base.map(f::Function, t::ChainRulesCore.ZeroTangent, tup::Tuple{})
+    return ()
+end
+
+
 function ChainRulesCore.rrule(::typeof(exp), ba::BatchArray)
     Z = exp(ba)
 
