@@ -22,6 +22,7 @@ WEIGHT_MAP = Dict("mrnaseq" => 1.0,
                   "cna" => 1.0,
                   "rppa" => 1.0)
 
+BATCHED_ASSAYS = Set(["mrnaseq","methylation"])
 
 function column_variances(data::AbstractMatrix)
     nan_idx = (!isfinite).(data)

@@ -44,7 +44,9 @@ function load_batches(omic_hdf, omic_types)
     
     result = Dict()
     for a in omic_types
-        result[a] = map(barcode_to_batch, barcode_data[:,assay_to_col[a]])
+        if a in BATCHED_ASSAYS
+            result[a] = map(barcode_to_batch, barcode_data[:,assay_to_col[a]])
+        end
     end
 
     return result
@@ -52,10 +54,10 @@ end
 
 function save_transformed(transformed_X, instances, instance_groups, target, output_hdf)
 
-    h5write(transformed_X, output_hdf, "X")
-    h5write(instances, output_hdf, "instances")
-    h5write(instance_groups, output_hdf, "instance_groups")
-    h5write(target, output_hdf, "target")
+    h5write(output_hdf, "X", transformed_X)
+    h5write(output_hdf, "instances", instances)
+    h5write(output_hdf, "instance_groups", instance_groups)
+    h5write(output_hdf, "target", target)
 
 end
 
@@ -267,7 +269,7 @@ function main(args)
     # SAVE RESULTS 
     ########################################################
     save_model(model, fitted_bson)
-    save_transformed(transpose(model.matfac.X), 
+    save_transformed(permutedims(model.matfac.X), 
                      sample_ids, sample_conditions, 
                      target, transformed_hdf)
 
