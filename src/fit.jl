@@ -206,7 +206,7 @@ function theta_delta_fixpoint(model::MF.MatFacModel, delta2::Tuple, sigma2::Abst
 
     alpha, beta = delta2_eb_mom(delta2)
 
-    batch_sizes = ba_map((ba, d)->vec(sum(MF.column_nonnan(d), dims=1)), data)
+    batch_sizes = ba_map((ba, d)->vec(sum(MF.column_nonnan(d), dims=1)), theta, data)
 
     diffs = MutableLinkedList() 
     for iter=1:batch_eb_max_iter
