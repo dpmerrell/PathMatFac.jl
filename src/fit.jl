@@ -76,7 +76,7 @@ function init_theta!(model::PathMatFacModel, opt; capacity=Int(10e8), max_epochs
     freeze_layer!(model.matfac.col_transform, 1:3)
 
     orig_lr = opt.eta 
-    opt.eta *= 0.01
+    opt.eta *= 0.05
 
     h = mf_fit!(model; update_col_layers=true, capacity=capacity,
                        max_epochs=max_epochs, opt=opt,
@@ -203,21 +203,24 @@ function theta_delta_fixpoint(model::MF.MatFacModel, delta2::Tuple, sigma2::Abst
     mu = model.col_transform.layers[3].mu
 
     theta_mean, theta_var = theta_eb_mom(theta.values)
-
     alpha, beta = delta2_eb_mom(delta2)
 
-    batch_sizes = ba_map((ba, d)->vec(sum(MF.column_nonnan(d), dims=1)), theta, data)
+    batch_sizes = ba_map((ba, d)->MF.column_nonnan(d), theta, data)
 
     diffs = MutableLinkedList() 
     for iter=1:batch_eb_max_iter
 
         batch_col_sqerr = ba_map((ba, m, d) -> MF.link_col_sqerr(m.noise_model,m,d),
                                  theta, model, data)
-        nans_to_val!(batch_col_sqerr, 0) 
+        nans_to_val!(batch_col_sqerr, 0)
+ 
         delta2_new = map((a, b, sq, bs, cr) -> (b .+ 0.5.*(sq ./ transpose(view(sigma2, cr)))) ./ (a .+ (0.5.*bs)), 
-                         alpha, beta, batch_col_sqerr, batch_sizes, theta.col_ranges) 
+                         alpha, beta, batch_col_sqerr, batch_sizes, theta.col_ranges)
+        nans_to_val!(delta2_new, 1) 
+ 
         theta.values = map((e_th, v_th, d2, th_lsq, bs, cr)-> (e_th.*d2.*transpose(view(sigma2, cr)) .+ th_lsq.*bs.*v_th)./(transpose(view(sigma2, cr)).*d2 .+ bs.*v_th), 
-                           theta_mean, theta_var, delta2, theta_lsq, batch_sizes, theta.col_ranges)
+                           theta_mean, theta_var, delta2_new, theta_lsq, batch_sizes, theta.col_ranges)
+        nans_to_val!(delta2_new, 0) 
 
         delta2_diff = sum(map((d2,d2n)->sum((d2 .- d2n).^2), delta2, delta2_new))/sum(map(d2->sum(d2.*d2), delta2))
         v_println("(",iter, ") ||δ - δ'||^2/||δ||^2 : ", delta2_diff; verbosity=verbosity, prefix=print_prefix)
@@ -265,8 +268,6 @@ function init_batch_effects!(model::PathMatFacModel, opt; capacity=Int(10e8),
     init_mu!(model, opt; capacity=capacity, max_epochs=max_epochs, 
                                verbosity=verbosity-1, print_prefix=n_pref,
                                history=history, kwargs...)
-    println("COLUMN SHIFTS:")
-    println(model.matfac.col_transform.layers[3])
 
     v_println("Regressing against sample conditions..."; verbosity=verbosity,
                                                          prefix=print_prefix)
@@ -294,8 +295,6 @@ function init_batch_effects!(model::PathMatFacModel, opt; capacity=Int(10e8),
                             verbosity=verbosity-1, print_prefix=n_pref, 
                             history=history, kwargs...)
     nans_to_val!(model.matfac.col_transform.layers[4].theta.values, 0)
-    println("LSQ BATCH SHIFTS:")
-    println(map(th->mean(th, dims=2), model.matfac.col_transform.layers[4].theta.values))
     theta_ba = deepcopy(model.matfac.col_transform.layers[4].theta)
 
     # Set its column scales
@@ -307,8 +306,6 @@ function init_batch_effects!(model::PathMatFacModel, opt; capacity=Int(10e8),
                                      model.matfac,
                                      model.data; capacity=capacity))
     col_vars ./= vec(MF.column_nonnan(model.data))
-    println("COLUMN SCALES:")
-    println(col_vars)
     # Set NaNs to 1
     col_vars[(!isfinite).(col_vars)] .= 1
 
@@ -323,19 +320,11 @@ function init_batch_effects!(model::PathMatFacModel, opt; capacity=Int(10e8),
     col_ranges = theta_ba.col_ranges
     delta2_values = map((v, cr) -> v ./ transpose(view(col_vars, cr)), ba_vars, col_ranges)
 
-    println("LSQ BATCH SCALES:")
-    println(map(d2->mean(d2,dims=2), delta2_values))
-
     # Update the estimated batch parameters in an EB fashion
     v_println("Batch effect EB procedure:"; prefix=print_prefix, verbosity=verbosity)
     theta_values, delta2_values = theta_delta_fixpoint(model.matfac, delta2_values, col_vars, model.data;
                                                        batch_eb_max_iter=batch_eb_max_iter,
                                                        print_prefix=n_pref, verbosity=verbosity) 
-
-    println("EB-ADJUSTED BATCH SCALES:")
-    println(map(d2->mean(d2,dims=2), delta2_values))
-    println("EB-ADJUSTED BATCH SHIFTS:")
-    println(map(th->mean(th,dims=2), model.matfac.col_transform.layers[4].theta.values))
 
     # Set the model's parameters to the fitted values
     model.matfac = orig_matfac
@@ -459,7 +448,7 @@ function basic_fit!(model::PathMatFacModel; fit_batch=false,
         unfreeze_layer!(model.matfac.col_transform, 3:4) # batch and column shift 
         v_println("Jointly adjusting parameters..."; verbosity=verbosity, prefix=print_prefix)
         orig_lr = opt.eta
-        opt.eta *= 0.01
+        opt.eta *= 0.05
         h = mf_fit!(model; capacity=capacity, update_X=true, update_Y=true,
                                               update_col_layers=true,
                                               opt=opt,
@@ -667,10 +656,13 @@ function fit_ard!(model::PathMatFacModel; lr=0.05, opt=nothing,
     v_println("Adjusting with ARD on Y..."; verbosity=verbosity,
                                            prefix=print_prefix)
     model.matfac.Y_reg = orig_ard
+    orig_lr = opt.eta
+    opt.eta *= 0.05
     basic_fit!(model; opt=opt, fit_factors=true, 
                                verbosity=verbosity,
                                print_prefix=n_pref,
                                kwargs...)
+    opt.eta = orig_lr
 
 end
 
