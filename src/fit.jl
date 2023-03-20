@@ -76,7 +76,7 @@ function init_theta!(model::PathMatFacModel, opt; capacity=Int(10e8), max_epochs
     freeze_layer!(model.matfac.col_transform, 1:3)
 
     orig_lr = opt.eta 
-    opt.eta *= 0.05
+    opt.eta = 0.001
 
     h = mf_fit!(model; update_col_layers=true, capacity=capacity,
                        max_epochs=max_epochs, opt=opt,
@@ -448,7 +448,7 @@ function basic_fit!(model::PathMatFacModel; fit_batch=false,
         unfreeze_layer!(model.matfac.col_transform, 3:4) # batch and column shift 
         v_println("Jointly adjusting parameters..."; verbosity=verbosity, prefix=print_prefix)
         orig_lr = opt.eta
-        opt.eta *= 0.05
+        opt.eta = 0.001
         h = mf_fit!(model; capacity=capacity, update_X=true, update_Y=true,
                                               update_col_layers=true,
                                               opt=opt,
@@ -657,7 +657,7 @@ function fit_ard!(model::PathMatFacModel; lr=0.05, opt=nothing,
                                            prefix=print_prefix)
     model.matfac.Y_reg = orig_ard
     orig_lr = opt.eta
-    opt.eta *= 0.05
+    opt.eta = 0.001
     basic_fit!(model; opt=opt, fit_factors=true, 
                                verbosity=verbosity,
                                print_prefix=n_pref,
