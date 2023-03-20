@@ -103,11 +103,15 @@ function BatchScale(col_batches, batch_dict)
     unq_cbi = unique(col_batches)
     col_ranges = ids_to_ranges(col_batches)
 
-    used_idx = Int[i for (i, cbi) in enumerate(unq_cbi) if haskey(batch_dict, cbi)]
-    used_col_ranges = col_ranges[used_idx]
-    used_cbi = unq_cbi[used_idx]
+    values = [Dict() for cb in unq_cbi]
+    for (k, (cbi, cr)) in enumerate(zip(unq_cbi, col_ranges))
+        if haskey(batch_dict, cbi)
+            for rb in unique(batch_dict[cbi])
+                values[k][rb] = zeros(length(cr))
+            end
+        end 
+    end
 
-    values = [Dict(urb => zeros(length(cr)) for urb in unique(batch_dict[cbid])) for (cr, cbid) in zip(used_col_ranges, used_cbi)]
     logdelta = BatchArray(col_batches, batch_dict, values)
 
     return BatchScale(logdelta)
@@ -163,19 +167,17 @@ function BatchShift(col_batches, batch_dict)
     unq_cbi = unique(col_batches)
     col_ranges = ids_to_ranges(col_batches)
     
-    used_idx = Int[i for (i, cbi) in enumerate(unq_cbi) if haskey(batch_dict, cbi)]
-    used_col_ranges = col_ranges[used_idx]
-    used_cbi = unq_cbi[used_idx]
-
-    values = [Dict(urb => zeros(length(cr)) for urb in unique(batch_dict[cbid])) for (cr, cbid) in zip(used_col_ranges, used_cbi)]
+    values = [Dict() for cb in unq_cbi]
+    for (k, (cbi, cr)) in enumerate(zip(unq_cbi, col_ranges))
+        if haskey(batch_dict, cbi)
+            for rb in unique(batch_dict[cbi])
+                values[k][rb] = zeros(length(cr))
+            end
+        end 
+    end
     theta = BatchArray(col_batches, batch_dict, values)
 
     return BatchShift(theta)
-end
-
-
-function (bs::BatchShift)(Z::AbstractMatrix)
-    return Z + bs.theta
 end
 
 
@@ -194,12 +196,23 @@ function Base.getindex(bs::BatchShift, idx1, idx2)
     return view(bs, idx1, idx2)
 end
 
+
+function (bs::BatchShift)(Z::AbstractMatrix)
+    return Z + bs.theta
+end
+
 function ChainRulesCore.rrule(bs::BatchShift, Z::AbstractMatrix)
     
     result, pb = Zygote.pullback((z,t) -> z + t, Z, bs.theta)
 
+    #println("RESULT OF BATCH SHIFT")
+    #println(result)
     function batchshift_pullback(result_bar)
-        Z_bar, theta_bar = pb(result_bar) 
+        Z_bar, theta_bar = pb(result_bar)
+        #println("GRADIENT OF BATCH SHIFT W.R.T. Z")
+        #println(Z_bar) 
+        #println("GRADIENT OF BATCH SHIFT W.R.T. LAYER")
+        #println(theta_bar) 
         return ChainRulesCore.Tangent{BatchShift}(theta=theta_bar),
                Z_bar
     end

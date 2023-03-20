@@ -125,6 +125,14 @@ function batch_array_tests()
         values = [Dict(1=>fill(3.14,3), 2=>fill(2.7,3)), Dict(), Dict(1=>fill(0.0,2), 2=>fill(0.5,2)), Dict(1=>fill(-1.0,1), 2=>fill(1.0,1))]
         A = zeros(5,7)
 
+        ## Fit batch shift
+        #sample_conditions = [1,1,2,2,2]
+        #model = PathMatFacModel(A; K=2, sample_conditions=sample_conditions, feature_views=col_batches, batch_dict=row_batches)
+        #model.matfac.X .= 0
+        #model.matfac.Y .= 0
+        #PM.freeze_layer!(model.matfac.col_transform, [1,2,3])
+        #PM.mf_fit!(model; max_epochs=10, verbosity=2, update_layers=true)
+
         ##############################
         # Constructor
         ba = PM.BatchArray(col_batches, row_batches, values)
@@ -1156,7 +1164,7 @@ function fit_tests()
         X_start = deepcopy(model.matfac.X)
         Y_start = deepcopy(model.matfac.Y)
         batch_scale = deepcopy(model.matfac.col_transform.layers[2]) 
-        fit!(model; verbosity=1, lr=0.05, max_epochs=1000, print_iter=10, rel_tol=1e-7, abs_tol=1e-7)
+        fit!(model; verbosity=2, lr=0.05, max_epochs=1000, print_iter=10, rel_tol=1e-7, abs_tol=1e-7)
 
         @test !isapprox(model.matfac.X, X_start)
         @test !isapprox(model.matfac.Y, Y_start)
@@ -1208,7 +1216,7 @@ function fit_tests()
         X_start = deepcopy(model.matfac.X)
         Y_start = deepcopy(model.matfac.Y)
         batch_scale = deepcopy(model.matfac.col_transform.layers[2]) 
-        fit!(model; verbosity=1, lr=0.05, max_epochs=1000, print_iter=10, rel_tol=1e-5, abs_tol=1e-5,
+        fit!(model; verbosity=2, lr=0.05, max_epochs=1000, print_iter=10, rel_tol=1e-5, abs_tol=1e-5,
                     fsard_term_rtol=1e-3,
                     fsard_max_iter=10,
                     fsard_max_A_iter=500,
@@ -1237,7 +1245,7 @@ function fit_tests()
         batch_scale = deepcopy(model.matfac.col_transform.layers[2])
 
         model = gpu(model) 
-        fit!(model; verbosity=1, lr=0.05, max_epochs=1000, print_iter=10, rel_tol=1e-5, abs_tol=1e-5,
+        fit!(model; verbosity=2, lr=0.05, max_epochs=1000, print_iter=10, rel_tol=1e-5, abs_tol=1e-5,
                     fsard_term_rtol=1e-3,
                     fsard_max_iter=10,
                     fsard_max_A_iter=500,
@@ -1428,7 +1436,7 @@ function main()
     #featureset_ard_tests()
     #model_tests()
     #score_tests()
-    #fit_tests()
+    fit_tests()
     transform_tests()
     model_io_tests()
     #simulation_tests()

@@ -112,7 +112,6 @@ function ChainRulesCore.rrule(::typeof(+), A::AbstractMatrix, B::BatchArray)
         values_bar = map(zero, B.values) # Just sum the result tangents corresponding
                                          # to each value of B
         for (j, cbr) in enumerate(B.col_ranges)
-            #values_bar[j] .= vec(sum(transpose(B.row_batches[j]) * view(result_bar,:,cbr); dims=2)) 
             values_bar[j] .= transpose(B.row_batches[j]) * view(result_bar,:,cbr) 
         end
         B_bar = Tangent{BatchArray}(values=values_bar)
