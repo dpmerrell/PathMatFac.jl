@@ -55,7 +55,6 @@ function init_mu!(model::PathMatFacModel, opt; capacity=Int(10e8), max_epochs=50
                                     opt=opt, verbosity=verbosity, print_prefix=print_prefix,
                                     keep_history=keep_history,
                                     rel_tol=1e-6, abs_tol=1e-3) 
-   
     # Awkwardly handle the variable-length output
     h = nothing
     M_estimates = result
@@ -70,7 +69,7 @@ end
 
 
 function init_theta!(model::PathMatFacModel, opt; capacity=Int(10e8), max_epochs=500,
-                                                  lr_theta=0.001,
+                                                  lr_theta=0.005,
                                                   verbosity=1, print_prefix="", 
                                                   history=nothing, kwargs...)
     # Freeze everything except batch shift... 
@@ -269,6 +268,7 @@ function init_batch_effects!(model::PathMatFacModel, opt; capacity=Int(10e8),
     init_mu!(model, opt; capacity=capacity, max_epochs=max_epochs, 
                                verbosity=verbosity-1, print_prefix=n_pref,
                                history=history, kwargs...)
+    orig_matfac.col_transform.layers[3].mu .= model.matfac.col_transform.layers[3].mu
 
     v_println("Regressing against sample conditions..."; verbosity=verbosity,
                                                          prefix=print_prefix)
@@ -349,6 +349,7 @@ function whiten!(model::PathMatFacModel)
     X_std = std(model.matfac.X, dims=2)
     model.matfac.X ./= X_std
     model.matfac.Y .*= X_std
+    return
 end
 
 
@@ -366,7 +367,7 @@ function basic_fit!(model::PathMatFacModel; fit_batch=false,
                                             whiten=false,
                                             capacity=Int(10e8),
                                             opt=nothing, lr=0.05, max_epochs=1000,
-                                            lr_joint=0.001, 
+                                            lr_joint=0.0005, 
                                             verbosity=1, print_prefix="",
                                             history=nothing,
                                             kwargs...)
@@ -631,7 +632,7 @@ end
 ############################################
 # Fit models with ARD regularization on Y
 
-function fit_ard!(model::PathMatFacModel; lr=0.05, ard_lr=0.005, opt=nothing, 
+function fit_ard!(model::PathMatFacModel; lr=0.05, ard_lr=0.01, opt=nothing, 
                                           verbosity=1, print_prefix="", 
                                           kwargs...)
 
