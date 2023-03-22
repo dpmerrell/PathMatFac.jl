@@ -1,6 +1,6 @@
 
 import Base: view, zero, exp, log, deepcopy
-import Flux: gpu, trainable
+import Adapt: adapt_storage 
 
 mutable struct BatchArray
     col_ranges::Tuple # UnitRanges
@@ -14,9 +14,35 @@ mutable struct BatchArray
     values::Tuple # Matrices of numbers
 end
 
-@functor BatchArray
+#@functor BatchArray
+
+# Julia's CUDA package doesn't implement multiplication
+# for sparse boolean matrices -- so we make sure they're
+# Float32 matrices on the GPU
+function Adapt.adapt_storage(to::Flux.FluxCUDAAdaptor, ba::BatchArray)
+    return BatchArray(CUDA.cu(ba.col_ranges),
+                      deepcopy(ba.col_range_ids),
+                      CUDA.cu(SparseMatrixCSC{Float32,Int32}(ba.row_selector)),
+                      Tuple([CUDA.cu(SparseMatrixCSC{Float32,Int32}(rb)) for rb in ba.row_batches]),
+                      deepcopy(ba.row_batch_ids),
+                      Flux.gpu(ba.values)
+                     )
+end
+
+
+# ...and when we move back to CPU, translate back to Bool
+function Adapt.adapt_storage(to::Flux.FluxCPUAdaptor, ba::BatchArray)
+    return BatchArray(Flux.cpu(ba.col_ranges),
+                      deepcopy(ba.col_range_ids),
+                      SparseMatrixCSC{Bool,Int}(Flux.cpu(ba.row_selector)),
+                      Tuple([SparseMatrixCSC{Bool,Int}(Flux.cpu(rb)) for rb in ba.row_batches]),
+                      Flux.cpu(ba.row_batch_ids),
+                      Flux.cpu(ba.values)
+                     )
+end
 
 Flux.trainable(ba::BatchArray) = (values=ba.values,)
+
 
 function BatchArray(feature_views::Vector, row_batch_dict::AbstractDict, 
                     value_dicts::Vector{<:AbstractDict})
@@ -53,6 +79,7 @@ function BatchArray(feature_views::Vector, row_batch_dict::AbstractDict,
 end
 
 
+
 function view(ba::BatchArray, idx1, idx2::UnitRange)
 
     new_col_ranges, r_min, r_max = subset_ranges(ba.col_ranges, idx2)
@@ -61,7 +88,7 @@ function view(ba::BatchArray, idx1, idx2::UnitRange)
 
     new_row_selector = construct_row_selector(ba.row_selector, idx1)
 
-    new_row_batches = map(b -> new_row_selector*b, ba.row_batches[r_min:r_max])
+    new_row_batches = map(b -> select_rows(new_row_selector,b), ba.row_batches[r_min:r_max])
     new_row_batch_ids = ba.row_batch_ids[r_min:r_max]
     
     value_col_ranges = map(cr -> shift_range(cr, 1 - cr.start), new_col_ranges)
@@ -251,22 +278,53 @@ end
 # Apply a function to each batch in ba, and to the
 # corresponding views of each subsequent arg.
 # Returns a tuple of matrices corresponding to ba.values.
-function ba_map(map_func, ba::BatchArray, args...)
+#function ba_map(map_func, ba::BatchArray, args...)
+#
+#    M = size(ba.row_selector, 1) 
+#    #idx = collect(1:M)
+#
+#    result = map(zero, ba.values)
+#    for (v, rb, cr, r) in zip(ba.values, ba.row_batches, ba.col_ranges, result)
+#        for k=1:size(rb,2)
+#
+#            b_idx = get_col_idx(rb, k)
+#            views = map(a->view(a, b_idx, cr), args)
+#
+#            b_v = transpose(v[k,:])
+#            r[k,:] .= map_func(b_v, views...)
+#        end
+#    end
+#    return result
+#end
 
-    M = size(ba.row_selector, 1) 
-    idx = collect(1:M)
-
-    result = map(zero, ba.values)
-    for (v, rb, cr, r) in zip(ba.values, ba.row_batches, ba.col_ranges, result)
+function ba_batch_colsums!(ba::BatchArray, D::AbstractArray)
+    # For each column batch
+    for (v, rb, cr) in zip(ba.values, ba.row_batches, ba.col_ranges)
+        # For the kth batch of rows
         for k=1:size(rb,2)
-            b_idx = idx[rb[:,k]]
-            b_v = transpose(v[k,:])
-
-            views = map(a->view(a, b_idx, cr), args)
-            r[k,:] .= map_func(b_v, views...)
+            # Get the rows (i.e., nonzero entries in column k of rb)
+            b_idx = get_col_idx(rb, k)
+            # Sum the entries of D indexed by b_idx, cr;
+            # add the result to the kth row of the values.
+            v[k,:] .+= vec(sum(view(D, b_idx, cr), dims=1))
         end
-    end
-    return result
+    end 
 end
 
+
+function ba_map(map_func, template::BatchArray, args...; capacity=10^8)
+
+    M, N = size(args[1])
+    row_batch_size = div(capacity, N)
+    result = zero(template)
+
+    for row_batch in MF.BatchIter(M, row_batch_size)
+        result_view = view(result, row_batch, 1:N)
+        view_tuple = map(a -> view(a, row_batch, :), args)
+        map_qty = map_func(view_tuple...)
+        ba_batch_colsums!(result_view, map_qty)
+    end
+
+    return result.values
+end
 

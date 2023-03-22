@@ -38,12 +38,28 @@ end
 # Hardware-agnostic, GPU-enabled functions
 ######################################################
 
-function randn_like(A::AbstractMatrix)
+function randn_like(A::CuArray)
     M, N = size(A)
-    if isa(A, CuArray)
-        return CUDA.randn(M,N)
-    end
+    return CUDA.randn(M,N)
+end
+
+function randn_like(A::Array)
+    M, N = size(A)
     return randn(M,N)
+end
+
+function zeros_like(args...)
+    result = similar(args...)
+    result .= 0
+    return result
+end
+
+function set_array!(target::CuArray, source::AbstractArray)
+    target .= gpu(source)
+end
+
+function set_array!(target::Array, source::AbstractArray)
+    target .= cpu(source)
 end
 
 
@@ -436,7 +452,6 @@ end
 
 function construct_row_selector(rs::SparseMatrixCSC, idx::AbstractVector{Int})
     M = length(idx)
-    #N = rs.n
     N = rs.m
     I = collect(1:M)
     J = idx
@@ -446,7 +461,6 @@ end
 
 function construct_row_selector(rs::SparseMatrixCSC, idx::UnitRange)
     M = length(idx)
-    #N = rs.n
     N = rs.m
     I = collect(1:M)
     J = collect(idx)
@@ -454,6 +468,34 @@ function construct_row_selector(rs::SparseMatrixCSC, idx::UnitRange)
     return sparse(I, J, V, M, N)
 end
 
+
+function construct_row_selector(rs::CUDA.CUSPARSE.CuSparseMatrixCSC, idx::AbstractVector{Int})
+
+    M = length(idx)
+    N = rs.dims[1]
+    I = similar(rs.rowVal, M)
+    I .= 1
+    I .= cumsum(I)
+    J = cu(collect(idx))
+    V = CUDA.ones(M)
+
+    coo = CUDA.CUSPARSE.CuSparseMatrixCOO(I,J,V,(M,N),M)
+    return CUDA.CUSPARSE.CuSparseMatrixCSC(coo)
+end
+
+function construct_row_selector(rs::CUDA.CUSPARSE.CuSparseMatrixCSC, idx::CuVector)
+
+    M = length(idx)
+    N = rs.dims[1]
+    I = similar(rs.rowVal, M)
+    I .= 1
+    I .= cumsum(I)
+    J = idx
+    V = CUDA.ones(M)
+
+    coo = CUDA.CUSPARSE.CuSparseMatrixCOO(I,J,V,(M,N),M)
+    return CUDA.CUSPARSE.CuSparseMatrixCSC(coo)
+end
 
 function construct_row_selector(rs::CUDA.CUSPARSE.CuSparseMatrixCSC, idx::UnitRange)
 
@@ -463,12 +505,39 @@ function construct_row_selector(rs::CUDA.CUSPARSE.CuSparseMatrixCSC, idx::UnitRa
     I .= 1
     I .= cumsum(I)
     J = cu(collect(idx))
-    V = CUDA.ones(Bool, M)
+    V = CUDA.ones(M)
 
     coo = CUDA.CUSPARSE.CuSparseMatrixCOO(I,J,V,(M,N),M)
     return CUDA.CUSPARSE.CuSparseMatrixCSC(coo)
 end
 
+# `select_rows` wraps Boolean matrix multiplication
+# and handles some weirdness specific to CUDA sparse matrices.
+function select_rows(rs::SparseMatrixCSC, rb::SparseMatrixCSC)
+    return rs * rb
+end
+
+function select_rows(rs::CUDA.CUSPARSE.CuSparseMatrixCSC, rb::CUDA.CUSPARSE.CuSparseMatrixCSC)
+    result = rs * rb
+    result.nzVal .= 1
+    return result
+end
+
+
+# Get the indices of the entries for column j in a CSC sparse matrix
+function get_col_idx(sp::SparseMatrixCSC, j)
+    idx = sp.colptr[j:(j+1)]
+    start = idx[1]
+    stop = idx[2]-1
+    return sp.rowval[start:stop]
+end
+
+function get_col_idx(sp::CUDA.CUSPARSE.CuSparseMatrixCSC, j)
+    idx = cpu(sp.colPtr[j:(j+1)])
+    start = idx[1]
+    stop = idx[2] - 1
+    return sp.rowVal[start:stop]
+end
 
 #########################################################
 # History utils

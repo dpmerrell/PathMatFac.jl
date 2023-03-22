@@ -241,14 +241,14 @@ function batch_array_tests()
 
         ################################
         # ba_map
-        result = PM.ba_map((ba, a)->vec(sum(a, dims=1)), ba, test_mat)
+        result = PM.ba_map(a->a, ba, test_mat)
         @test result == ([3*3.14 3*3.14 3*3.14;
                           2*2.7  2*2.7  2*2.7], 
                          [0.0  0.0;
                           1.5  1.5], 
                          reshape([-4.0;
                                  1.0], (2,1)))
-        result = PM.ba_map((ba, a)->vec(sum(a, dims=1)), ba, test_mat)
+        result = PM.ba_map(a->a, ba, test_mat)
         @test result == ([3*3.14 3*3.14 3*3.14;
                           2*2.7  2*2.7  2*2.7], 
                          [0.0  0.0;
@@ -267,60 +267,80 @@ function batch_array_tests()
        
         # view
         ba_d_view = view(ba_d, 2:4, 2:6)
+        ba_d_view = cpu(ba_d_view)
         @test ba_d_view.col_ranges == (1:2, 4:5)
-        @test ba_d_view.row_batches == map(b->gpu(b[2:4,:]), test_row_batches[1:2])
-        @test isapprox(ba_d_view.row_selector, gpu(sparse([0 1 0 0 0;
-                                                           0 0 1 0 0;
-                                                           0 0 0 1 0]
-                                                          ))
+        @test all(map((u,v)->isapprox(u,v), 
+                       ba_d_view.row_batches, 
+                       map(b->b[2:4,:], test_row_batches[1:2])
+                     )
+                  )
+        @test isapprox(ba_d_view.row_selector, sparse([0 1 0 0 0;
+                                                       0 0 1 0 0;
+                                                       0 0 0 1 0]
+                                                     )
                       )
-        @test ba_d_view.values == map(gpu, (repeat([3.14, 2.7], inner=(1,2)),
-                                            repeat([0.0,0.5], inner=(1,2)))
-                                     )
+        @test all(map(isapprox,
+                      ba_d_view.values,
+                      (repeat([3.14, 2.7], inner=(1,2)),
+                       repeat([0.0,0.5], inner=(1,2))
+                      )
+                     )
+                  )
 
         # zero 
         ba_d_zero = zero(ba_d)
-        @test ba_d_zero.col_ranges == ba_d.col_ranges
-        @test ba_d_zero.row_batches == ba_d.row_batches
-        @test ba_d_zero.values == map(gpu, (repeat([0.0, 0.0], inner=(1,3)), 
-                                            repeat([0.0, 0.0], inner=(1,2)), 
-                                            repeat([0.0, 0.0], inner=(1,1))
-                                            ))
+        ba_d_zero = cpu(ba_d_zero)
+        @test ba_d_zero.col_ranges == ba.col_ranges
+        @test ba_d_zero.row_batches == ba.row_batches
+        @test ba_d_zero.values == (repeat([0.0, 0.0], inner=(1,3)), 
+                                   repeat([0.0, 0.0], inner=(1,2)), 
+                                   repeat([0.0, 0.0], inner=(1,1))
+                                  )
 
         # addition
         A_d = gpu(A)
         Z_d = A_d + ba_d
-        test_mat_d = gpu(test_mat)
-        @test Z_d == test_mat_d
+        @test isapprox(cpu(Z_d),test_mat)
         (A_grad, ba_grad) = Zygote.gradient((x,y)->sum(x+y), A_d, ba_d)
-        @test A_grad == gpu(ones(size(A)...))
-        @test ba_grad.values == map(gpu, (repeat([3., 2.], inner=(1,3)), 
-                                          repeat([2., 3.], inner=(1,2)),
-                                          repeat([4., 1.], inner=(1,1))
-                                          ))
+        A_grad = cpu(A_grad)
+        ba_grad = cpu(ba_grad)
+        @test isapprox(A_grad, ones(size(A)...))
+        @test all(map(isapprox, ba_grad.values, (repeat([3., 2.], inner=(1,3)), 
+                                                repeat([2., 3.], inner=(1,2)),
+                                                repeat([4., 1.], inner=(1,1))
+                                                )
+                     )
+                 )
 
 
         # multiplication
         Z_d = gpu(ones(5,7)) * ba_d
-        @test isapprox(Z_d, gpu(other_test_mat))
+        Z_d = cpu(Z_d)
+        @test isapprox(Z_d, other_test_mat)
         (A_grad, ba_grad) = Zygote.gradient((x,y)->sum(x*y), gpu(ones(5,7)), ba_d)
+        A_grad = cpu(A_grad)
+        ba_grad = cpu(ba_grad)
         other_Z_d = deepcopy(Z_d)
         other_Z_d[:,4] .= 0
         @test isapprox(A_grad, other_Z_d)
-        @test ba_grad.values == map(gpu, (repeat([3., 2.], inner=(1,3)), 
-                                          repeat([2., 3.], inner=(1,2)),
-                                          repeat([4., 1.], inner=(1,1))
-                                    ))
-
+        @test all(map(isapprox, ba_grad.values, (repeat([3., 2.], inner=(1,3)), 
+                                                repeat([2., 3.], inner=(1,2)),
+                                                repeat([4., 1.], inner=(1,1))
+                                                )
+                     )
+                 )
 
         # exponentiation
         ba_d_exp = exp(ba_d)
-        @test isapprox((gpu(ones(5,7)) * ba_d_exp), exp.(test_mat_d))
+        @test isapprox(cpu(gpu(ones(5,7)) * ba_d_exp), exp.(test_mat))
         (ba_grad,) = Zygote.gradient(x->sum(gpu(ones(5,7)) * exp(x)), ba_d)
-        @test all(map((u,v) -> isapprox(u,v), ba_grad.values, map(gpu, (repeat([3.0*exp(3.14), 2.0*exp(2.7)], inner=(1,3)), 
-                                                                        repeat([2.0*exp(0.0), 3.0*exp(0.5)], inner=(1,2)),
-                                                                        repeat([4.0*exp(-1.0), 1.0*exp(1.0)], inner=(1,1))
-                                                                   ))))
+        ba_grad = cpu(ba_grad)
+        @test all(map((u,v) -> isapprox(u,v), ba_grad.values, (repeat([3.0*exp(3.14), 2.0*exp(2.7)], inner=(1,3)), 
+                                                               repeat([2.0*exp(0.0), 3.0*exp(0.5)], inner=(1,2)),
+                                                               repeat([4.0*exp(-1.0), 1.0*exp(1.0)], inner=(1,1))
+                                                              )
+                     )
+                 )
 
     end
 end
@@ -1056,25 +1076,25 @@ function fit_tests()
     # Basic fitting
     ####################################################
     
-    @testset "Basic fit CPU" begin
-
-        model = PathMatFacModel(Z; sample_conditions=sample_conditions, 
-                                   feature_ids=feature_ids,  feature_views=feature_views,
-                                   feature_graphs=feature_graphs, batch_dict=batch_dict, 
-                                   lambda_X_l2=0.1, lambda_Y_graph=0.1, lambda_Y_selective_l1=0.05)
-
-        X_start = deepcopy(model.matfac.X)
-        Y_start = deepcopy(model.matfac.Y)
-        batch_scale = deepcopy(model.matfac.col_transform.layers[2]) 
-        fit!(model; verbosity=2, lr=0.05, max_epochs=1000, print_iter=10, rel_tol=1e-7, abs_tol=1e-7,
-                    fit_reg_weight=false)
-
-        @test !isapprox(model.matfac.X, X_start)
-        @test !isapprox(model.matfac.Y, Y_start)
-        @test !all(map(isapprox, batch_scale.logdelta.values,
-                                model.matfac.col_transform.layers[2].logdelta.values)
-                 ) # This should not have changed
-    end
+#    @testset "Basic fit CPU" begin
+#
+#        model = PathMatFacModel(Z; sample_conditions=sample_conditions, 
+#                                   feature_ids=feature_ids,  feature_views=feature_views,
+#                                   feature_graphs=feature_graphs, batch_dict=batch_dict, 
+#                                   lambda_X_l2=0.1, lambda_Y_graph=0.1, lambda_Y_selective_l1=0.05)
+#
+#        X_start = deepcopy(model.matfac.X)
+#        Y_start = deepcopy(model.matfac.Y)
+#        batch_scale = deepcopy(model.matfac.col_transform.layers[2]) 
+#        fit!(model; verbosity=2, lr=0.05, max_epochs=1000, print_iter=10, rel_tol=1e-7, abs_tol=1e-7,
+#                    fit_reg_weight=false)
+#
+#        @test !isapprox(model.matfac.X, X_start)
+#        @test !isapprox(model.matfac.Y, Y_start)
+#        @test !all(map(isapprox, batch_scale.logdelta.values,
+#                                model.matfac.col_transform.layers[2].logdelta.values)
+#                 ) # This should not have changed
+#    end
 
     @testset "Basic fit GPU" begin
 

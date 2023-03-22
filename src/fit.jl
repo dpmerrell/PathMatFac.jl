@@ -160,7 +160,6 @@ end
 function theta_eb_mom(theta_values::Tuple)
     theta_mean = map(v -> mean(v, dims=2), theta_values)
     theta_var = map(v -> var(v, dims=2), theta_values)
-
     return theta_mean, theta_var
 end
 
@@ -195,8 +194,8 @@ function nanprint(v::AbstractArray, name)
     end
 end
 
-function theta_delta_fixpoint(model::MF.MatFacModel, delta2::Tuple, sigma2::AbstractVector, data::AbstractMatrix;  
-                              batch_eb_max_iter=10, batch_eb_rtol=1e-8, verbosity=1, print_prefix="", history=nothing)
+function theta_delta_fixpoint(model::MF.MatFacModel, delta2::Tuple, sigma2::AbstractVector, data::AbstractMatrix; 
+                              capacity=10^8, batch_eb_max_iter=10, batch_eb_rtol=1e-8, verbosity=1, print_prefix="", history=nothing)
 
     theta = model.col_transform.layers[4].theta
     theta_lsq = deepcopy(theta.values)
@@ -205,16 +204,16 @@ function theta_delta_fixpoint(model::MF.MatFacModel, delta2::Tuple, sigma2::Abst
     theta_mean, theta_var = theta_eb_mom(theta.values)
     alpha, beta = delta2_eb_mom(delta2)
 
-    batch_sizes = ba_map((ba, d)->MF.column_nonnan(d), theta, data)
+    batch_sizes = ba_map(d->isfinite.(d), theta, data)
 
     diffs = MutableLinkedList() 
     for iter=1:batch_eb_max_iter
 
-        batch_col_sqerr = ba_map((ba, m, d) -> MF.link_col_sqerr(m.noise_model,m,d),
+        batch_col_sqerr = ba_map((m, d) -> MF.sqerr_func(m,d),
                                  theta, model, data)
-        nans_to_val!(batch_col_sqerr, 0)
+        nans_to_val!(batch_col_sqerr, Float32(0))
  
-        delta2_new = map((a, b, sq, bs, cr) -> (b .+ 0.5.*(sq ./ transpose(view(sigma2, cr)))) ./ (a .+ (0.5.*bs)), 
+        delta2_new = map((a, b, sq, bs, cr) -> (b .+ Float32(0.5).*(sq ./ transpose(view(sigma2, cr)))) ./ (a .+ (Float32(0.5).*bs)), 
                          alpha, beta, batch_col_sqerr, batch_sizes, theta.col_ranges)
         nans_to_val!(delta2_new, 1) 
  
@@ -258,51 +257,48 @@ function init_batch_effects!(model::PathMatFacModel, opt; capacity=Int(10e8),
     M, K_conditions = size(condition_mat)
     N = size(model.matfac.Y,2)
     model.matfac.X = similar(model.matfac.X, K_conditions, M)
-    model.matfac.X .= transpose(condition_mat)
-    model.matfac.Y = similar(model.matfac.X, K_conditions, N)
-    model.matfac.Y .= 0
+    set_array!(model.matfac.X, transpose(condition_mat))
+    model.matfac.Y = zeros_like(model.matfac.X, K_conditions, N)
 
     v_println("Fitting column shifts..."; verbosity=verbosity,
                                           prefix=print_prefix)
     # Fit its column shifts
     init_mu!(model, opt; capacity=capacity, max_epochs=max_epochs, 
-                               verbosity=verbosity-1, print_prefix=n_pref,
-                               history=history, kwargs...)
+                         verbosity=verbosity-1, print_prefix=n_pref,
+                         history=history, kwargs...)
     orig_matfac.col_transform.layers[3].mu .= model.matfac.col_transform.layers[3].mu
 
     v_println("Regressing against sample conditions..."; verbosity=verbosity,
                                                          prefix=print_prefix)
     # Fit its Y factor (without regularization).
-    model.matfac.Y_reg = y->0.0
+    model.matfac.Y_reg = y->0
     h = mf_fit!(model; capacity=capacity, max_epochs=max_epochs,
-                             verbosity=verbosity-1, print_prefix=n_pref,
-                             scale_column_losses=false,
-                             update_X=false,
-                             update_Y=true,
-                             update_col_layers=false,
-                             reg_relative_weighting=false,
-                             update_X_reg=false,
-                             update_Y_reg=false,
-                             update_row_layers_reg=false,
-                             update_col_layers_reg=false,
-                             keep_history=(history != nothing))
+                       verbosity=verbosity-1, print_prefix=n_pref,
+                       scale_column_losses=false,
+                       update_X=false,
+                       update_Y=true,
+                       update_col_layers=false,
+                       reg_relative_weighting=false,
+                       update_X_reg=false,
+                       update_Y_reg=false,
+                       update_row_layers_reg=false,
+                       update_col_layers_reg=false,
+                       keep_history=(history != nothing))
     history!(history, h; name="regress_against_sample_conditions")
 
     # Fit its batch shift (without regularization; "least-squares")
-    model.matfac.col_transform_reg = l->0.0
+    model.matfac.col_transform_reg = l->0
     v_println("Fitting batch shift..."; verbosity=verbosity,
                                         prefix=print_prefix)
     init_theta!(model, opt; capacity=capacity, max_epochs=max_epochs,
                             verbosity=verbosity-1, print_prefix=n_pref, 
                             history=history, kwargs...)
-    nans_to_val!(model.matfac.col_transform.layers[4].theta.values, 0)
+    nans_to_val!(model.matfac.col_transform.layers[4].theta.values, Float32(0))
     theta_ba = deepcopy(model.matfac.col_transform.layers[4].theta)
 
     # Set its column scales
     v_println("Computing column scales..."; verbosity=verbosity,
                                             prefix=print_prefix)
-    reduce_start = similar(model.matfac.Y, 1, N)
-    reduce_start .= 0 
     col_vars = vec(MF.link_col_sqerr(model.matfac.noise_model,
                                      model.matfac,
                                      model.data; capacity=capacity))
@@ -313,9 +309,11 @@ function init_batch_effects!(model::PathMatFacModel, opt; capacity=Int(10e8),
     # Compute batchwise variances
     v_println("Computing batch scales..."; verbosity=verbosity,
                                            prefix=print_prefix)
-    ba_vars = ba_map((ba, m, d) -> MF.link_col_sqerr(m.noise_model,m,d) ./ MF.column_nonnan(d),
+    ba_sqerr = ba_map((m, d) -> MF.sqerr_func(m,d) ,
                      theta_ba, model.matfac, model.data)
-    nans_to_val!(ba_vars, 1) # Set NaNs to 1
+    ba_M = ba_map(d -> isfinite.(d), theta_ba, model.data)
+    ba_vars = map((sq, M) -> sq ./ M, ba_sqerr, ba_M)
+    nans_to_val!(ba_vars, Float32(1)) # Set NaNs to 1
 
     # Divide batch vars by column vars to obtain "raw" delta^2's
     col_ranges = theta_ba.col_ranges
@@ -324,6 +322,7 @@ function init_batch_effects!(model::PathMatFacModel, opt; capacity=Int(10e8),
     # Update the estimated batch parameters in an EB fashion
     v_println("Batch effect EB procedure:"; prefix=print_prefix, verbosity=verbosity)
     theta_values, delta2_values = theta_delta_fixpoint(model.matfac, delta2_values, col_vars, model.data;
+                                                       capacity=capacity,
                                                        batch_eb_max_iter=batch_eb_max_iter,
                                                        print_prefix=n_pref, verbosity=verbosity) 
 
@@ -528,7 +527,6 @@ function basic_fit_reg_weight_crossval!(model::PathMatFacModel;
                                         capacity=Int(10e8),
                                         validation_frac=0.1,
                                         lr=0.05, opt=nothing, 
-                                        use_gpu=true,
                                         lambda_max=nothing, 
                                         n_lambda=8,
                                         lambda_min_frac=1e-8,
@@ -551,9 +549,6 @@ function basic_fit_reg_weight_crossval!(model::PathMatFacModel;
     val_idx = sprand(Bool, M, N, validation_frac)
     true_validation = model.data[val_idx]
     model.data[val_idx] .= NaN
-    if use_gpu
-        model = gpu(model)
-    end
 
     v_println("Pre-fitting model layers..."; verbosity=verbosity,
                                              prefix=print_prefix)

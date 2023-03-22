@@ -233,14 +233,14 @@ quadratic_form(X::AbstractMatrix, v::AbstractVector) = dot(v, (X*v))
 
 function (nr::NetworkRegularizer)(X::AbstractMatrix)
 
-    loss = 0.0
+    loss = 0
     K,M = size(X)
     for k=1:K
         # Network-regularization
         xAB = transpose(transpose(X[k,:])*nr.AB[k])
         nr.x_virtual[k] .= - cg(nr.BB[k], xAB, nr.x_virtual[k])[1]
 
-        net_loss = 0.0
+        net_loss = 0
         net_loss += quadratic_form(nr.AA[k], X[k,:])
         net_loss += 2*dot(xAB, nr.x_virtual[k])
         net_loss += quadratic_form(nr.BB[k], nr.x_virtual[k])
@@ -260,7 +260,7 @@ function ChainRules.rrule(nr::NetworkRegularizer, X::AbstractMatrix)
     xAA = similar(X, K,MA)
     ABu = similar(X, MA,K)
 
-    loss = 0.0
+    loss = 0
     for k=1:K
         # Network-regularization
         # Parts of the gradients
@@ -271,7 +271,7 @@ function ChainRules.rrule(nr::NetworkRegularizer, X::AbstractMatrix)
         BBu = nr.BB[k]*nr.x_virtual[k]
 
         # Full loss computation
-        net_loss = 0.0
+        net_loss = 0
         net_loss += 0.5*dot(xAA[k,:], X[k,:])
         net_loss += dot(X[k,:], ABu[:,k])
         net_loss += 0.5*dot(nr.x_virtual[k], BBu)
@@ -402,7 +402,7 @@ end
 
 
 function (gr::GroupRegularizer)(layer::FrozenLayer)
-    return 0.0
+    return 0
 end
 
 ##############################################
@@ -420,7 +420,7 @@ end
 Flux.trainable(cpr::ColParamReg) = ()
 
 
-function ColParamReg(feature_views; weight=1.0, center=0.0)
+function ColParamReg(feature_views; weight=1.0, center=0)
     col_ranges = Tuple(ids_to_ranges(feature_views))
     n_range = length(col_ranges)
     weights = Tuple(fill(weight, n_range))
@@ -456,7 +456,7 @@ function (cpr::ColParamReg)(cs::ColScale)
 end
 
 function (cpr::ColParamReg)(fl::FrozenLayer)
-    return 0.0
+    return 0
 end
 
 ## Define behaviors on various types
@@ -498,7 +498,9 @@ function ChainRulesCore.rrule(ard::ARDRegularizer, X::AbstractMatrix)
     
     b = 1 .+ (0.5/ard.beta).*(X.*X)
     function ard_pullback(loss_bar)
-        return NoTangent(), (loss_bar/ard.beta)*(0.5 + ard.alpha) .* X ./ b 
+        X_bar = similar(X)
+        X_bar .= (loss_bar/ard.beta)*(0.5 + ard.alpha) .* X ./ b 
+        return NoTangent(), X_bar
     end
 
     return (0.5 .+ ard.alpha)*sum(log.(b)), ard_pullback
@@ -511,7 +513,7 @@ end
 
 mutable struct CompositeRegularizer
     regularizers::Tuple
-    mixture_p::AbstractVector
+    mixture_p::Tuple
 end
 
 @functor CompositeRegularizer
@@ -520,10 +522,10 @@ Flux.trainable(cr::CompositeRegularizer) = (regularizers=cr.regularizers,)
 
 function construct_composite_reg(regs::AbstractVector, mixture_p::AbstractVector)
     if length(regs) == 0
-        regs = [ x->0.0 ]
+        regs = [ x->0 ]
         mixture_p = [0]
     end
-    return CompositeRegularizer(Tuple(regs), mixture_p)
+    return CompositeRegularizer(Tuple(regs), Tuple(mixture_p))
 end
 
 
@@ -558,7 +560,7 @@ function construct_X_reg(K, M, sample_ids, sample_conditions, sample_graphs,
         end
     end
 
-    regularizers = Any[x->0.0, x->0.0, x->0.0]
+    regularizers = Any[x->0, x->0, x->0]
     mixture_p = zeros(3)
     if lambda_X_l2 != nothing
         regularizers[1] = L2Regularizer(K, lambda_X_l2)
@@ -600,7 +602,7 @@ function construct_Y_reg(K, N, feature_ids, feature_views, feature_sets, feature
     # If neither ARD flag is set `true`, then 
     # construct a regularizer from any other flags.
     # (Default is *no* regularization) 
-    regularizers = Any[x->0.0, x->0.0, x->0.0]
+    regularizers = Any[x->0, x->0, x->0]
     mixture_p = zeros(3)
     if lambda_Y_l1 != nothing
         regularizers[1] =  L1Regularizer(K, lambda_Y_l1)
@@ -640,17 +642,11 @@ end
 
 @functor BatchArrayReg 
 
-function BatchArrayReg(ba::BatchArray; center=0.0, weight=1.0)
+function BatchArrayReg(ba::BatchArray; center=0, weight=1.0)
     N_batches = map(v -> size(v,1), ba.values)
     return BatchArrayReg(map( n -> fill(center, n), N_batches),
                          map( n -> fill(weight, n), N_batches)) 
 end
-
-
-#function BatchArrayReg(feature_views::AbstractVector; weight=1.0)
-#    unq_feature_views = unique(feature_views)
-#    return BatchArrayReg(Tuple(fill(weight, length(unq_feature_views))))
-#end
 
 
 function (reg::BatchArrayReg)(ba::BatchArray)
@@ -737,7 +733,7 @@ function (reg::BatchArrayReg)(layer::BatchShift)
 end
 
 function (reg::BatchArrayReg)(layer::FrozenLayer)
-    return 0.0
+    return 0
 end
 
 
@@ -761,7 +757,7 @@ function construct_layer_reg(feature_views, batch_dict, layers, lambda_layer)
 
     # Start with the regularizers for logsigma and mu
     # (the column parameters)
-    regs = Any[x->0.0, x->0.0, x->0.0, x->0.0]
+    regs = Any[x->0, x->0, x->0, x->0]
     if feature_views != nothing
         regs[1] = ColParamReg(feature_views; weight=lambda_layer)
         regs[3] = ColParamReg(feature_views; weight=lambda_layer)
@@ -807,7 +803,7 @@ end
 Flux.trainable(fr::FrozenRegularizer) = ()
 
 function (fr::FrozenRegularizer)(args...)
-    return 0.0
+    return 0
 end
 
 
@@ -817,7 +813,7 @@ function ChainRulesCore.rrule(fr::FrozenRegularizer, args...)
         return NoTangent(), ZeroTangent()
     end
 
-    return 0.0, FrozenRegularizer_pullback 
+    return 0, FrozenRegularizer_pullback 
 end
 
 
