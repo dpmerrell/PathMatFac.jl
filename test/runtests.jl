@@ -1076,29 +1076,31 @@ function fit_tests()
     # Basic fitting
     ####################################################
     
-#    @testset "Basic fit CPU" begin
-#
-#        model = PathMatFacModel(Z; sample_conditions=sample_conditions, 
-#                                   feature_ids=feature_ids,  feature_views=feature_views,
-#                                   feature_graphs=feature_graphs, batch_dict=batch_dict, 
-#                                   lambda_X_l2=0.1, lambda_Y_graph=0.1, lambda_Y_selective_l1=0.05)
-#
-#        X_start = deepcopy(model.matfac.X)
-#        Y_start = deepcopy(model.matfac.Y)
-#        batch_scale = deepcopy(model.matfac.col_transform.layers[2]) 
-#        fit!(model; verbosity=2, lr=0.05, max_epochs=1000, print_iter=10, rel_tol=1e-7, abs_tol=1e-7,
-#                    fit_reg_weight=false)
-#
-#        @test !isapprox(model.matfac.X, X_start)
-#        @test !isapprox(model.matfac.Y, Y_start)
-#        @test !all(map(isapprox, batch_scale.logdelta.values,
-#                                model.matfac.col_transform.layers[2].logdelta.values)
-#                 ) # This should not have changed
-#    end
+    @testset "Basic fit CPU" begin
+
+        model = PathMatFacModel(Z; sample_conditions=sample_conditions, 
+                                   feature_ids=feature_ids,  feature_views=feature_views,
+                                   feature_graphs=feature_graphs, batch_dict=batch_dict, 
+                                   lambda_X_l2=0.1, lambda_Y_graph=0.1, lambda_Y_selective_l1=0.05)
+
+        X_start = deepcopy(model.matfac.X)
+        Y_start = deepcopy(model.matfac.Y)
+        batch_scale = deepcopy(model.matfac.col_transform.layers[2]) 
+        fit!(model; verbosity=2, lr=0.05, max_epochs=1000, print_iter=10, rel_tol=1e-7, abs_tol=1e-7,
+                    fit_reg_weight=false)
+
+        @test !isapprox(model.matfac.X, X_start)
+        @test !isapprox(model.matfac.Y, Y_start)
+        @test !all(map(isapprox, batch_scale.logdelta.values,
+                                model.matfac.col_transform.layers[2].logdelta.values)
+                 ) # This should not have changed
+    end
+
+     Z_d = gpu(Z)
 
     @testset "Basic fit GPU" begin
 
-        model = PathMatFacModel(Z; sample_conditions=sample_conditions, 
+        model = PathMatFacModel(Z_d; sample_conditions=sample_conditions, 
                                    feature_ids=feature_ids,  feature_views=feature_views,
                                    feature_graphs=feature_graphs, batch_dict=batch_dict, 
                                    lambda_X_l2=0.1, lambda_Y_graph=0.1, lambda_Y_selective_l1=0.05)
@@ -1147,7 +1149,7 @@ function fit_tests()
 
     @testset "Empirical Bayes fit GPU" begin
 
-        model = PathMatFacModel(Z; sample_conditions=sample_conditions, 
+        model = PathMatFacModel(Z_d; sample_conditions=sample_conditions, 
                                    feature_ids=feature_ids,  feature_views=feature_views,
                                    feature_graphs=feature_graphs, batch_dict=batch_dict, 
                                    lambda_X_l2=0.1, lambda_Y_graph=0.1, lambda_Y_selective_l1=0.05)
@@ -1195,12 +1197,12 @@ function fit_tests()
 
     @testset "ARD fit GPU" begin
 
-        model = PathMatFacModel(Z; K=4,
-                                   #sample_conditions=sample_conditions, 
-                                   feature_views=feature_views, 
-                                   feature_ids=feature_ids,  
-                                   #batch_dict=batch_dict, 
-                                   Y_ard=true)
+        model = PathMatFacModel(Z_d; K=4,
+                                     #sample_conditions=sample_conditions, 
+                                     feature_views=feature_views, 
+                                     feature_ids=feature_ids,  
+                                     #batch_dict=batch_dict, 
+                                     Y_ard=true)
 
         X_start = deepcopy(model.matfac.X)
         Y_start = deepcopy(model.matfac.Y)
@@ -1252,13 +1254,13 @@ function fit_tests()
 
     @testset "Featureset ARD fit GPU" begin
 
-        model = PathMatFacModel(Z; K=4,
-                                   sample_conditions=sample_conditions, 
-                                   feature_views=feature_views, 
-                                   feature_ids=feature_ids,  
-                                   batch_dict=batch_dict,
-                                   feature_sets=feature_sets, 
-                                   Y_fsard=true)
+        model = PathMatFacModel(Z_d; K=4,
+                                     sample_conditions=sample_conditions, 
+                                     feature_views=feature_views, 
+                                     feature_ids=feature_ids,  
+                                     batch_dict=batch_dict,
+                                     feature_sets=feature_sets, 
+                                     Y_fsard=true)
 
         X_start = deepcopy(model.matfac.X)
         Y_start = deepcopy(model.matfac.Y)
@@ -1448,16 +1450,16 @@ end
 
 function main()
 
-    #util_tests()
-    #batch_array_tests()
-    #layers_tests()
-    #preprocess_tests()
-    #reg_tests()
-    #featureset_ard_tests()
-    #model_tests()
-    #score_tests()
+    util_tests()
+    batch_array_tests()
+    layers_tests()
+    preprocess_tests()
+    reg_tests()
+    featureset_ard_tests()
+    model_tests()
+    score_tests()
     fit_tests()
-    transform_tests()
+    #transform_tests()
     model_io_tests()
     #simulation_tests()
 
