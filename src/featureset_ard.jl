@@ -29,7 +29,7 @@ mutable struct FeatureSetARDReg
     A_opt::ISTAOptimiser
 end
 
-@functor FeatureSetARDReg
+#@functor FeatureSetARDReg
 Flux.trainable(r::FeatureSetARDReg) = ()
 
 function FeatureSetARDReg(K::Integer, S::AbstractMatrix,
@@ -52,6 +52,30 @@ function FeatureSetARDReg(K::Integer, S::AbstractMatrix,
                             S, A, A_opt) 
 end
 
+
+function Adapt.adapt_storage(::Flux.FluxCUDAAdaptor, r::FeatureSetARDReg)
+    return FeatureSetARDReg(r.feature_view_ids, 
+                            r.feature_views,
+                            gpu(r.alpha),
+                            r.beta0,
+                            gpu(r.beta),
+                            gpu(SparseMatrixCSC{Float32,Int32}(r.S)),
+                            gpu(r.A),
+                            gpu(r.A_opt)
+                            )
+end
+
+function Adapt.adapt_storage(::Flux.FluxCPUAdaptor, r::FeatureSetARDReg)
+    return FeatureSetARDReg(r.feature_view_ids, 
+                            r.feature_views,
+                            cpu(r.alpha),
+                            r.beta0,
+                            cpu(r.beta),
+                            SparseMatrixCSC{Bool,Int}(cpu(r.S)),
+                            cpu(r.A),
+                            cpu(r.A_opt)
+                            )
+end
 
 function construct_featureset_ard(K, feature_ids, feature_views, feature_sets;
                                   beta0=1e-6, lr=0.05)
@@ -82,20 +106,20 @@ end
 
 # Apply the regularizer to a matrix
 function (reg::FeatureSetARDReg)(Y::AbstractMatrix)
-    b = 1 .+ (0.5 ./ reg.beta).*(Y.*Y)
+    b = 1 .+ (Float32(0.5) ./ reg.beta).*(Y.*Y)
     return sum(transpose(0.5 .+ reg.alpha) .* sum(log.(b), dims=1))
 end
 
 
 function ChainRulesCore.rrule(reg::FeatureSetARDReg, Y::AbstractMatrix)
 
-    b = 1 .+ (0.5 ./ reg.beta).*(Y.*Y)
+    b = 1 .+ (Float32(0.5) ./ reg.beta).*(Y.*Y)
     
     function featureset_ard_pullback(loss_bar)
-        return NoTangent(), transpose((loss_bar .* reg.alpha) .+ 0.5) .* Y ./ (b .* reg.beta)
+        return NoTangent(), transpose((loss_bar .* reg.alpha) .+ Float32(0.5)) .* Y ./ (b .* reg.beta)
     end
 
-    return sum(transpose(0.5 .+ reg.alpha) .* sum(log.(b), dims=1)), featureset_ard_pullback
+    return sum(transpose(Float32(0.5) .+ reg.alpha) .* sum(log.(b), dims=1)), featureset_ard_pullback
 end
 
 
@@ -105,7 +129,7 @@ end
 # TODO replace this with a more direct estimate from Y.
 function update_alpha!(reg::FeatureSetARDReg, Y::AbstractMatrix)
 
-    tau = (reg.beta0 .+ 0.5) ./ (reg.beta0 .+ (0.5.*Y.*Y))
+    tau = (reg.beta0 .+ Float32(0.5)) ./ (reg.beta0 .+ (Float32(0.5).*Y.*Y))
 
     # Compute view-wise quantities from tau
     view_mean_t = map(r->mean(tau[:,r]), reg.feature_views)
@@ -122,7 +146,7 @@ function update_alpha!(reg::FeatureSetARDReg, Y::AbstractMatrix)
     # set alpha = beta0 for an uninformative ARD prior on
     # that column of Y.
     L = size(reg.S, 1)
-    feature_appearances = vec(ones(1,L) * reg.S)
+    feature_appearances = vec(ones_like(Y,1,L) * reg.S)
     noprior_features = (feature_appearances .== 0)
     reg.alpha[noprior_features] .= reg.beta0
 end
@@ -130,10 +154,10 @@ end
 
 function gamma_normal_loss(A, S, alpha, beta0, Y)
     beta = beta0 .* (1 .+ transpose(A)*S)
-    alpha_p_5 = alpha .+ 0.5
-    lss = -sum(transpose(alpha).*sum(log.(beta), dims=1)) .+ sum(transpose(alpha_p_5).*sum(log.(beta .+ 0.5.*(Y.*Y)), dims=1))
+    alpha_p_5 = alpha .+ Float32(0.5)
+    lss = -sum(transpose(alpha).*sum(log.(beta), dims=1)) .+ sum(transpose(alpha_p_5).*sum(log.(beta .+ Float32(0.5).*(Y.*Y)), dims=1))
     # Calibration term
-    lss -= sum(transpose((alpha_p_5).*log.(alpha_p_5) .- (alpha).*log.(alpha)) .+ sum(log.(abs.(Y) .+ 1e-9), dims=1))
+    lss -= sum(transpose((alpha_p_5).*log.(alpha_p_5) .- (alpha).*log.(alpha)) .+ sum(log.(abs.(Y) .+ Float32(1e-9)), dims=1))
     return lss
 end
 
@@ -141,21 +165,21 @@ function ChainRulesCore.rrule(::typeof(gamma_normal_loss), A, S, alpha, beta0, Y
 
     beta = beta0.*(1 .+ transpose(A)*S)
     Y2 = Y.*Y
-    alpha_p_5 = alpha .+ 0.5
+    alpha_p_5 = alpha .+ Float32(0.5)
 
     function gamma_normal_loss_pullback(loss_bar)
 
-        grad_AtS = beta0.*((-transpose(alpha) ./ beta) .+ transpose(alpha_p_5)./(beta .+ 0.5.*Y2))
+        grad_AtS = beta0.*((-transpose(alpha) ./ beta) .+ transpose(alpha_p_5)./(beta .+ Float32(0.5).*Y2))
         grad_A = S*transpose(grad_AtS)
         return NoTangent(), loss_bar.*grad_A,
                             NoTangent(), NoTangent(),
                             NoTangent(), NoTangent()
     end
 
-    lss = -sum(transpose(alpha).*sum(beta, dims=1)) .+ sum(transpose(alpha_p_5).*sum(log.(beta .+ 0.5.*Y2), dims=1))
+    lss = -sum(transpose(alpha).*sum(beta, dims=1)) .+ sum(transpose(alpha_p_5).*sum(log.(beta .+ Float32(0.5).*Y2), dims=1))
     
     # Calibration term
-    lss -= sum(transpose((alpha_p_5).*log.(alpha_p_5) .- (alpha).*log.(alpha)) .+ sum(log.(abs.(Y) .+ 1e-9), dims=1))
+    lss -= sum(transpose((alpha_p_5).*log.(alpha_p_5) .- (alpha).*log.(alpha)) .+ sum(log.(abs.(Y) .+ Float32(1e-9)), dims=1))
 
     return lss, gamma_normal_loss_pullback
 end 

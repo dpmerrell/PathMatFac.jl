@@ -54,6 +54,12 @@ function zeros_like(args...)
     return result
 end
 
+function ones_like(args...)
+    result = similar(args...)
+    result .= 1
+    return result
+end
+
 function set_array!(target::CuArray, source::AbstractArray)
     target .= gpu(source)
 end
@@ -289,8 +295,12 @@ function edgelists_to_spmats(edgelists, node_to_idx; epsilon=0.0)
 end
 
 
-function scale_spmat!(spmat::AbstractMatrix, scalar::Number)
+function scale_spmat!(spmat::SparseMatrixCSC, scalar::Number)
     spmat.nzval .*= scalar 
+end
+
+function scale_spmat!(spmat::CUDA.CUSPARSE.CuSparseMatrixCSC, scalar::Number)
+    spmat.nzVal .*= scalar 
 end
 
 

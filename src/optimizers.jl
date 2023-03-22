@@ -29,14 +29,16 @@ mutable struct ISTAOptimiser
     lambda::AbstractArray
 end
 
+@functor ISTAOptimiser
+
 function ISTAOptimiser(target::AbstractArray, lr::Number, l1_lambda)
-    ssq_grad = zero(target) .+ 1e-8
+    ssq_grad = zero(target) .+ Float32(1e-8)
     return ISTAOptimiser(lr, ssq_grad, l1_lambda)
 end
 
 # ISTA projection rule for L1 regularization. 
 function ist_proj!(X_new, alpha)
-    X_new .= max.(abs.(X_new) .- alpha, 0.0)
+    X_new .= max.(abs.(X_new) .- alpha, 0)
 end
 
 # It makes most sense to define ISTA's behavior in 
@@ -51,7 +53,7 @@ function update!(ist::ISTAOptimiser, p::AbstractMatrix, g::AbstractMatrix)
     # Apply the gradient update.
     # Impose the nonnegativity constraint.
     p .-= (eta.*g)
-    p .= max.(p, 0.0)
+    p .= max.(p, 0)
         
     # Apply the ISTA projection.
     # The threshold for each parameter

@@ -482,10 +482,10 @@ function basic_fit_reg_weight_eb!(model::PathMatFacModel;
     freeze_reg!(model.matfac.col_transform_reg, 1:4)
 
     orig_X_reg = model.matfac.X_reg
-    model.matfac.X_reg = X->0.0
+    model.matfac.X_reg = X->0
 
     orig_Y_reg = model.matfac.Y_reg
-    model.matfac.Y_reg = Y->0.0
+    model.matfac.Y_reg = Y->0
 
     # Fit the model without regularization. 
     # Whiten the embedding.
@@ -642,7 +642,7 @@ function fit_ard!(model::PathMatFacModel; lr=0.05, ard_lr=0.01, opt=nothing,
     orig_ard = model.matfac.Y_reg
 
     K = size(model.matfac.Y, 1)
-    model.matfac.Y_reg = L2Regularizer(K, 1.0)
+    model.matfac.Y_reg = L2Regularizer(ones_like(model.matfac.Y, K))
     v_println("Pre-fitting with Empirical Bayes L2 regularization..."; verbosity=verbosity,
                                                                         prefix=print_prefix)
     basic_fit_reg_weight_eb!(model; opt=opt, verbosity=verbosity,

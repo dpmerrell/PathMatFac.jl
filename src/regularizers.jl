@@ -34,13 +34,13 @@ function (reg::L2Regularizer)(x::AbstractVector)
     return reg(transpose(x))
 end
 
-function reweight_eb!(reg::L2Regularizer, X::AbstractMatrix; mixture_p=1.0)
+function reweight_eb!(reg::L2Regularizer, X::AbstractMatrix; mixture_p=Float32(1.0))
     row_vars = vec(var(X, dims=2))
     row_precs = 1 ./ row_vars
     reg.weights .= (mixture_p .* row_precs)
 end 
 
-function reweight_eb!(reg::L2Regularizer, x::AbstractVector; mixture_p=1.0)
+function reweight_eb!(reg::L2Regularizer, x::AbstractVector; mixture_p=Float32(1.0))
     reweight_eb!(reg, transpose(x); mixture_p=mixture_p)
 end 
 
