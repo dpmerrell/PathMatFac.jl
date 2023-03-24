@@ -353,7 +353,7 @@ end
 
 
 function reorder_by_importance!(model::PathMatFacModel)
-    Y_ssq = vec(sum(model.matfac.Y .* model.matfac.Y, dims=2))
+    Y_ssq = cpu(vec(sum(model.matfac.Y .* model.matfac.Y, dims=2)))
     srt_idx = sortperm(Y_ssq, rev=true)
 
     model.matfac.X .= model.matfac.X[srt_idx,:]

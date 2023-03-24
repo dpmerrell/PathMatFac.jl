@@ -804,9 +804,10 @@ function featureset_ard_tests()
                                       beta0=1e-6, lr=0.1)
     
     test_A = (rand(Bool, n_sets, 10) .* randn(4,10))
-    test_S = zeros(Bool, n_sets, N)
+    test_S = zeros(n_sets, N)
     for (i, s) in enumerate(feature_sets)
-        test_S[i,s] .= true
+        scale = 1 / sqrt(length(s))
+        test_S[i,s] .= scale
     end
     corrupt_S = (test_S)# .| rand([true, false, false, false], n_sets, N))
     Y = transpose(test_A)*corrupt_S .+ randn(K,N).*0.01

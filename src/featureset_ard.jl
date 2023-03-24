@@ -61,29 +61,29 @@ function reorder_reg!(reg::FeatureSetARDReg, p)
 end
 
 
-function Adapt.adapt_storage(::Flux.FluxCUDAAdaptor, r::FeatureSetARDReg)
-    return FeatureSetARDReg(r.feature_view_ids, 
-                            r.feature_views,
-                            gpu(r.alpha),
-                            r.beta0,
-                            gpu(r.beta),
-                            gpu(SparseMatrixCSC{Float32,Int32}(r.S)),
-                            gpu(r.A),
-                            gpu(r.A_opt)
-                            )
-end
-
-function Adapt.adapt_storage(::Flux.FluxCPUAdaptor, r::FeatureSetARDReg)
-    return FeatureSetARDReg(r.feature_view_ids, 
-                            r.feature_views,
-                            cpu(r.alpha),
-                            r.beta0,
-                            cpu(r.beta),
-                            SparseMatrixCSC{Bool,Int}(cpu(r.S)),
-                            cpu(r.A),
-                            cpu(r.A_opt)
-                            )
-end
+#function Adapt.adapt_storage(::Flux.FluxCUDAAdaptor, r::FeatureSetARDReg)
+#    return FeatureSetARDReg(r.feature_view_ids, 
+#                            r.feature_views,
+#                            gpu(r.alpha),
+#                            r.beta0,
+#                            gpu(r.beta),
+#                            gpu(SparseMatrixCSC{Float32,Int32}(r.S)),
+#                            gpu(r.A),
+#                            gpu(r.A_opt)
+#                            )
+#end
+#
+#function Adapt.adapt_storage(::Flux.FluxCPUAdaptor, r::FeatureSetARDReg)
+#    return FeatureSetARDReg(r.feature_view_ids, 
+#                            r.feature_views,
+#                            cpu(r.alpha),
+#                            r.beta0,
+#                            cpu(r.beta),
+#                            SparseMatrixCSC{Bool,Int}(cpu(r.S)),
+#                            cpu(r.A),
+#                            cpu(r.A_opt)
+#                            )
+#end
 
 function construct_featureset_ard(K, feature_ids, feature_views, feature_sets;
                                   beta0=1e-6, lr=0.05)
@@ -95,13 +95,14 @@ function construct_featureset_ard(K, feature_ids, feature_views, feature_sets;
     nnz = sum(map(length, feature_sets))
     I = Vector{Int}(undef, nnz)
     J = Vector{Int}(undef, nnz)
-    V = Vector{Bool}(undef, nnz)
+    V = Vector{Float32}(undef, nnz)
     idx = 1
     for (i, fs) in enumerate(feature_sets)
+        fs_scale = 1/sqrt(length(fs))
         for f in fs
             I[idx] = i
             J[idx] = f_to_j[f]
-            V[idx] = true
+            V[idx] = fs_scale
             idx += 1
         end
     end
