@@ -352,6 +352,18 @@ function whiten!(model::PathMatFacModel)
 end
 
 
+function reorder_by_importance!(model::PathMatFacModel)
+    Y_ssq = vec(sum(model.matfac.Y .* model.matfac.Y, dims=2))
+    srt_idx = sortperm(Y_ssq, rev=true)
+
+    model.matfac.X .= model.matfac.X[srt_idx,:]
+    model.matfac.Y .= model.matfac.Y[srt_idx,:]
+    
+    reorder_reg!(model.matfac.Y_reg, srt_idx)
+    reorder_reg!(model.matfac.X_reg, srt_idx)
+end
+
+
 #######################################################################
 # FITTING PROCEDURES
 #######################################################################
@@ -836,6 +848,9 @@ function fit!(model::PathMatFacModel; opt=nothing, lr=0.05,
                             lambda_min_frac=lambda_min_frac,
                             kwargs...)
     end
+
+    reorder_by_importance!(model)
+    history!(hist; name="reorder_factors")
 
     history!(hist; name="finish")
     hist = finalize_history(hist)

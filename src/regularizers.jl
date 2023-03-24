@@ -1,6 +1,8 @@
 
 import Base: ==
 
+# By default, `reorder_reg!` does nothing.
+function reorder_reg!(reg, p) end
 
 ##########################################################
 # L2 regularizer
@@ -44,6 +46,9 @@ function reweight_eb!(reg::L2Regularizer, x::AbstractVector; mixture_p=Float32(1
     reweight_eb!(reg, transpose(x); mixture_p=mixture_p)
 end 
 
+function reorder_reg!(reg::L2Regularizer, p)
+    reg.weights .= reg.weights[p]
+end
 
 ##########################################################
 # L1 regularizer
@@ -86,6 +91,9 @@ function reweight_eb!(reg::L1Regularizer, x::AbstractVector; mixture_p=1.0)
     reweight_eb!(reg, transpose(x); mixture_p=mixture_p)
 end 
 
+function reorder_reg!(reg::L1Regularizer, p)
+    reg.weights .= reg.weights[p]
+end
 
 ##########################################################
 # Selective L1 regularizer
@@ -146,6 +154,9 @@ function reweight_eb!(reg::SelectiveL1Reg, X::AbstractMatrix; mixture_p=1.0)
     reg.weight .= new_weights
 end
 
+function reorder_reg!(reg::SelectiveL1Reg, p)
+    reg.l1_idx .= reg.l1_idx[p,:]
+end
 
 ##########################################################
 # Network regularizer
@@ -312,7 +323,15 @@ function reweight_eb!(nr::NetworkRegularizer, X::AbstractMatrix; mixture_p=1.0)
     nr.cur_weights .= row_precs
 end
 
- 
+function reorder_reg!(reg::NetworkRegularizer, p)
+
+    reg.AA = reg.AA[p]
+    reg.AB = reg.AB[p]
+    reg.BB = reg.BB[p]
+    reg.x_virtual = reg.x_virtual[p]
+    reg.cur_weights .= reg.cur_weights[p]
+    return
+end 
 
 ##########################################################
 # Group Regularizer -- meant to regularize X when 
@@ -400,6 +419,10 @@ function (gr::GroupRegularizer)(X::AbstractMatrix)
                   )
 end
 
+function reorder_reg!(reg::GroupRegularizer, p)
+    reg.group_centers = map(c -> c[p], reg.group_centers)
+    return
+end
 
 function (gr::GroupRegularizer)(layer::FrozenLayer)
     return 0
@@ -540,6 +563,11 @@ function (cr::CompositeRegularizer)(x)
     return sum(map((f,p)->p*f(x), cr.regularizers, cr.mixture_p))
 end
 
+function reorder_reg!(reg::CompositeRegularizer, p)
+    for r in reg.regularizers
+        reorder_reg!(r, p)
+    end
+end
 
 ######################################################
 # Construct regularizer for X matrix
@@ -844,6 +872,11 @@ function unfreeze_reg!(sr::SequenceReg, idx::AbstractVector)
     for i in idx
         unfreeze_reg!(sr, i)
     end
+end
+
+
+function reorder_reg!(r::FrozenRegularizer, p)
+    reorder_reg!(r.reg, p)
 end
 
 

@@ -611,7 +611,7 @@ end
 #
 # It may also terminate if it finds lower and upper bounds
 # satisfying (UB - LB) < x_atol.
-function func_binary_search(x_start, z_target, f; z_atol=1e-2, x_atol=1e-3, max_iter=20, 
+function func_binary_search(x_start, z_target, f; z_atol=1e-1, x_atol=1e-3, max_iter=20, 
                                                   verbosity=1, print_prefix="")
     UB = Inf
     LB = -Inf
@@ -621,7 +621,7 @@ function func_binary_search(x_start, z_target, f; z_atol=1e-2, x_atol=1e-3, max_
     # Obtain finite LB and UB.
     # If f(x) too small, keep doubling x until we have a finite UB.
     sz = sign(z_target)
-    if y < z_target - sz*z_atol
+    if y < z_target - z_atol
         while (y < z_target) & (iter < max_iter)
             LB = x
             x *= 2
@@ -630,7 +630,7 @@ function func_binary_search(x_start, z_target, f; z_atol=1e-2, x_atol=1e-3, max_
         end
         UB = x
     # If f(x) too big, keep halving x until we have a finite LB.
-    elseif y > z_target + sz*z_atol
+    elseif y > z_target + z_atol
         while (y > z_target) & (iter < max_iter)
             UB = x
             x *= 0.5
@@ -653,9 +653,9 @@ function func_binary_search(x_start, z_target, f; z_atol=1e-2, x_atol=1e-3, max_
         end
         x = 0.5*(LB + UB)
         y = f(x)
-        if y < z_target - sz*z_atol
+        if y < z_target - z_atol
             LB = x
-        elseif y > z_target + sz*z_atol
+        elseif y > z_target + z_atol
             UB = x
         else
             break

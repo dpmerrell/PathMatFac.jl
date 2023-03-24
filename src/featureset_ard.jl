@@ -53,6 +53,14 @@ function FeatureSetARDReg(K::Integer, S::AbstractMatrix,
 end
 
 
+function reorder_reg!(reg::FeatureSetARDReg, p)
+    reg.beta .= reg.beta[p,:]
+    reg.A .= reg.A[:,p]
+    reg.A_opt.ssq_grad .= reg.A_opt.ssq_grad[:,p]
+    return
+end
+
+
 function Adapt.adapt_storage(::Flux.FluxCUDAAdaptor, r::FeatureSetARDReg)
     return FeatureSetARDReg(r.feature_view_ids, 
                             r.feature_views,
