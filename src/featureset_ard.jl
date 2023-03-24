@@ -61,29 +61,29 @@ function reorder_reg!(reg::FeatureSetARDReg, p)
 end
 
 
-#function Adapt.adapt_storage(::Flux.FluxCUDAAdaptor, r::FeatureSetARDReg)
-#    return FeatureSetARDReg(r.feature_view_ids, 
-#                            r.feature_views,
-#                            gpu(r.alpha),
-#                            r.beta0,
-#                            gpu(r.beta),
-#                            gpu(SparseMatrixCSC{Float32,Int32}(r.S)),
-#                            gpu(r.A),
-#                            gpu(r.A_opt)
-#                            )
-#end
-#
-#function Adapt.adapt_storage(::Flux.FluxCPUAdaptor, r::FeatureSetARDReg)
-#    return FeatureSetARDReg(r.feature_view_ids, 
-#                            r.feature_views,
-#                            cpu(r.alpha),
-#                            r.beta0,
-#                            cpu(r.beta),
-#                            SparseMatrixCSC{Bool,Int}(cpu(r.S)),
-#                            cpu(r.A),
-#                            cpu(r.A_opt)
-#                            )
-#end
+function Adapt.adapt_storage(::Flux.FluxCUDAAdaptor, r::FeatureSetARDReg)
+    return FeatureSetARDReg(r.feature_view_ids, 
+                            r.feature_views,
+                            gpu(r.alpha),
+                            r.beta0,
+                            gpu(r.beta),
+                            gpu(SparseMatrixCSC{Float32,Int32}(r.S)),
+                            gpu(r.A),
+                            gpu(r.A_opt)
+                            )
+end
+
+function Adapt.adapt_storage(::Flux.FluxCPUAdaptor, r::FeatureSetARDReg)
+    return FeatureSetARDReg(r.feature_view_ids, 
+                            r.feature_views,
+                            cpu(r.alpha),
+                            r.beta0,
+                            cpu(r.beta),
+                            SparseMatrixCSC{Float32,Int}(cpu(r.S)),
+                            cpu(r.A),
+                            cpu(r.A_opt)
+                            )
+end
 
 function construct_featureset_ard(K, feature_ids, feature_views, feature_sets;
                                   beta0=1e-6, lr=0.05)
