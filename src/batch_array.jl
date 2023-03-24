@@ -25,7 +25,7 @@ function Adapt.adapt_storage(to::Flux.FluxCUDAAdaptor, ba::BatchArray)
                       CUDA.cu(SparseMatrixCSC{Float32,Int32}(ba.row_selector)),
                       Tuple([CUDA.cu(SparseMatrixCSC{Float32,Int32}(rb)) for rb in ba.row_batches]),
                       deepcopy(ba.row_batch_ids),
-                      Flux.gpu(ba.values)
+                      CUDA.cu(ba.values)
                      )
 end
 
