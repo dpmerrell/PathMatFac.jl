@@ -313,6 +313,6 @@ tcga_ablation:
             print_iter: [1]
             var_filter: [0.25]
             verbosity: [2]
-            fit_reg_weight: ["none"]
+            fit_reg_weight: ["EB"]
             
 
