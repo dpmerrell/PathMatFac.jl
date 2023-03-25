@@ -69,7 +69,7 @@ end
 
 
 function init_theta!(model::PathMatFacModel, opt; capacity=Int(10e8), max_epochs=500,
-                                                  lr_theta=0.005,
+                                                  lr_theta=0.001,
                                                   verbosity=1, print_prefix="", 
                                                   history=nothing, kwargs...)
     # Freeze everything except batch shift... 
@@ -272,7 +272,7 @@ function init_batch_effects!(model::PathMatFacModel, opt; capacity=Int(10e8),
                                                          prefix=print_prefix)
     # Fit its Y factor (without regularization).
     model.matfac.Y_reg = y->0
-    h = mf_fit!(model; capacity=capacity, max_epochs=max_epochs,
+    h = mf_fit!(model; opt=opt, capacity=capacity, max_epochs=max_epochs,
                        verbosity=verbosity-1, print_prefix=n_pref,
                        scale_column_losses=false,
                        update_X=false,
@@ -378,7 +378,7 @@ function basic_fit!(model::PathMatFacModel; fit_batch=false,
                                             whiten=false,
                                             capacity=Int(10e8),
                                             opt=nothing, lr=0.05, max_epochs=1000,
-                                            lr_joint=0.0005, 
+                                            lr_joint=0.001, 
                                             verbosity=1, print_prefix="",
                                             history=nothing,
                                             kwargs...)
