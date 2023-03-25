@@ -298,3 +298,21 @@ tcga_regressions:
         #    var_filter: [0.1]
 
 
+tcga_ablation:
+    data:
+        heldout_ctypes: ["OV:GBM:LAML"]
+    pathways:
+        top_pwys: [1000]
+    methods:
+        matfac:
+            configuration: ["basic", "ard", "fsard"]
+            K: [20]
+            max_epochs: [20]
+            capacity: [100000000000]
+            lr: [0.1]
+            print_iter: [1]
+            var_filter: [0.25]
+            verbosity: [2]
+            fit_reg_weight: ["none"]
+            
+

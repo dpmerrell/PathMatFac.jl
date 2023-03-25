@@ -55,12 +55,15 @@ EXP_DATA_DIR = join(EXP_DIR, "omic_data")
 EXP_FITTED_DIR = join(EXP_DIR, "fitted_transforms")
 EXP_TRANS_TRAIN_DIR = join(EXP_DIR, "transformed_training_sets")
 EXP_TRANS_TEST_DIR = join(EXP_DIR, "transformed_test_sets")
-EXP_REGRESSOR_DIR = join(EXP_DIR, "fitted_regressors")
-EXP_REGRESSOR_SCORE_DIR = join(EXP_DIR, "regression_scores")
 EXP_HISTORY_DIR = join(EXP_DIR, "training_histories")
 EXP_VIS_DIR = join(EXP_DIR, "visualizations")
 EXP_SCATTER_DIR = join(EXP_VIS_DIR, "embedding_scatter")
 EXP_FACTORPLOT_DIR = join(EXP_VIS_DIR, "factor_plots")
+
+## TCGA prediction task directories
+EXP_REGRESSOR_DIR = join(EXP_DIR, "fitted_regressors")
+EXP_REGRESSOR_SCORE_DIR = join(EXP_DIR, "regression_scores")
+
 
 
 #####################################################################
@@ -97,7 +100,7 @@ for a, a_p in SIM_PARAMS.items():
 print(SIM_ANALYSES_SIZES)
 
 #####################################################################
-# Unpack TCGA regression parameters
+# Unpack TCGA regression task parameters
 #####################################################################
 TCGA_REGRESSION_PARAMS = config["tcga_regressions"]
 TCGA_FOLDS = TCGA_REGRESSION_PARAMS["cross_val_folds"]
@@ -109,6 +112,16 @@ TCGA_REGRESSION_PARAMS = {"methods": ["__".join(["method={}".format(m), l]) for 
                           "targets": TCGA_REGRESSION_TARGETS,
                           "folds": list(range(TCGA_FOLDS))
                          }
+
+
+#####################################################################
+# Unpack TCGA ablation study parameters
+#####################################################################
+TCGA_ABLATION_PARAMS = config["tcga_ablation"]
+TCGA_ABLATION_PARAMS = {"methods": ["__".join(["method={}".format(m), l]) for m, m_param in TCGA_ABLATION_PARAMS["methods"].items() for l in param_dict_to_list(m_param) ],
+                        "data": param_dict_to_list(TCGA_ABLATION_PARAMS["data"]),
+                        "pathways": param_dict_to_list(TCGA_ABLATION_PARAMS["pathways"]),
+                       }
 
 
 print("\nTCGA Runs:")
@@ -126,8 +139,8 @@ rule all:
        #sim_snr_lineplot=join(SIM_VIS_DIR, "snr-lineplot.png"),
        #sim_snr_heatmap=join(SIM_VIS_DIR, "snr-heatmap.png")
        exp_fitted=expand(join(EXP_FITTED_DIR,"{method}/{data}/{pathways}/fitted.bson"),
-                         method=TCGA_REGRESSION_PARAMS["methods"], data=TCGA_REGRESSION_PARAMS["data"],
-                         pathways=TCGA_REGRESSION_PARAMS["pathways"]),
+                         method=TCGA_ABLATION_PARAMS["methods"], data=TCGA_ABLATION_PARAMS["data"],
+                         pathways=TCGA_ABLATION_PARAMS["pathways"]),
        #exp_scatters=expand(join(EXP_SCATTER_DIR,"{method}/{data}/{pathways}/scatter.html"),
        #                    method=TCGA_REGRESSION_PARAMS["methods"], data=TCGA_REGRESSION_PARAMS["data"],
        #                    pathways=TCGA_REGRESSION_PARAMS["pathways"]),
@@ -149,6 +162,10 @@ rule all:
        # pred_result_png=join(EXP_REGRESSOR_SCORE_DIR, "results.png"),
        # pred_embedding_png=join(EXP_REGRESSOR_SCORE_DIR, "embeddings.png")
 
+
+#############################################################
+# Ablation tasks
+#############################################################
 
 #############################################################
 # TCGA prediction tasks
