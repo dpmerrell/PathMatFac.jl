@@ -306,9 +306,9 @@ tcga_ablation:
         matfac:
             configuration: ["basic", "ard", "fsard"]
             K: [20]
-            max_epochs: [20]
-            capacity: [100000000000]
-            lr: [0.1]
+            max_epochs: [2000]
+            capacity: [1000000000000]
+            lr: [0.2]
             print_iter: [1]
             var_filter: [0.25]
             verbosity: [2]
