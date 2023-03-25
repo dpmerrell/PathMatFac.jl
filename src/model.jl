@@ -44,6 +44,14 @@ function assemble_model(D, K, sample_ids, sample_conditions,
                               lambda_layer)
 
     M, N = size(D)
+    
+    # If necessary, rearrange features such that 
+    # their distributions and views are in contiguous blocks
+    data_idx = sortperm(collect(zip(feature_distributions, feature_views)))
+    feature_ids .= feature_ids[data_idx]
+    feature_views .= feature_views[data_idx]
+    feature_distributions .= feature_distributions[data_idx]
+    D .= D[:,data_idx]
 
     # Construct the column layers and their regularizer
     col_layers = construct_model_layers(feature_views, batch_dict) 
@@ -56,15 +64,6 @@ function assemble_model(D, K, sample_ids, sample_conditions,
     Y_reg = construct_Y_reg(K, N, feature_ids, feature_views, feature_sets, feature_graphs,
                             lambda_Y_l1, lambda_Y_selective_l1, lambda_Y_graph,
                             Y_ard, Y_feature_set_ard)
-
-
-    # If necessary, rearrange features such that 
-    # their distributions and views are in contiguous blocks
-    data_idx = sortperm(collect(zip(feature_distributions, feature_views)))
-    feature_ids .= feature_ids[data_idx]
-    feature_views .= feature_views[data_idx]
-    feature_distributions .= feature_distributions[data_idx]
-    D .= D[:,data_idx]
 
     # Construct MatFacModel
     matfac = MatFacModel(M, N, K, feature_distributions;
@@ -197,27 +196,27 @@ end
 ##########################################
 
 
-function Base.getindex(model::PathMatFacModel, idx1, idx2)
-    
-    new_data = nothing
-    if model.data != nothing
-        new_data = model.data[idx1,idx2]
-    end
-
-    new_conditions = nothing
-    if model.sample_conditions != nothing
-        new_conditions = model.sample_conditions[idx1]
-    end
-
-    return PathMatFacModel(model.matfac[idx1,idx2],
-                           new_data,
-                           model.sample_ids[idx1],
-                           new_conditions,
-                           model.feature_ids[idx2],
-                           model.feature_views[idx2],
-                           model.data_idx[idx2])
-
-end
+#function Base.getindex(model::PathMatFacModel, idx1, idx2)
+#    
+#    new_data = nothing
+#    if model.data != nothing
+#        new_data = model.data[idx1,idx2]
+#    end
+#
+#    new_conditions = nothing
+#    if model.sample_conditions != nothing
+#        new_conditions = model.sample_conditions[idx1]
+#    end
+#
+#    return PathMatFacModel(model.matfac[idx1,idx2],
+#                           new_data,
+#                           model.sample_ids[idx1],
+#                           new_conditions,
+#                           model.feature_ids[idx2],
+#                           model.feature_views[idx2],
+#                           model.data_idx[idx2])
+#
+#end
 
 
 PMTypes = Union{PathMatFacModel, NetworkRegularizer, GroupRegularizer,
