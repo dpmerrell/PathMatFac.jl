@@ -942,7 +942,7 @@ function model_tests()
         @test length(model.matfac.X_reg.regularizers) == 3 
         @test length(model.matfac.col_transform.layers) == 4 
         @test length(model.matfac.Y_reg.regularizers) == 3 
-        @test typeof(model.matfac.Y_reg.regularizers[1]) <: PM.L1Regularizer 
+        @test typeof(model.matfac.Y_reg.regularizers[1]) <: PM.L2Regularizer 
         @test isapprox(model.matfac.Y_reg(model.matfac.Y), 0.5*3.14*sum(model.matfac.Y.^2))
 
         # Selective L1-regularized model construction 
