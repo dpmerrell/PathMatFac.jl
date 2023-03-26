@@ -1,30 +1,61 @@
 
+
 using DictVis
-using HDF5
+using PathwayMultiomics, MatFac
+using Plotly
+
+PM = PathwayMultiomics
+MF = MatFac
 
 import DictVis: is_plottable, leaf_trace, is_traversable
 
-#@traversable(HDF5.File)
-#@traversable(HDF5.Group)
 
-DictVis.is_traversable(x::HDF5.File) = true
-DictVis.is_traversable(x::HDF5.Group) = true
+@traversable_fields PM.PathMatFacModel
+@traversable_fields MF.MatFacModel
+@traversable_fields PM.ViewableComposition
+@traversable_fields PM.ColScale
+@traversable_fields PM.BatchScale
+@traversable_fields PM.ColShift
+@traversable_fields PM.BatchShift
+@traversable_fields PM.BatchArray
 
-function DictVis.is_plottable(x::HDF5.Dataset)
-    return DictVis.is_plottable(getindex(x))
+@traversable_fields PM.SequenceReg
+@traversable_fields PM.ColParamReg
+@traversable_fields PM.GroupRegularizer
+@traversable_fields PM.CompositeRegularizer
+@traversable_fields PM.BatchArrayReg
+@traversable_fields PM.FeatureSetARDReg
+
+#DictVis.is_plottable(m::SparseMatrixCSC) = false
+
+
+@plottable NTuple{K,Number} where K
+function leaf_trace(leaf::NTuple{K,Number} where K)
+    return leaf_trace(collect(leaf))
 end
 
-function DictVis.leaf_trace(x::HDF5.Dataset)
-    return DictVis.leaf_trace(getindex(x))
-end 
+MAX_HEATMAP_SIZE = DictVis.MAX_HEATMAP_SIZE*100
+
+function leaf_trace(leaf::AbstractMatrix{<:Real})
+
+    M, N = size(leaf)
+    total_size = M*N
+
+    if total_size > MAX_HEATMAP_SIZE
+        shrinkage = ceil(sqrt(total_size/MAX_HEATMAP_SIZE))
+        leaf = DictVis.downsample(leaf, shrinkage)
+    end
+
+    trace = heatmap(z=float.(leaf), type="heatmap", colorscale="Greys", reversescale=true)
+    return trace
+end
 
 function main(args)
-    in_hdf = args[1]
+    in_model_hdf = args[1]
     out_html = args[2]
 
-    f = h5open(in_hdf, "r")
-    generate_html(f, out_html)
+    model = PathwayMultiomics.load_model(in_model_hdf)
+    generate_html(model, out_html)
 end
 
 main(ARGS)
-

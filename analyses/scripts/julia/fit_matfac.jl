@@ -102,7 +102,7 @@ function main(args)
                                     :lambda_X_l2 => nothing,
                                     :lambda_X_condition => 1.0,
                                     :lambda_X_graph => 1.0, 
-                                    :lambda_Y_l1 => nothing,
+                                    :lambda_Y_l2 => nothing,
                                     :lambda_Y_selective_l1 => nothing,
                                     :lambda_Y_graph => nothing,
                                     :lambda_layer => 1.0,
@@ -207,7 +207,9 @@ function main(args)
     #################################################
 
     model = PathMatFacModel(D; model_kwargs...)
-    
+    println("K LATENT FACTORS: ")
+    println(size(model.matfac.X, 1))
+ 
     #######################################################
     # SELECT A GPU (IF APPLICABLE)
     #######################################################

@@ -181,18 +181,6 @@ function nans_to_val!(tup, val)
     end
 end
 
-function nanprint(v::Tuple, name)
-    for (i,arr) in enumerate(v)
-        nanprint(arr, string(name, "[", i, "]"))
-    end
-end
-
-function nanprint(v::AbstractArray, name)
-    s = sum((!isfinite).(v))
-    if s > 0
-        println(string(s, " NONFINITE VALUES IN ", name))
-    end
-end
 
 function theta_delta_fixpoint(model::MF.MatFacModel, delta2::Tuple, sigma2::AbstractVector, data::AbstractMatrix; 
                               capacity=10^8, batch_eb_max_iter=10, batch_eb_rtol=1e-8, verbosity=1, print_prefix="", history=nothing)
@@ -378,7 +366,7 @@ function basic_fit!(model::PathMatFacModel; fit_batch=false,
                                             whiten=false,
                                             capacity=Int(10e8),
                                             opt=nothing, lr=0.05, max_epochs=1000,
-                                            lr_joint=0.001, 
+                                            lr_joint=0.0005, 
                                             verbosity=1, print_prefix="",
                                             history=nothing,
                                             kwargs...)

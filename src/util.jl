@@ -21,6 +21,10 @@ function bernoulli_var_init(m::T, v::T) where T <: Number
     end
 end
 
+
+###################################################
+# Dealing with NaNs
+###################################################
 function nansum(x)
     return sum(filter(!isnan, x))
 end
@@ -31,6 +35,19 @@ end
 
 function nanvar(x)
     return var(filter(!isnan, x))
+end
+
+function nanprint(v::Tuple, name)
+    for (i,arr) in enumerate(v)
+        nanprint(arr, string(name, "[", i, "]"))
+    end
+end
+
+function nanprint(v::AbstractArray, name)
+    s = sum((!isfinite).(v))
+    if s > 0
+        println(string(s, " NONFINITE VALUES IN ", name))
+    end
 end
 
 

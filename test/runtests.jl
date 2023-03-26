@@ -937,13 +937,13 @@ function model_tests()
         @test typeof(model.matfac.Y_reg.regularizers[3]) <: PM.NetworkRegularizer
         
         # Vanilla L1-regularized model construction 
-        model = PathMatFacModel(Z; K=7, lambda_Y_l1=3.14)
+        model = PathMatFacModel(Z; K=7, lambda_Y_l2=3.14)
         @test size(model.matfac.Y) == (7,N)
         @test length(model.matfac.X_reg.regularizers) == 3 
         @test length(model.matfac.col_transform.layers) == 4 
         @test length(model.matfac.Y_reg.regularizers) == 3 
         @test typeof(model.matfac.Y_reg.regularizers[1]) <: PM.L1Regularizer 
-        @test isapprox(model.matfac.Y_reg(model.matfac.Y), 3.14*sum(abs.(model.matfac.Y)))
+        @test isapprox(model.matfac.Y_reg(model.matfac.Y), 0.5*3.14*sum(model.matfac.Y.^2))
 
         # Selective L1-regularized model construction 
         model = PathMatFacModel(Z; feature_ids=feature_ids, feature_graphs=feature_graphs, lambda_Y_selective_l1=1.0)
@@ -1393,7 +1393,7 @@ function model_io_tests()
     @testset "Model IO" begin
 
         model = PathMatFacModel(Z; sample_conditions, feature_ids=feature_ids,  feature_views=feature_views,
-                                                      lambda_X_l2=0.1,# lambda_Y_l1=0.05, 
+                                                      lambda_X_l2=0.1, 
                                                       feature_graphs=feature_graphs, batch_dict=batch_dict, 
                                                       lambda_Y_graph=0.1, lambda_Y_selective_l1=0.05)
 
