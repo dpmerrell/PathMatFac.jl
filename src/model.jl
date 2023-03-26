@@ -39,7 +39,7 @@ function assemble_model(D, K, sample_ids, sample_conditions,
                               batch_dict,
                               feature_sets, feature_graphs, sample_graphs,
                               lambda_X_l2, lambda_X_condition, lambda_X_graph, 
-                              lambda_Y_l1, lambda_Y_selective_l1, lambda_Y_graph,
+                              lambda_Y_l2, lambda_Y_selective_l1, lambda_Y_graph,
                               Y_ard, Y_feature_set_ard,
                               lambda_layer)
 
@@ -62,7 +62,7 @@ function assemble_model(D, K, sample_ids, sample_conditions,
                             lambda_X_l2, lambda_X_condition, lambda_X_graph,
                             Y_ard, Y_feature_set_ard)
     Y_reg = construct_Y_reg(K, N, feature_ids, feature_views, feature_sets, feature_graphs,
-                            lambda_Y_l1, lambda_Y_selective_l1, lambda_Y_graph,
+                            lambda_Y_l2, lambda_Y_selective_l1, lambda_Y_graph,
                             Y_ard, Y_feature_set_ard)
 
     # Construct MatFacModel
@@ -103,7 +103,7 @@ function PathMatFacModel(D::AbstractMatrix{<:Real};
                          lambda_X_l2::Union{Real,Nothing}=nothing,
                          lambda_X_condition::Union{Real,Nothing}=1.0,
                          lambda_X_graph::Union{Real,Nothing}=1.0, 
-                         lambda_Y_l1::Union{Real,Nothing}=nothing,
+                         lambda_Y_l2::Union{Real,Nothing}=nothing,
                          lambda_Y_selective_l1::Union{Real,Nothing}=nothing,
                          lambda_Y_graph::Union{Real,Nothing}=nothing,
                          lambda_layer::Union{Real,Nothing}=1.0,
@@ -185,7 +185,7 @@ function PathMatFacModel(D::AbstractMatrix{<:Real};
                           feature_ids, feature_views, feature_distributions,
                           batch_dict, feature_sets, feature_graphs, sample_graphs,
                           lambda_X_l2, lambda_X_condition, lambda_X_graph,
-                          lambda_Y_l1, lambda_Y_selective_l1, lambda_Y_graph,
+                          lambda_Y_l2, lambda_Y_selective_l1, lambda_Y_graph,
                           Y_ard, Y_fsard, 
                           lambda_layer) 
 end

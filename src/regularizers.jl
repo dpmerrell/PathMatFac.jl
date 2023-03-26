@@ -615,7 +615,7 @@ end
 #########################################################
 
 function construct_Y_reg(K, N, feature_ids, feature_views, feature_sets, feature_graphs,
-                         lambda_Y_l1, lambda_Y_selective_l1, lambda_Y_graph,
+                         lambda_Y_l2, lambda_Y_selective_l1, lambda_Y_graph,
                          Y_ard, Y_geneset_ard)
 
     # If either of the ARD flags are set `true`, then
@@ -632,8 +632,8 @@ function construct_Y_reg(K, N, feature_ids, feature_views, feature_sets, feature
     # (Default is *no* regularization) 
     regularizers = Any[x->0, x->0, x->0]
     mixture_p = zeros(3)
-    if lambda_Y_l1 != nothing
-        regularizers[1] =  L1Regularizer(K, lambda_Y_l1)
+    if lambda_Y_l2 != nothing
+        regularizers[1] =  L2Regularizer(K, lambda_Y_l2)
         mixture_p[1] = 1
     end
 
@@ -710,6 +710,15 @@ function reweight_eb!(reg::BatchArrayReg, A::BatchArray; mixture_p=1.0)
 
     reg.centers = new_centers
     reg.weights = map(v -> mixture_p ./ v, new_vars)
+   
+    # Set regularizer weights to a finite value
+    # whenever they're NaN
+    nan_idx = map(w -> (!isfinite).(w), reg.weights)
+    cr_sizes = map(length, A.col_ranges)
+    for (w,i,s) in zip(reg.weights, nan_idx, cr_sizes)
+        w[i] .= (1 + Float32(0.5)*s) # This is the posterior mean of a gamma-distributed precision
+                                     # with parameters α = β = 1 (and zero empirical variance). 
+    end
 
 end
 

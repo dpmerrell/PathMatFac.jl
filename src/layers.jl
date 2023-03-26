@@ -144,7 +144,7 @@ function ChainRulesCore.rrule(bs::BatchScale, Z::AbstractMatrix)
     result, pb = Zygote.pullback((z,d) -> z*exp(d), Z, bs.logdelta)
 
     function batchscale_pullback(result_bar)
-        Z_bar, logdelta_bar = pb(result_bar) 
+        Z_bar, logdelta_bar = pb(result_bar)
         return ChainRulesCore.Tangent{BatchScale}(logdelta=logdelta_bar),
                Z_bar
     end
@@ -205,14 +205,8 @@ function ChainRulesCore.rrule(bs::BatchShift, Z::AbstractMatrix)
     
     result, pb = Zygote.pullback((z,t) -> z + t, Z, bs.theta)
 
-    #println("RESULT OF BATCH SHIFT")
-    #println(result)
     function batchshift_pullback(result_bar)
         Z_bar, theta_bar = pb(result_bar)
-        #println("GRADIENT OF BATCH SHIFT W.R.T. Z")
-        #println(Z_bar) 
-        #println("GRADIENT OF BATCH SHIFT W.R.T. LAYER")
-        #println(theta_bar) 
         return ChainRulesCore.Tangent{BatchShift}(theta=theta_bar),
                Z_bar
     end

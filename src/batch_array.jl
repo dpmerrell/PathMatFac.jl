@@ -141,6 +141,7 @@ function ChainRulesCore.rrule(::typeof(+), A::AbstractMatrix, B::BatchArray)
         for (j, cbr) in enumerate(B.col_ranges)
             values_bar[j] .= transpose(B.row_batches[j]) * view(result_bar,:,cbr) 
         end
+        
         B_bar = Tangent{BatchArray}(values=values_bar)
         return ChainRulesCore.NoTangent(), A_bar, B_bar 
     end
@@ -199,6 +200,7 @@ function ChainRulesCore.rrule(::typeof(*), A::AbstractMatrix, B::BatchArray)
             view(A, :, cbr) .*= view(result_bar, :, cbr)
             values_bar[j] .= transpose(B.row_batches[j]) * view(A, :, cbr)
         end
+
         B_bar = Tangent{BatchArray}(values=values_bar)
         return ChainRulesCore.NoTangent(), A_bar, B_bar 
     end
@@ -242,9 +244,9 @@ function ChainRulesCore.rrule(::typeof(exp), ba::BatchArray)
     Z = exp(ba)
 
     function ba_exp_pullback(Z_bar)
-        values_bar = map(.*, Z_bar.values, Z.values)
+        values_bar = Tuple(map(.*, Z_bar.values, Z.values))
         return ChainRulesCore.NoTangent(),
-               Tangent{BatchArray}(values=Tuple(values_bar))
+               Tangent{BatchArray}(values=values_bar)
     end
 
     return Z, ba_exp_pullback
