@@ -121,13 +121,13 @@ function main(args)
                                   :fsard_max_A_iter => 10000,
                                   :fsard_n_lambda => 20,
                                   :fsard_lambda_atol => 1e-2,
-                                  :fsard_frac_atol => 0.1,
-                                  :fsard_A_prior_frac => 0.7,
+                                  :fsard_frac_atol => 0.2,
+                                  :fsard_A_prior_frac => 0.9,
                                   :fsard_term_iter => 10,
                                   :fsard_term_rtol => 1e-5,
                                   :keep_history => false,
                                   :verbosity => 1
-                                    )
+                                  )
     update_opts!(fit_kwargs, cli_opts)
 
     #################################################
