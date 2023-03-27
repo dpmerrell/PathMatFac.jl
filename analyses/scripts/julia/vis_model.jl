@@ -9,20 +9,37 @@ PM = PathwayMultiomics
 
 function vis_embedding!(traces, labels, model::PM.PathMatFacModel)
 
-    push!(labels, "Embedded data (X)")
-
     sample_conditions = model.sample_conditions
     unq_conditions = unique(sample_conditions)
-    cond2color = Dict([c=>i for (i,c) in enumerate(unq_conditions)])
-    sample_colors = map(c->cond2color[c], sample_conditions)
+    #cond2color = Dict([c=>i for (i,c) in enumerate(unq_conditions)])
+    #sample_colors = map(c->cond2color[c], sample_conditions)
 
-    tr = scatter(x=model.matfac.X[1,:],
-                 y=model.matfac.X[2,:],
-                 z=model.matfac.X[3,:],
-                 color=sample_colors,
-                 type="scatter3d", mode="markers")
-    push!(traces, tr)
- 
+    for uc in unq_conditions
+        push!(labels, "Embedded data (X)")
+        idx = (sample_conditions .== uc)
+        tr = scatter(x=model.matfac.X[1,idx],
+                     y=model.matfac.X[2,idx],
+                     z=model.matfac.X[3,idx],
+                     type="scatter3d", 
+                     mode="markers", name=uc)
+        push!(traces, tr)
+    end 
+end
+
+
+function vis_X_matrix!(traces, labels, model::PM.PathMatFacModel)
+    K, M = size(model.matfac.X)
+    sample_ids = model.sample_ids
+    sample_conditions = model.sample_conditions
+    combined_ids = map((i,c) -> string(i, "_", c), sample_ids, sample_conditions)
+
+    push!(labels, "Embedded data (X)")
+    push!(traces, 
+          heatmap(z=model.matfac.X,
+                  x=combined_ids,
+                  y=collect(1:K),
+                  type="heatmap", colorscale="Greys", reversescale=true)
+         )
 end
 
 
@@ -35,21 +52,21 @@ function vis_factors!(traces, labels, model::PM.PathMatFacModel)
         push!(labels, "Linear factors (Y)")
 
         push!(traces,
-              scatter(x=collect(1:N), y=model.matfac.Y[k,:],
+              scatter(x=feature_ids, y=model.matfac.Y[k,:],
                       mode="lines", name=string("factor ",k)
                      )
              )
     end
-
 end
 
 
 function vis_mu!(traces, labels, model::PM.PathMatFacModel)
 
     N = size(model.matfac.Y,2)
+    feature_ids = model.feature_ids
     push!(labels, "Column shifts (μ)")
     push!(traces,
-          scatter(x=collect(1:N), y=model.matfac.col_transform.layers[3].mu,
+          scatter(x=feature_ids, y=model.matfac.col_transform.layers[3].mu,
                   mode="lines", name="Column shifts")
          )
 end
@@ -57,12 +74,44 @@ end
 
 function vis_sigma!(traces, labels, model::PM.PathMatFacModel)
 
-    N = size(model.matfac.Y,2)
+    K,N = size(model.matfac.Y)
+    feature_ids = model.feature_ids
     push!(labels, "Column scales (σ)")
     push!(traces,
-          scatter(x=collect(1:N), y=exp.(model.matfac.col_transform.layers[1].logsigma),
+          scatter(x=feature_ids, y=sqrt(K).*exp.(model.matfac.col_transform.layers[1].logsigma),
                   mode="lines", name="Column scales")
          )
+end
+
+
+function vis_explained_variance!(traces, labels, model::PathMatFacModel)
+
+    push!(labels, "Explained variance")
+
+    norm_sq = vec(sum(model.matfac.Y.^2, dims=2))
+    K = length(norm_sq)
+
+    push!(traces,
+          scatter(x=collect(1:K), y=norm_sq, mode="lines", name="Explained variance")
+         )
+
+end
+
+
+function vis_assignments!(traces, labels, model::PathMatFacModel)
+    if isa(model.matfac.Y_reg, PM.FeatureSetARDReg)
+        reg = model.matfac.Y_reg
+        L,K = size(reg.A)
+        push!(labels, "Pathway-factor assignments (A)")
+        push!(traces, 
+              heatmap(z=reg.A,
+                      x=collect(1:K),
+                      #y=reg.featureset_ids,
+                      y=collect(1:L),
+                      type="heatmap", colorscale="Greys", reversescale=true
+                     )
+             )
+    end
 end
 
 
@@ -87,14 +136,20 @@ function make_buttons(labels)
 end
 
 
-function generate_plots(model)
+function generate_plots(model, flag)
     traces = PlotlyBase.AbstractTrace[]
     labels = []
 
-    vis_embedding!(traces, labels, model)
-    vis_factors!(traces, labels, model)
-    vis_mu!(traces, labels, model)
-    vis_sigma!(traces, labels, model)
+    if flag == "embedding"
+        vis_embedding!(traces, labels, model)
+    else
+        vis_X_matrix!(traces, labels, model)
+        vis_factors!(traces, labels, model)
+        vis_explained_variance!(traces, labels, model)
+        vis_mu!(traces, labels, model)
+        vis_sigma!(traces, labels, model)
+        vis_assignments!(traces, labels, model)
+    end
 
     buttons = make_buttons(labels)  
  
@@ -118,9 +173,14 @@ function main(args)
     model_bson = args[1]
     out_html = args[2]
 
+    flag = nothing
+    if length(args) > 2
+        flag = args[3]
+    end
+
     model = PM.load_model(model_bson)
 
-    fig = generate_plots(model)
+    fig = generate_plots(model, flag)
     
     open(out_html, "w") do io
         PlotlyBase.to_html(io, fig.plot)
