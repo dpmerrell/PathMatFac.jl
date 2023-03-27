@@ -152,8 +152,8 @@ function update_alpha!(reg::FeatureSetARDReg, Y::AbstractMatrix)
 
     # Compute view-wise quantities from tau
     view_mean_t = map(r->mean(tau[:,r]), reg.feature_views)
-    view_mean_lt = map(r->mean(log.(tau[:,r])), reg.feature_views)
-    view_mean_tlt = map(r->mean(tau[:,r].*log.(tau[:,r])), reg.feature_views)
+    view_mean_lt = map(r->mean(log.(tau[:,r] .+ Float32(1e-9))), reg.feature_views)
+    view_mean_tlt = map(r->mean(tau[:,r].*log.(tau[:,r] .+ Float32(1e-9))), reg.feature_views)
 
     # Compute new view-wise alphas; assign to model
     view_alpha = view_mean_t ./(view_mean_tlt .- view_mean_t .* view_mean_lt)
@@ -161,8 +161,13 @@ function update_alpha!(reg::FeatureSetARDReg, Y::AbstractMatrix)
         reg.alpha[r] .= view_alpha[i]
     end
     
-    # Require alpha to be at least as large as beta0
     beta0 = reg.beta0
+
+    # Replace NaNs with beta0
+    nan_idx = (!isfinite).(reg.alpha)
+    reg.alpha[nan_idx] .= beta0
+ 
+    # Require alpha to be at least as large as beta0
     reg.alpha = map(x->max(x,beta0), reg.alpha)
  
     # For features that do not appear in any feature sets,
@@ -171,7 +176,7 @@ function update_alpha!(reg::FeatureSetARDReg, Y::AbstractMatrix)
     L = size(reg.S, 1)
     feature_appearances = vec(ones_like(Y,1,L) * reg.S)
     noprior_features = (feature_appearances .== 0)
-    reg.alpha[noprior_features] .= reg.beta0
+    reg.alpha[noprior_features] .= beta0
 end
 
 

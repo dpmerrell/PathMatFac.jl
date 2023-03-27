@@ -71,7 +71,7 @@ def inv_logistic(a, shrinkage=0.99):
     return np.log(x / (1.0 - x))
 
 
-def cna_threshold(a, lq=0.333, uq=0.667):
+def cna_threshold_quantile(a, lq=0.333, uq=0.667):
 
     m = a.shape[0]
     l = np.reshape(np.nanquantile(a, lq, axis=1), (m,1))
@@ -87,6 +87,19 @@ def cna_threshold(a, lq=0.333, uq=0.667):
 
     return a
 
+def cna_threshold(a, l=-0.5, u=0.5):
+
+    m = a.shape[0]
+    nan_idx = np.isnan(a)
+    l_idx = (a <= l)
+    u_idx = (a > u)
+    mid_idx = np.logical_not( l_idx | u_idx | nan_idx )
+
+    a[l_idx] = 1.0
+    a[u_idx] = 3.0
+    a[mid_idx] = 2.0
+
+    return a
 
 def mut_threshold(a, u=0.0):
     u_idx = (a > u)
