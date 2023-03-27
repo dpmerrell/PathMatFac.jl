@@ -19,6 +19,7 @@
 # within feature views. 
  
 mutable struct FeatureSetARDReg
+    featureset_ids::AbstractVector
     feature_view_ids::AbstractVector
     feature_views::Tuple
     alpha::AbstractVector
@@ -33,7 +34,8 @@ end
 Flux.trainable(r::FeatureSetARDReg) = ()
 
 function FeatureSetARDReg(K::Integer, S::AbstractMatrix,
-                          feature_views::AbstractVector; 
+                          feature_views::AbstractVector,
+                          featureset_ids::AbstractVector; 
                           beta0=1e-6, lr=0.05)
 
     n_sets, N = size(S)
@@ -45,7 +47,8 @@ function FeatureSetARDReg(K::Integer, S::AbstractMatrix,
     l1_lambda = ones(n_sets)  #TODO: revisit lambda
     A_opt = ISTAOptimiser(A, lr, l1_lambda)
  
-    return FeatureSetARDReg(feature_view_ids,
+    return FeatureSetARDReg(featureset_ids, 
+                            feature_view_ids,
                             feature_views,
                             alpha, 
                             beta0, beta,
@@ -62,7 +65,8 @@ end
 
 
 function Adapt.adapt_storage(::Flux.FluxCUDAAdaptor, r::FeatureSetARDReg)
-    return FeatureSetARDReg(r.feature_view_ids, 
+    return FeatureSetARDReg(r.featureset_ids, 
+                            r.feature_view_ids, 
                             r.feature_views,
                             gpu(r.alpha),
                             r.beta0,
@@ -74,7 +78,8 @@ function Adapt.adapt_storage(::Flux.FluxCUDAAdaptor, r::FeatureSetARDReg)
 end
 
 function Adapt.adapt_storage(::Flux.FluxCPUAdaptor, r::FeatureSetARDReg)
-    return FeatureSetARDReg(r.feature_view_ids, 
+    return FeatureSetARDReg(r.featureset_ids,
+                            r.feature_view_ids, 
                             r.feature_views,
                             cpu(r.alpha),
                             r.beta0,
@@ -86,7 +91,7 @@ function Adapt.adapt_storage(::Flux.FluxCPUAdaptor, r::FeatureSetARDReg)
 end
 
 function construct_featureset_ard(K, feature_ids, feature_views, feature_sets;
-                                  beta0=1e-6, lr=0.05)
+                                  featureset_names=nothing, beta0=1e-6, lr=0.05)
     L = length(feature_sets)
     N = length(feature_ids)
     f_to_j = value_to_idx(feature_ids)
@@ -108,7 +113,12 @@ function construct_featureset_ard(K, feature_ids, feature_views, feature_sets;
     end
     S = sparse(I, J, V, L, N)
 
-    return FeatureSetARDReg(K, S, feature_views; 
+    if featureset_names == nothing
+        featureset_names = collect(1:L)
+    end
+
+    return FeatureSetARDReg(K, S, feature_views, 
+                            featureset_names; 
                             beta0=beta0, lr=lr)
 end 
 

@@ -616,12 +616,13 @@ end
 
 function construct_Y_reg(K, N, feature_ids, feature_views, feature_sets, feature_graphs,
                          lambda_Y_l2, lambda_Y_selective_l1, lambda_Y_graph,
-                         Y_ard, Y_geneset_ard)
+                         Y_ard, Y_geneset_ard, featureset_names)
 
     # If either of the ARD flags are set `true`, then
     # they take priority over the other regularizers.
     if Y_geneset_ard
-        return construct_featureset_ard(K, feature_ids, feature_views, feature_sets) 
+        return construct_featureset_ard(K, feature_ids, feature_views, feature_sets; 
+                                        featureset_names=featureset_names) 
     end
     if Y_ard
         return ARDRegularizer() 

@@ -37,7 +37,7 @@ end
 function assemble_model(D, K, sample_ids, sample_conditions,
                               feature_ids, feature_views, feature_distributions,
                               batch_dict,
-                              feature_sets, feature_graphs, sample_graphs,
+                              feature_sets, featureset_names, feature_graphs, sample_graphs,
                               lambda_X_l2, lambda_X_condition, lambda_X_graph, 
                               lambda_Y_l2, lambda_Y_selective_l1, lambda_Y_graph,
                               Y_ard, Y_feature_set_ard,
@@ -63,7 +63,7 @@ function assemble_model(D, K, sample_ids, sample_conditions,
                             Y_ard, Y_feature_set_ard)
     Y_reg = construct_Y_reg(K, N, feature_ids, feature_views, feature_sets, feature_graphs,
                             lambda_Y_l2, lambda_Y_selective_l1, lambda_Y_graph,
-                            Y_ard, Y_feature_set_ard)
+                            Y_ard, Y_feature_set_ard, featureset_names)
 
     # Construct MatFacModel
     matfac = MatFacModel(M, N, K, feature_distributions;
@@ -99,6 +99,7 @@ function PathMatFacModel(D::AbstractMatrix{<:Real};
                          batch_dict::Union{<:AbstractDict,Nothing}=nothing,
                          sample_graphs::Union{<:AbstractVector,Nothing}=nothing,
                          feature_sets::Union{<:AbstractVector,Nothing}=nothing,
+                         featureset_names::Union{<:AbstractVector,Nothing}=nothing,
                          feature_graphs::Union{<:AbstractVector,Nothing}=nothing,
                          lambda_X_l2::Union{Real,Nothing}=nothing,
                          lambda_X_condition::Union{Real,Nothing}=1.0,
@@ -178,12 +179,13 @@ function PathMatFacModel(D::AbstractMatrix{<:Real};
     if Y_fsard
         @assert feature_sets != nothing "`feature_sets` must be provided whenever `Y_fsard` is true."
     end 
+    
 
     ###############################
     # Assemble the model
     return assemble_model(D, K, sample_ids, sample_conditions, 
                           feature_ids, feature_views, feature_distributions,
-                          batch_dict, feature_sets, feature_graphs, sample_graphs,
+                          batch_dict, feature_sets, featureset_names, feature_graphs, sample_graphs,
                           lambda_X_l2, lambda_X_condition, lambda_X_graph,
                           lambda_Y_l2, lambda_Y_selective_l1, lambda_Y_graph,
                           Y_ard, Y_fsard, 

@@ -98,6 +98,7 @@ function main(args)
                                     :batch_dict => nothing,
                                     :sample_graphs => nothing,
                                     :feature_sets => nothing,
+                                    :featureset_names => nothing,
                                     :feature_graphs => nothing,
                                     :lambda_X_l2 => nothing,
                                     :lambda_X_condition => 1.0,
@@ -164,6 +165,7 @@ function main(args)
 
     pwy_sif_data = JSON.parsefile(pathway_json)
     pwy_edgelists = pwy_sif_data["pathways"]
+    pwy_names = pwy_sif_data["names"]
 
     #################################################
     # PREP INPUTS
@@ -179,6 +181,7 @@ function main(args)
                                                                  feature_genes;
                                                                  feature_ids=feature_ids)
         model_kwargs[:feature_sets] = feature_sets
+        model_kwargs[:featureset_names] = pwy_names 
         model_kwargs[:feature_ids] = new_feature_ids
         model_kwargs[:Y_fsard] = true
     end
