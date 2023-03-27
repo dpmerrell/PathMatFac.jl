@@ -150,8 +150,10 @@ function update_alpha!(reg::FeatureSetARDReg, Y::AbstractMatrix)
     for (i,r) in enumerate(reg.feature_views)
         reg.alpha[r] .= view_alpha[i]
     end
+    
     # Require alpha to be at least as large as beta0
-    map!(x->max(x,reg.beta0), reg.alpha, reg.alpha)
+    beta0 = reg.beta0
+    reg.alpha = map(x->max(x,beta0), reg.alpha)
  
     # For features that do not appear in any feature sets,
     # set alpha = beta0 for an uninformative ARD prior on
