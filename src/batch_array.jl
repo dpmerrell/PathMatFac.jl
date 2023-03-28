@@ -71,7 +71,7 @@ function BatchArray(feature_views::Vector, row_batch_dict::AbstractDict,
     row_batches = [sparse(ids_to_ind_mat(rbv)) for rbv in row_batch_ids]
 
     return BatchArray(Tuple(kept_col_ranges),
-                      unq_views, 
+                      kept_views, 
                       row_selector,
                       Tuple(row_batches), 
                       Tuple(unq_row_batch_ids),

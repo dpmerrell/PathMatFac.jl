@@ -99,7 +99,6 @@ end
 @functor BatchScale
 
 function BatchScale(col_batches, batch_dict)
-
     unq_cbi = unique(col_batches)
     col_ranges = ids_to_ranges(col_batches)
 
