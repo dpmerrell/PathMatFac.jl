@@ -120,6 +120,8 @@ function main(args)
                                   :lr => 0.1,
                                   :max_epochs => 1000,
                                   :fit_reg_weight => "EB",
+                                  :fit_joint => false,
+                                  :lr_joint => 0.0005,
                                   :fsard_max_iter => 10,
                                   :fsard_max_A_iter => 10000,
                                   :fsard_n_lambda => 20,

@@ -366,11 +366,9 @@ function basic_fit!(model::PathMatFacModel; fit_batch=false,
                                             fit_mu=false, fit_logsigma=false,
                                             reweight_losses=false,
                                             fit_factors=false,
-                                            fit_joint=false,
                                             whiten=false,
                                             capacity=Int(10e8),
                                             opt=nothing, lr=0.05, max_epochs=1000,
-                                            lr_joint=0.0005, 
                                             verbosity=1, print_prefix="",
                                             history=nothing,
                                             kwargs...)
@@ -448,24 +446,6 @@ function basic_fit!(model::PathMatFacModel; fit_batch=false,
         unfreeze_layer!(model.matfac.col_transform, 1:4)
     end
 
-    # Finally: jointly fit X, Y, and batch shifts
-    if fit_joint
-        freeze_layer!(model.matfac.col_transform, 1:2) # batch and column scale 
-        unfreeze_layer!(model.matfac.col_transform, 3:4) # batch and column shift 
-        v_println("Jointly adjusting parameters..."; verbosity=verbosity, prefix=print_prefix)
-        orig_lr = opt.eta
-        opt.eta = lr_joint 
-        h = mf_fit!(model; capacity=capacity, update_X=true, update_Y=true,
-                                              update_col_layers=true,
-                                              opt=opt,
-                                              max_epochs=max_epochs,
-                                              verbosity=verbosity,
-                                              print_prefix=n_prefix,
-                                              keep_history=keep_history,
-                                              kwargs...)
-        opt.eta = orig_lr
-        history!(history, h; name="fit_joint")
-    end
 
     if whiten
         v_println("Whitening X."; verbosity=verbosity, prefix=print_prefix)
@@ -518,7 +498,7 @@ function basic_fit_reg_weight_eb!(model::PathMatFacModel;
     # Re-fit the model with regularized factors
     v_println("Refitting with regularization..."; prefix=print_prefix, 
                                                   verbosity=verbosity)
-    basic_fit!(model; fit_factors=true, fit_joint=true,
+    basic_fit!(model; fit_factors=true, 
                       verbosity=verbosity, print_prefix=n_pref,
                       history=history,
                       capacity=capacity,
@@ -621,7 +601,7 @@ function fit_non_ard!(model::PathMatFacModel; fit_reg_weight="EB",
                                               kwargs...)
     else
         basic_fit!(model; fit_mu=true, fit_logsigma=true, reweight_losses=true,
-                          fit_batch=true, fit_factors=true, fit_joint=true,
+                          fit_batch=true, fit_factors=true, 
                           whiten=true, 
                           kwargs...)
     end
@@ -726,7 +706,7 @@ function fit_feature_set_ard!(model::PathMatFacModel; lr=0.05, opt=nothing,
                                                       history=history) 
 
         # Re-fit the factors X, Y
-        basic_fit!(model; opt=opt, fit_factors=true, fit_joint=false, capacity=capacity,
+        basic_fit!(model; opt=opt, fit_factors=true, capacity=capacity,
                           whiten=false,
                           verbosity=verbosity, print_prefix=n_pref,
                           history=history, 
@@ -795,7 +775,9 @@ function fit!(model::PathMatFacModel; opt=nothing, lr=0.05,
                                       n_lambda=8,
                                       lambda_max=nothing,
                                       lambda_min_frac=1e-3, 
-                                      keep_history=false, 
+                                      keep_history=false,
+                                      fit_joint=false,
+                                      lr_joint=0.0005, 
                                       fsard_max_iter=10,
                                       fsard_max_A_iter=1000,
                                       fsard_n_lambda=20,
@@ -839,6 +821,26 @@ function fit!(model::PathMatFacModel; opt=nothing, lr=0.05,
                             n_lambda=n_lambda, 
                             lambda_min_frac=lambda_min_frac,
                             kwargs...)
+    end
+
+    # Finally: allow the fitted parameters to share information
+    if fit_joint
+        freeze_layer!(model.matfac.col_transform, 1:2) # batch and column scale 
+        unfreeze_layer!(model.matfac.col_transform, 3:4) # batch and column shift 
+        v_println("Jointly adjusting parameters..."; verbosity=verbosity, prefix=print_prefix)
+        orig_lr = opt.eta
+        opt.eta = lr_joint 
+        h = mf_fit!(model; capacity=capacity, update_X=true, update_Y=true,
+                                              update_col_layers=true,
+                                              opt=opt,
+                                              max_epochs=max_epochs,
+                                              verbosity=verbosity,
+                                              print_prefix=n_prefix,
+                                              keep_history=keep_history,
+                                              kwargs...)
+        opt.eta = orig_lr
+        history!(history, h; name="fit_joint")
+        unfreeze_layer!(model.matfac.col_transform, 1:2)
     end
 
     reorder_by_importance!(model)

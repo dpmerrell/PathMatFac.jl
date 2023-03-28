@@ -130,10 +130,10 @@ function vis_assignments!(traces, labels, model::PathMatFacModel)
         L,K = size(reg.A)
         push!(labels, "Pathway-factor assignments (A)")
         push!(traces, 
-              heatmap(z=reg.A,
-                      x=collect(1:K),
-                      #y=reg.featureset_ids,
-                      y=collect(1:L),
+              heatmap(z=transpose(reg.A),
+                      x=reg.featureset_ids,
+                      y=collect(1:K),
+                      #y=collect(1:L),
                       type="heatmap", colorscale="Greys", reversescale=true
                      )
              )

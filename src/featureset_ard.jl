@@ -316,7 +316,8 @@ function update_A!(reg::FeatureSetARDReg, Y::AbstractMatrix;
     i = 1
     function eval_func(lambda)
         v_println("(", i,") Updating A with λ_A=", lambda; verbosity=verbosity-1, prefix=print_prefix)
-        reg.A_opt.lambda .= lambda 
+        reg.A_opt.lambda .= lambda
+        reg.A .= 0 # Ditch the warm-start -- it seems to get stuck! 
         update_A_inner!(reg, Y; max_epochs=max_epochs,
                                 term_iter=term_iter,
                                 verbosity=verbosity-1,
