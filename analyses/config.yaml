@@ -301,17 +301,21 @@ tcga_regressions:
 tcga_ablation:
     data:
         heldout_ctypes: ["OV:GBM:LAML"]
+        kept_ctypes: ["HNSC:CESC:ESCA:STAD"]
     pathways:
         top_pwys: [1000]
     methods:
         matfac:
-            configuration: ["basic", "ard", "fsard"]
+            configuration: ["fsard"]
+            #omic_types: ["cna", "mrnaseq", "mrnaseq:methylation", "mrnaseq:methylation:cna:mutation"]
+            omic_types: ["mrnaseq:methylation:cna:mutation"]
+            #omic_types: ["cna"]
             K: [20]
             max_epochs: [2000]
             capacity: [1000000000000]
-            lr: [0.2]
+            lr: [0.07]
             print_iter: [1]
-            var_filter: [0.25]
+            var_filter: [0.05]
             verbosity: [2]
             fit_reg_weight: ["EB"]
             

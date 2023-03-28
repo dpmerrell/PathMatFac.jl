@@ -319,8 +319,8 @@ rule exp_fit_matfac:
         data_hdf=join(EXP_DATA_DIR, "{data}.hdf"),
         pwy_json=join(REACTOME_DIR, "{pathways}.json")
     output:
-        fitted_bson=join(EXP_FITTED_DIR, "method=matfac__{params,[_=.a-zA-Z0-9]+}/{data,[_.=:0-9a-zA-Z]+}/{pathways,[_.=0-9a-zA-Z]+}/fitted.bson"),
-        trans_train_hdf=join(EXP_TRANS_TRAIN_DIR, "method=matfac__{params,[_=.a-zA-Z0-9]+}/{data,[_.=:0-9a-zA-Z]+}/{pathways,[_.=0-9a-zA-Z]+}/transformed.hdf")
+        fitted_bson=join(EXP_FITTED_DIR, "method=matfac__{params,[_=:.a-zA-Z0-9]+}/{data,[_.=:0-9a-zA-Z]+}/{pathways,[_.=0-9a-zA-Z]+}/fitted.bson"),
+        trans_train_hdf=join(EXP_TRANS_TRAIN_DIR, "method=matfac__{params,[_=:.a-zA-Z0-9]+}/{data,[_.=:0-9a-zA-Z]+}/{pathways,[_.=0-9a-zA-Z]+}/transformed.hdf")
     params:
         kwargs=lambda wc: " ".join(wc["params"].split("__"))
     threads: 4

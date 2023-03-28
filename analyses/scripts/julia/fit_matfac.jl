@@ -48,6 +48,9 @@ function load_batches(omic_hdf, omic_types)
             result[a] = map(barcode_to_batch, barcode_data[:,assay_to_col[a]])
         end
     end
+    if length(result) == 0
+        result = nothing
+    end
 
     return result
 end
@@ -81,7 +84,7 @@ function main(args)
                                    :use_batch => true,
                                    :use_conditions => true,
                                    :history_json => nothing,
-                                   :omic_types => "mrnaseq,methylation,cna,mutation",
+                                   :omic_types => "mrnaseq:methylation:cna:mutation",
                                    :gpu_status_file => nothing,
                                    :use_gpu => true,
                                    :var_filter => 0.05
@@ -135,7 +138,7 @@ function main(args)
     #################################################   
     println("LOADING DATA")
 
-    omic_types = split(script_opts[:omic_types], ",")
+    omic_types = split(script_opts[:omic_types], ":")
  
     D, 
     sample_ids, sample_conditions, 

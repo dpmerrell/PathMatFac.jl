@@ -869,7 +869,7 @@ function featureset_ard_tests()
                      bin_search_lambda_atol=0.1,
                      target_frac=0.5,
                      print_iter=100,
-                     verbosity=1, print_prefix="")
+                     verbosity=2, print_prefix="")
 
         @test !isapprox(reg.A, zero(reg.A))
 
@@ -936,13 +936,13 @@ function model_tests()
         @test length(model.matfac.Y_reg.regularizers) == 3 
         @test typeof(model.matfac.Y_reg.regularizers[3]) <: PM.NetworkRegularizer
         
-        # Vanilla L1-regularized model construction 
+        # Vanilla Group-L2 regularized model construction 
         model = PathMatFacModel(Z; K=7, lambda_Y_l2=3.14)
         @test size(model.matfac.Y) == (7,N)
         @test length(model.matfac.X_reg.regularizers) == 3 
         @test length(model.matfac.col_transform.layers) == 4 
         @test length(model.matfac.Y_reg.regularizers) == 3 
-        @test typeof(model.matfac.Y_reg.regularizers[1]) <: PM.L2Regularizer 
+        @test typeof(model.matfac.Y_reg.regularizers[1]) <: PM.GroupRegularizer 
         @test isapprox(model.matfac.Y_reg(model.matfac.Y), 0.5*3.14*sum(model.matfac.Y.^2))
 
         # Selective L1-regularized model construction 

@@ -342,7 +342,7 @@ mutable struct GroupRegularizer
     group_labels::AbstractVector
     group_idx::Tuple
     group_weights::Tuple
-    group_centers::Tuple
+    #group_centers::Tuple
 end
 
 @functor GroupRegularizer
@@ -352,8 +352,8 @@ function GroupRegularizer(group_labels::AbstractVector; weight=1.0, K=1)
     idx = ids_to_ranges(group_labels)
     n_groups = length(unq_labels)
     weights = fill(weight, n_groups)
-    centers = [zeros(K) for _=1:n_groups]
-    return GroupRegularizer(unq_labels, Tuple(idx), Tuple(weights), Tuple(centers))
+    #centers = [zeros(K) for _=1:n_groups]
+    return GroupRegularizer(unq_labels, Tuple(idx), Tuple(weights)) #, Tuple(centers))
 end
 
 
@@ -383,13 +383,13 @@ function construct_new_group_reg(new_group_labels::AbstractVector,
     # whenever appropriate
     new_weights[new_intersect_idx] .= collect(old_reg_copy.group_weights[old_intersect_idx])
 
-    # Construct a vector of group centers for the new regularizer.
-    # By default, set it to the mean of the old centers.
-    expected_center = sum(old_reg_copy.group_centers) ./ length(old_reg_copy.group_centers)
-    new_centers = [copy(expected_center) for _=1:length(unq_new_labels)]
-    for (ni, oi) in zip(new_intersect_idx, old_intersect_idx)
-        new_centers[ni] .= old_reg_copy.group_centers[oi]
-    end
+    ## Construct a vector of group centers for the new regularizer.
+    ## By default, set it to the mean of the old centers.
+    #expected_center = sum(old_reg_copy.group_centers) ./ length(old_reg_copy.group_centers)
+    #new_centers = [copy(expected_center) for _=1:length(unq_new_labels)]
+    #for (ni, oi) in zip(new_intersect_idx, old_intersect_idx)
+    #    new_centers[ni] .= old_reg_copy.group_centers[oi]
+    #end
 
     # Finally: construct the sparse index matrix for the new regularizer
     new_group_idx = ids_to_ranges(new_group_labels)
@@ -397,30 +397,31 @@ function construct_new_group_reg(new_group_labels::AbstractVector,
     # Return the completed regularizer
     return GroupRegularizer(unq_new_labels, 
                             Tuple(new_group_idx), 
-                            Tuple(new_weights), 
-                            Tuple(new_centers))
+                            Tuple(new_weights)) #, 
+                            #Tuple(new_centers))
 end
 
 
 function reweight_eb!(gr::GroupRegularizer, X::AbstractMatrix; mixture_p=1.0)
-    new_centers = map(idx -> vec(mean(view(X,:,idx), dims=2)), gr.group_idx)
-    new_vars = map(idx -> var(view(X,:,idx)), gr.group_idx)
+    #new_centers = map(idx -> vec(mean(view(X,:,idx), dims=2)), gr.group_idx)
+    new_vars = map(idx -> mean(view(X,:,idx).^2), gr.group_idx)
     new_weights = map(v -> 1/v, new_vars)
     
-    gr.group_centers = new_centers
+    #gr.group_centers = new_centers
     gr.group_weights = new_weights
 end
 
 
 function (gr::GroupRegularizer)(X::AbstractMatrix)
-    return 0.5*sum( map((c, w, idx)->w*sum((view(X,:,idx) .- c).^2), 
-                         gr.group_centers, gr.group_weights, gr.group_idx
+    return 0.5*sum( map((w, idx)->w*sum(view(X,:,idx).^2), 
+                         #gr.group_centers, 
+                        gr.group_weights, gr.group_idx
                         ) 
                   )
 end
 
 function reorder_reg!(reg::GroupRegularizer, p)
-    reg.group_centers = map(c -> c[p], reg.group_centers)
+    #reg.group_centers = map(c -> c[p], reg.group_centers)
     return
 end
 
@@ -634,7 +635,7 @@ function construct_Y_reg(K, N, feature_ids, feature_views, feature_sets, feature
     regularizers = Any[x->0, x->0, x->0]
     mixture_p = zeros(3)
     if lambda_Y_l2 != nothing
-        regularizers[1] =  L2Regularizer(K, lambda_Y_l2)
+        regularizers[1] =  GroupRegularizer(feature_views; K=K, weight=lambda_Y_l2)
         mixture_p[1] = 1
     end
 

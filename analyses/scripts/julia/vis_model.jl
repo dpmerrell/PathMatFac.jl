@@ -6,6 +6,13 @@ using LinearAlgebra
 
 PM = PathwayMultiomics
 
+function nice_feature_ids(feature_ids, feature_views)
+    better_ids = feature_ids
+    if all(map(f->isa(f, Number), feature_ids))
+        better_ids = map((f,v)->string(v, " ", f), feature_ids, feature_views)
+    end
+    return better_ids
+end
 
 function vis_embedding!(traces, labels, model::PM.PathMatFacModel)
 
@@ -46,7 +53,7 @@ end
 function vis_factors!(traces, labels, model::PM.PathMatFacModel)
 
     K,N = size(model.matfac.Y)
-    feature_ids = model.feature_ids
+    feature_ids = nice_feature_ids(model.feature_ids, model.feature_views)
 
     for k=1:K
         push!(labels, "Linear factors (Y)")
@@ -59,31 +66,6 @@ function vis_factors!(traces, labels, model::PM.PathMatFacModel)
     end
 end
 
-
-function vis_mu!(traces, labels, model::PM.PathMatFacModel)
-
-    N = size(model.matfac.Y,2)
-    feature_ids = model.feature_ids
-    push!(labels, "Column shifts (μ)")
-    push!(traces,
-          scatter(x=feature_ids, y=model.matfac.col_transform.layers[3].mu,
-                  mode="lines", name="Column shifts")
-         )
-end
-
-
-function vis_sigma!(traces, labels, model::PM.PathMatFacModel)
-
-    K,N = size(model.matfac.Y)
-    feature_ids = model.feature_ids
-    push!(labels, "Column scales (σ)")
-    push!(traces,
-          scatter(x=feature_ids, y=sqrt(K).*exp.(model.matfac.col_transform.layers[1].logsigma),
-                  mode="lines", name="Column scales")
-         )
-end
-
-
 function vis_explained_variance!(traces, labels, model::PathMatFacModel)
 
     push!(labels, "Explained variance")
@@ -95,6 +77,50 @@ function vis_explained_variance!(traces, labels, model::PathMatFacModel)
           scatter(x=collect(1:K), y=norm_sq, mode="lines", name="Explained variance")
          )
 
+end
+
+function vis_mu!(traces, labels, model::PM.PathMatFacModel)
+
+    N = size(model.matfac.Y,2)
+    feature_ids = nice_feature_ids(model.feature_ids, model.feature_views)
+    push!(labels, "Column shifts (μ)")
+    push!(traces,
+          scatter(x=feature_ids, y=model.matfac.col_transform.layers[3].mu,
+                  mode="lines", name="Column shifts")
+         )
+end
+
+
+function vis_sigma!(traces, labels, model::PM.PathMatFacModel)
+
+    K,N = size(model.matfac.Y)
+    feature_ids = nice_feature_ids(model.feature_ids, model.feature_views)
+    push!(labels, "Column scales (σ)")
+    push!(traces,
+          scatter(x=feature_ids, y=sqrt(K).*exp.(model.matfac.col_transform.layers[1].logsigma),
+                  mode="lines", name="Column scales")
+         )
+end
+
+
+
+
+function vis_batch_shift!(traces, labels, model::PathMatFacModel)
+
+    if isa(model.matfac.col_transform.layers[4], PM.BatchShift)
+        theta = model.matfac.col_transform.layers[4].theta
+        f_ids = nice_feature_ids(model.feature_ids, model.feature_views)
+
+        for (cr, n, v) in zip(theta.col_ranges, theta.col_range_ids, theta.values)
+            x = f_ids[cr]
+            for k=1:size(v,1)
+                push!(labels, "Batch shift (θ)")
+                push!(traces,
+                      scatter(x=x, y=v[k,:], mode="lines", name=string(n, " ", k))
+                     )
+            end
+        end
+    end
 end
 
 
@@ -147,6 +173,7 @@ function generate_plots(model, flag)
         vis_factors!(traces, labels, model)
         vis_explained_variance!(traces, labels, model)
         vis_mu!(traces, labels, model)
+        vis_batch_shift!(traces, labels, model)
         vis_sigma!(traces, labels, model)
         vis_assignments!(traces, labels, model)
     end
