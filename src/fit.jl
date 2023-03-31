@@ -106,7 +106,9 @@ function init_logsigma!(model::PathMatFacModel; capacity=Int(10e8), history=noth
  
     col_vars = MF.link_col_sqerr(model.matfac.noise_model, model.matfac, model.data; 
                                  capacity=capacity)
-    K = size(model.matfac.X, 1) 
+    col_vars ./= vec(MF.column_nonnan(model.data))
+    
+    K = size(model.matfac.X, 1)
     model.matfac.col_transform.layers[1].logsigma .= log.(sqrt.(col_vars) ./ sqrt(K))
 
     model.matfac.X = orig_X
@@ -148,6 +150,65 @@ function reweight_col_losses!(model::PathMatFacModel; capacity=Int(10e8), histor
     unfreeze_layer!(model.matfac.col_transform, [1,2,4])
     
     history!(history; name="reweight_col_losses")
+end
+
+
+function rec_set_thresholds(p_vec, l_p::Float32, r_p::Float32)
+
+    if length(p_vec) == 0
+        # If zero probabilities remain, then we're done 
+        # (we had an even number of probabilities)
+        return Float32[] 
+    elseif length(p_vec) == 1
+        # If one probability remains, then we're done 
+        # (we had an odd number of probabilities)
+        return Float32[] 
+    else
+        # If more probabilities remain, then we 
+        # remove the two "outermost" probabilities from p_vec;
+        # add those probabilities to l_p, r_p;
+        l_p += p_vec[1]
+        r_p += p_vec[end] 
+        p_vec = p_vec[2:1-end]
+
+        # compute thresholds for them;
+        new_l_th = inv_logistic(l_p)
+        new_r_th = inv_logistic(1 - r_p)
+ 
+        # call rec_set_thresholds on the remaining probabilities;
+        # and concatenate the results together 
+        return vcat([new_l_th], 
+                    rec_set_thresholds(p_vec, l_p, r_p),
+                    [new_r_th])
+    end
+    
+end
+
+
+function init_ordinal_thresholds!(model::PathMatFacModel; verbosity=1, print_prefix="")
+
+    nm = model.matfac.noise_model
+    data = model.data
+
+    for (n, cr) in zip(nm.noises, nm.col_ranges)
+        if isa(n, MF.OrdinalNoise)
+            v_println("Setting ordinal thresholds..."; verbosity=verbosity,
+                                                       prefix=print_prefix)
+            K = length(n.ext_thresholds)
+            p = zeros(Float32, K-1)
+            
+            ord_data = view(data, :, cr)
+            for k=1:(K-1)
+                k_idx = (ord_data .== Float32(k))
+                p[k] = sum(k_idx) + 1
+            end
+            p ./= sum(p)
+
+            new_thresh = rec_set_thresholds(p, Float32(0.0), Float32(0.0))
+            n.ext_thresholds[2:(end-1)] .= new_thresh
+
+        end
+    end
 end
 
 
@@ -366,6 +427,7 @@ function basic_fit!(model::PathMatFacModel; fit_batch=false,
                                             fit_mu=false, fit_logsigma=false,
                                             reweight_losses=false,
                                             fit_factors=false,
+                                            init_ordinal=false,
                                             whiten=false,
                                             capacity=Int(10e8),
                                             opt=nothing, lr=0.05, max_epochs=1000,
@@ -389,6 +451,11 @@ function basic_fit!(model::PathMatFacModel; fit_batch=false,
     if fit_batch
         fit_batch = (isa(model.matfac.col_transform.layers[2], BatchScale) & 
                      isa(model.matfac.col_transform.layers[4], BatchShift))
+    end
+
+    if init_ordinal
+        init_ordinal_thresholds!(model; verbosity=verbosity,
+                                        print_prefix=print_prefix)
     end
 
     # Things differ pretty radically if we're fitting batch parameters
@@ -478,6 +545,7 @@ function basic_fit_reg_weight_eb!(model::PathMatFacModel;
     basic_fit!(model; fit_mu=true, fit_logsigma=true,
                       reweight_losses=true,
                       fit_batch=true, fit_factors=true,
+                      init_ordinal=true,
                       whiten=true,
                       verbosity=verbosity, print_prefix=n_pref, 
                       capacity=capacity,
@@ -540,6 +608,7 @@ function basic_fit_reg_weight_crossval!(model::PathMatFacModel;
                       fit_mu=true, fit_logsigma=true,
                       reweight_losses=true,
                       fit_batch=true, 
+                      init_ordinal=true,
                       print_prefix=n_pref, verbosity=verbosity)
 
     # Loop over a set of weights (in decreasing order)
@@ -601,7 +670,7 @@ function fit_non_ard!(model::PathMatFacModel; fit_reg_weight="EB",
                                               kwargs...)
     else
         basic_fit!(model; fit_mu=true, fit_logsigma=true, reweight_losses=true,
-                          fit_batch=true, fit_factors=true, 
+                          fit_batch=true, fit_factors=true, init_ordinal=true, 
                           whiten=true, 
                           kwargs...)
     end
@@ -638,6 +707,7 @@ function fit_ard!(model::PathMatFacModel; lr=0.05, ard_lr=0.01, opt=nothing,
     v_println("Adjusting with ARD on Y..."; verbosity=verbosity,
                                            prefix=print_prefix)
     model.matfac.Y_reg = orig_ard
+    #reweight_eb!(model.matfac.Y_reg, model.matfac.Y)
     orig_lr = opt.eta
     opt.eta = ard_lr
     basic_fit!(model; opt=opt, fit_factors=true, 
@@ -786,6 +856,8 @@ function fit!(model::PathMatFacModel; opt=nothing, lr=0.05,
                                       fsard_A_prior_frac=0.5,
                                       fsard_term_iter=5,
                                       fsard_term_rtol=1e-5,
+                                      verbosity=1,
+                                      print_prefix="",
                                       kwargs...)
   
     if opt == nothing
@@ -802,7 +874,9 @@ function fit!(model::PathMatFacModel; opt=nothing, lr=0.05,
     end   
  
     if isa(model.matfac.Y_reg, ARDRegularizer)
-        fit_ard!(model; opt=opt, history=hist, kwargs...)
+        fit_ard!(model; opt=opt, history=hist, verbosity=verbosity,
+                                               print_prefix=print_prefix, 
+                                               kwargs...)
     elseif isa(model.matfac.Y_reg, FeatureSetARDReg)
         fit_feature_set_ard!(model; opt=opt, history=hist, 
                                              fsard_max_iter=10,
@@ -813,6 +887,8 @@ function fit!(model::PathMatFacModel; opt=nothing, lr=0.05,
                                              fsard_A_prior_frac=0.5,
                                              fsard_term_iter=5,
                                              fsard_term_rtol=1e-5,
+                                             verbosity=verbosity,
+                                             print_prefix=print_prefix,
                                              kwargs...)
     else
         fit_non_ard!(model; opt=opt, history=hist, 
@@ -820,6 +896,8 @@ function fit!(model::PathMatFacModel; opt=nothing, lr=0.05,
                             lambda_max=lambda_max, 
                             n_lambda=n_lambda, 
                             lambda_min_frac=lambda_min_frac,
+                            verbosity=verbosity,
+                            print_prefix=print_prefix, 
                             kwargs...)
     end
 
@@ -829,7 +907,8 @@ function fit!(model::PathMatFacModel; opt=nothing, lr=0.05,
         unfreeze_layer!(model.matfac.col_transform, 3:4) # batch and column shift 
         v_println("Jointly adjusting parameters..."; verbosity=verbosity, prefix=print_prefix)
         orig_lr = opt.eta
-        opt.eta = lr_joint 
+        opt.eta = lr_joint
+        n_prefix = string(print_prefix, "    ") 
         h = mf_fit!(model; capacity=capacity, update_X=true, update_Y=true,
                                               update_col_layers=true,
                                               opt=opt,

@@ -118,7 +118,7 @@ PWY_SIF_CODE = Dict("a" => "activation",
                     "|" => -1
                    )
 
-VALID_LOSSES = ["normal", "bernoulli", "poisson", "ordinal3"]
+VALID_LOSSES = ["normal", "bernoulli", "bernoulli_sq_hinge", "poisson", "ordinal3"]
 
 ###############################################
 # Index and ID utils

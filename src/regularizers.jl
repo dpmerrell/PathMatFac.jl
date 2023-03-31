@@ -531,6 +531,19 @@ function ChainRulesCore.rrule(ard::ARDRegularizer, X::AbstractMatrix)
 end
 
 
+function reweight_eb!(reg::ARDRegularizer, X::AbstractMatrix)
+    tau_pm = Float32(1e-6 + 0.5) ./ (Float32(1e-6) .+ Float32(0.5) .* (X.*X))
+    tau_mean = mean(tau_pm)
+    tau_var = var(tau_pm)
+    
+    beta_mom = tau_mean / tau_var
+    alpha_mom = tau_mean * beta_mom
+
+    reg.alpha = alpha_mom
+    reg.beta = beta_mom 
+end
+
+
 #######################################################
 # Struct representing a weighted sum of regularizers 
 #######################################################
