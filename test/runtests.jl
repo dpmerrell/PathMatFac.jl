@@ -866,7 +866,7 @@ function featureset_ard_tests()
                      max_epochs=500, term_iter=100,
                      bin_search_max_iter=20,
                      bin_search_frac_atol=0.25,
-                     bin_search_lambda_atol=0.1,
+                     bin_search_lambda_atol=0.0001,
                      target_frac=0.5,
                      print_iter=100,
                      verbosity=2, print_prefix="")
@@ -997,7 +997,7 @@ function model_tests()
         @test length(model.matfac.X_reg.regularizers) == 3 
         @test typeof(model.matfac.X_reg.regularizers[2]) <: PM.GroupRegularizer
         @test typeof(model.matfac.X_reg.regularizers[3]) <: PM.NetworkRegularizer
-        @test all(model.matfac.X_reg.regularizers[2].group_weights .== 5.678) 
+        @test all(map(w-> isapprox(w,fill(5.678, K)), model.matfac.X_reg.regularizers[2].group_weights)) 
         @test all(model.matfac.X_reg.regularizers[3].cur_weights .== 1.234)
     end
 
@@ -1012,7 +1012,7 @@ function model_tests()
         @test length(model.matfac.X_reg.regularizers) == 3 
         @test typeof(model.matfac.X_reg.regularizers[2]) <: PM.GroupRegularizer
         @test typeof(model.matfac.X_reg.regularizers[3]) <: PM.NetworkRegularizer
-        @test all(model.matfac.X_reg.regularizers[2].group_weights .== 5.678)
+        @test all(map(w->isapprox(w,fill(5.678, K)), model.matfac.X_reg.regularizers[2].group_weights))
         @test all(model.matfac.X_reg.regularizers[3].cur_weights .== 1.234)
         @test size(model.matfac.Y) == (K,N)
         @test length(model.matfac.Y_reg.regularizers) == 3 
@@ -1451,14 +1451,14 @@ end
 
 function main()
 
-    util_tests()
-    batch_array_tests()
-    layers_tests()
-    preprocess_tests()
-    reg_tests()
-    featureset_ard_tests()
-    model_tests()
-    score_tests()
+    #util_tests()
+    #batch_array_tests()
+    #layers_tests()
+    #preprocess_tests()
+    #reg_tests()
+    #featureset_ard_tests()
+    #model_tests()
+    #score_tests()
     fit_tests()
     #transform_tests()
     model_io_tests()

@@ -180,8 +180,10 @@ function main(args)
     model_kwargs[:feature_views] = feature_assays
     model_kwargs[:feature_distributions] = map(a -> DISTRIBUTION_MAP[a], feature_assays) 
 
+    feature_ids = map((g,a) -> string(g, "_", a), feature_genes, feature_assays)
+    model_kwargs[:feature_ids] = feature_ids
+
     if script_opts[:configuration] == "fsard"
-        feature_ids = map(p -> join(p,"_"), zip(feature_genes, feature_assays))
         feature_sets, new_feature_ids = prep_pathway_featuresets(pwy_edgelists, 
                                                                  feature_genes;
                                                                  feature_ids=feature_ids)

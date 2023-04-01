@@ -2,7 +2,8 @@
 
 using DictVis
 using PathwayMultiomics, MatFac
-using Plotly
+using PlotlyJS
+using PlotlyBase
 
 PM = PathwayMultiomics
 MF = MatFac
@@ -10,8 +11,12 @@ MF = MatFac
 import DictVis: is_plottable, leaf_trace, is_traversable
 
 
-@traversable_fields PM.PathMatFacModel
 @traversable_fields MF.MatFacModel
+@traversable_fields MF.CompositeNoise
+@traversable_fields MF.OrdinalNoise
+@traversable_fields MF.OrdinalSqHingeNoise
+
+@traversable_fields PM.PathMatFacModel
 @traversable_fields PM.ViewableComposition
 @traversable_fields PM.ColScale
 @traversable_fields PM.BatchScale
@@ -24,6 +29,7 @@ import DictVis: is_plottable, leaf_trace, is_traversable
 @traversable_fields PM.GroupRegularizer
 @traversable_fields PM.CompositeRegularizer
 @traversable_fields PM.BatchArrayReg
+@traversable_fields PM.ARDRegularizer
 @traversable_fields PM.FeatureSetARDReg
 
 #DictVis.is_plottable(m::SparseMatrixCSC) = false

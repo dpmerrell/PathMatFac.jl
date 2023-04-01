@@ -341,8 +341,7 @@ end
 mutable struct GroupRegularizer
     group_labels::AbstractVector
     group_idx::Tuple
-    group_weights::Tuple
-    #group_centers::Tuple
+    group_weights::Tuple # Tuple of vectors -- row-and-group-specific weights
 end
 
 @functor GroupRegularizer
@@ -351,8 +350,7 @@ function GroupRegularizer(group_labels::AbstractVector; weight=1.0, K=1)
     unq_labels = unique(group_labels)
     idx = ids_to_ranges(group_labels)
     n_groups = length(unq_labels)
-    weights = fill(weight, n_groups)
-    #centers = [zeros(K) for _=1:n_groups]
+    weights = [fill(weight, K) for k=1:n_groups]
     return GroupRegularizer(unq_labels, Tuple(idx), Tuple(weights)) #, Tuple(centers))
 end
 
@@ -397,31 +395,27 @@ function construct_new_group_reg(new_group_labels::AbstractVector,
     # Return the completed regularizer
     return GroupRegularizer(unq_new_labels, 
                             Tuple(new_group_idx), 
-                            Tuple(new_weights)) #, 
-                            #Tuple(new_centers))
+                            Tuple(new_weights)) 
 end
 
 
 function reweight_eb!(gr::GroupRegularizer, X::AbstractMatrix; mixture_p=1.0)
-    #new_centers = map(idx -> vec(mean(view(X,:,idx), dims=2)), gr.group_idx)
-    new_vars = map(idx -> mean(view(X,:,idx).^2), gr.group_idx)
-    new_weights = map(v -> 1/v, new_vars)
+    new_vars = map(idx -> mean(view(X,:,idx).^2, dims=2), gr.group_idx)
+    new_weights = map(v -> 1 ./ v, new_vars)
     
-    #gr.group_centers = new_centers
     gr.group_weights = new_weights
 end
 
 
 function (gr::GroupRegularizer)(X::AbstractMatrix)
-    return 0.5*sum( map((w, idx)->w*sum(view(X,:,idx).^2), 
-                         #gr.group_centers, 
+    return 0.5*sum( map((w, idx)->sum( w.*view(X,:,idx).^2), 
                         gr.group_weights, gr.group_idx
                         ) 
                   )
 end
 
 function reorder_reg!(reg::GroupRegularizer, p)
-    #reg.group_centers = map(c -> c[p], reg.group_centers)
+    reg.group_weights = map(w -> w[p], reg.group_weights)
     return
 end
 

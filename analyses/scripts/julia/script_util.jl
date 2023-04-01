@@ -6,8 +6,9 @@ PM = PathwayMultiomics
 
 DISTRIBUTION_MAP = Dict("mrnaseq" => "normal",
                         "methylation" => "normal",
-                        "mutation" => "bernoulli",
-                        "cna" => "ordinal3",
+                        "mutation" => "bernoulli_sq_hinge",
+                        "cna" => "ordinal_sq_hinge3",
+                        #"cna" => "ordinal3",
                         "rppa" => "normal")
 
 DOGMA_MAP = Dict("mrnaseq" => "mrna",
