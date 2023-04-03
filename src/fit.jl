@@ -439,6 +439,7 @@ function basic_fit!(model::PathMatFacModel; fit_batch=false,
                                             opt=nothing, lr=0.05, max_epochs=1000,
                                             verbosity=1, print_prefix="",
                                             history=nothing,
+                                            lr_theta=0.01,
                                             kwargs...)
 
 
@@ -477,7 +478,8 @@ function basic_fit!(model::PathMatFacModel; fit_batch=false,
                                         max_epochs=max_epochs,
                                         verbosity=verbosity,
                                         print_prefix=n_prefix,
-                                        history=history)
+                                        history=history,
+                                        lr_theta=lr_theta)
     else
         if fit_mu
             # Initialize mu with the column M-estimates.
@@ -550,7 +552,6 @@ function basic_fit_reg_weight_eb!(model::PathMatFacModel;
     basic_fit!(model; fit_mu=true, fit_logsigma=true,
                       reweight_losses=true,
                       fit_batch=true, fit_factors=true,
-                      #init_ordinal=true,
                       whiten=true,
                       verbosity=verbosity, print_prefix=n_pref, 
                       capacity=capacity,
@@ -613,7 +614,6 @@ function basic_fit_reg_weight_crossval!(model::PathMatFacModel;
                       fit_mu=true, fit_logsigma=true,
                       reweight_losses=true,
                       fit_batch=true, 
-                      #init_ordinal=true,
                       print_prefix=n_pref, verbosity=verbosity)
 
     # Loop over a set of weights (in decreasing order)
