@@ -104,7 +104,7 @@ function PathMatFacModel(D::AbstractMatrix{<:Real};
                          lambda_X_l2::Union{Real,Nothing}=nothing,
                          lambda_X_condition::Union{Real,Nothing}=1.0,
                          lambda_X_graph::Union{Real,Nothing}=1.0, 
-                         lambda_Y_l2::Union{Real,Nothing}=nothing,
+                         lambda_Y_l2::Union{Real,Nothing}=1.0,
                          lambda_Y_selective_l1::Union{Real,Nothing}=nothing,
                          lambda_Y_graph::Union{Real,Nothing}=nothing,
                          lambda_layer::Union{Real,Nothing}=1.0,

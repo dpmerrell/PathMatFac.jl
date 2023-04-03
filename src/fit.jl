@@ -71,7 +71,7 @@ end
 
 
 function init_theta!(model::PathMatFacModel, opt; capacity=Int(10e8), max_epochs=500,
-                                                  lr_theta=0.001,
+                                                  lr_theta=0.005,
                                                   verbosity=1, print_prefix="", 
                                                   history=nothing, kwargs...)
     # Freeze everything except batch shift... 
@@ -121,36 +121,40 @@ end
 
 function reweight_col_losses!(model::PathMatFacModel; capacity=Int(10e8), history=nothing)
     
-
-    # Freeze the model layers.
-    freeze_layer!(model.matfac.col_transform, [1,2,4])
-    unfreeze_layer!(model.matfac.col_transform, 3) 
-
     # Set the noise model's weights to 1
     N = size(model.data, 2)
     one_vec = similar(model.data,N)
     one_vec .= 1
     MF.set_weight!(model.matfac.noise_model, one_vec)
 
-    # Compute the RMS norm of the loss gradient w.r.t. X, for each column
-    M_estimates = transpose(model.matfac.col_transform.layers[3].mu) 
+    # Temporarily set X and Y to zero
+    orig_X = model.matfac.X
+    orig_Y = model.matfac.Y
+    model.matfac.X = zero(orig_X)
+    model.matfac.Y = zero(orig_Y)
+
+    # Compute the RMS of the loss gradient for each column
     ssq_grads = vec(MF.batched_column_ssq_grads(model.matfac,
-                                                M_estimates,
                                                 model.data; 
                                                 capacity=capacity)
                    )
     M_vec = MF.column_nonnan(model.data)
-    weights = sqrt.(M_vec ./ ssq_grads)
+    rms_grads = sqrt.(ssq_grads ./ M_vec)
+
+    # The RMS gradients should be multiplied by the column scales
+    rms_grads .*= exp.(model.matfac.col_transform.layers[1].logsigma)
+    weights = 1 ./ rms_grads 
     weights[ (!isfinite).(weights) ] .= 1
-    weights = map(x -> max(x, 1e-2), weights)
-    weights = map(x -> min(x, 10.0), weights)
+    #weights = map(x -> max(x, 1e-2), weights)
+    #weights = map(x -> min(x, 10.0), weights)
     
     # Set the weights
     MF.set_weight!(model.matfac.noise_model, vec(weights))
 
-    # Unfreeze the model layers
-    unfreeze_layer!(model.matfac.col_transform, [1,2,4])
-    
+    # Restore X and Y
+    model.matfac.X = orig_X
+    model.matfac.Y = orig_Y
+
     history!(history; name="reweight_col_losses")
 end
 
@@ -481,7 +485,7 @@ function basic_fit!(model::PathMatFacModel; fit_batch=false,
                                                   prefix=print_prefix)
             init_mu!(model, opt; capacity=capacity, 
                                  max_epochs=500,
-                                 verbosity=verbosity-1,
+                                 verbosity=verbosity,
                                  print_prefix=n_prefix,
                                  history=history)
         end
@@ -515,7 +519,6 @@ function basic_fit!(model::PathMatFacModel; fit_batch=false,
         unfreeze_layer!(model.matfac.col_transform, 1:4)
     end
 
-
     if whiten
         v_println("Whitening X."; verbosity=verbosity, prefix=print_prefix)
         whiten!(model)
@@ -547,7 +550,7 @@ function basic_fit_reg_weight_eb!(model::PathMatFacModel;
     basic_fit!(model; fit_mu=true, fit_logsigma=true,
                       reweight_losses=true,
                       fit_batch=true, fit_factors=true,
-                      init_ordinal=true,
+                      #init_ordinal=true,
                       whiten=true,
                       verbosity=verbosity, print_prefix=n_pref, 
                       capacity=capacity,
@@ -610,7 +613,7 @@ function basic_fit_reg_weight_crossval!(model::PathMatFacModel;
                       fit_mu=true, fit_logsigma=true,
                       reweight_losses=true,
                       fit_batch=true, 
-                      init_ordinal=true,
+                      #init_ordinal=true,
                       print_prefix=n_pref, verbosity=verbosity)
 
     # Loop over a set of weights (in decreasing order)
@@ -672,7 +675,7 @@ function fit_non_ard!(model::PathMatFacModel; fit_reg_weight="EB",
                                               kwargs...)
     else
         basic_fit!(model; fit_mu=true, fit_logsigma=true, reweight_losses=true,
-                          fit_batch=true, fit_factors=true, init_ordinal=true, 
+                          fit_batch=true, fit_factors=true, #init_ordinal=true, 
                           whiten=true, 
                           kwargs...)
     end
@@ -682,7 +685,7 @@ end
 ############################################
 # Fit models with ARD regularization on Y
 
-function fit_ard!(model::PathMatFacModel; lr=0.05, ard_lr=0.01, opt=nothing, 
+function fit_ard!(model::PathMatFacModel; lr=0.05, lr_ard=0.01, opt=nothing, 
                                           verbosity=1, print_prefix="", 
                                           kwargs...)
 
@@ -711,7 +714,7 @@ function fit_ard!(model::PathMatFacModel; lr=0.05, ard_lr=0.01, opt=nothing,
     model.matfac.Y_reg = orig_ard
     #reweight_eb!(model.matfac.Y_reg, model.matfac.Y)
     orig_lr = opt.eta
-    opt.eta = ard_lr
+    opt.eta = lr_ard
     basic_fit!(model; opt=opt, fit_factors=true, 
                                verbosity=verbosity,
                                print_prefix=n_pref,
