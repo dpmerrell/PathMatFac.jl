@@ -295,7 +295,7 @@ end
 
 function init_batch_effects!(model::PathMatFacModel, opt; capacity=Int(10e8), 
                                                           max_epochs=5000,
-                                                          regress_lr=0.25,
+                                                          lr_regress=0.25,
                                                           batch_eb_max_iter=10,
                                                           verbosity=1, print_prefix="",
                                                           history=nothing, kwargs...)
@@ -329,7 +329,7 @@ function init_batch_effects!(model::PathMatFacModel, opt; capacity=Int(10e8),
     # Fit its Y factor (without regularization).
     model.matfac.Y_reg = y->0
     orig_lr = opt.eta
-    opt.eta = regress_lr
+    opt.eta = lr_regress
     h = mf_fit!(model; opt=opt, capacity=capacity, max_epochs=max_epochs,
                        verbosity=verbosity-1, print_prefix=n_pref,
                        scale_column_losses=false,
@@ -439,6 +439,7 @@ function basic_fit!(model::PathMatFacModel; fit_batch=false,
                                             opt=nothing, lr=0.05, max_epochs=1000,
                                             verbosity=1, print_prefix="",
                                             history=nothing,
+                                            lr_regress=0.5,
                                             lr_theta=0.01,
                                             kwargs...)
 
@@ -479,6 +480,7 @@ function basic_fit!(model::PathMatFacModel; fit_batch=false,
                                         verbosity=verbosity,
                                         print_prefix=n_prefix,
                                         history=history,
+                                        lr_regress=lr_regress,
                                         lr_theta=lr_theta)
     else
         if fit_mu

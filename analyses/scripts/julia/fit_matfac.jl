@@ -123,6 +123,7 @@ function main(args)
                                   :fit_joint => false,
                                   :lr_joint => 0.0005,
                                   :lr_theta => 0.01,
+                                  :lr_regress => 0.5,
                                   :fsard_max_iter => 10,
                                   :fsard_max_A_iter => 10000,
                                   :fsard_n_lambda => 20,
