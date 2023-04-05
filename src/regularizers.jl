@@ -401,7 +401,7 @@ end
 
 function reweight_eb!(gr::GroupRegularizer, X::AbstractMatrix; mixture_p=1.0)
     new_vars = map(idx -> mean(view(X,:,idx).^2, dims=2), gr.group_idx)
-    new_weights = map(v -> 1 ./ v, new_vars)
+    new_weights = map(v -> Float32(1e-6 .+ 0.5) ./ (Float32(1e-6) .+ Float32(0.5).*v), new_vars)
     
     gr.group_weights = new_weights
 end
@@ -458,7 +458,7 @@ end
 function reweight_eb!(cpr::ColParamReg, v::AbstractVector; mixture_p=1.0)
     new_centers = map(r->mean(v[r]), cpr.col_ranges)
     new_vars = map(r->var(v[r]), cpr.col_ranges)
-    new_weights = mixture_p ./ new_vars
+    new_weights = mixture_p .* Float32(1e-6 + 0.5) ./ (Float32(1e-6) .+ Float32(0.5).*new_vars)
     
     cpr.centers = new_centers
     cpr.weights = new_weights
