@@ -584,7 +584,6 @@ function basic_fit!(model::PathMatFacModel; fit_batch=false,
                                     print_prefix=print_prefix,
                                     max_epochs=max_epochs,
                                     lr=opt.eta)
-        whiten!(model)
     end
 
     # Fit the factors X,Y.
@@ -931,7 +930,8 @@ function fit!(model::PathMatFacModel; opt=nothing, lr=0.05,
                                       lambda_min_frac=1e-3, 
                                       keep_history=false,
                                       fit_joint=false,
-                                      lr_joint=0.0005, 
+                                      lr_joint=0.0005,
+                                      lr_ard=0.01, 
                                       fsard_max_iter=10,
                                       fsard_max_A_iter=1000,
                                       fsard_n_lambda=20,
@@ -959,7 +959,8 @@ function fit!(model::PathMatFacModel; opt=nothing, lr=0.05,
  
     if isa(model.matfac.Y_reg, ARDRegularizer)
         fit_ard!(model; opt=opt, history=hist, verbosity=verbosity,
-                                               print_prefix=print_prefix, 
+                                               print_prefix=print_prefix,
+                                               lr_ard=lr_ard, 
                                                kwargs...)
     elseif isa(model.matfac.Y_reg, FeatureSetARDReg)
         fit_feature_set_ard!(model; opt=opt, history=hist, 

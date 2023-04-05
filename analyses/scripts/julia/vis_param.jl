@@ -14,6 +14,8 @@ import DictVis: is_plottable, leaf_trace, is_traversable
 @traversable_fields MF.MatFacModel
 @traversable_fields MF.CompositeNoise
 @traversable_fields MF.OrdinalNoise
+@traversable_fields MF.NormalNoise
+@traversable_fields MF.SquaredHingeNoise
 @traversable_fields MF.OrdinalSqHingeNoise
 
 @traversable_fields PM.PathMatFacModel
