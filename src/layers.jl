@@ -258,6 +258,40 @@ function set_layer!(vc::ViewableComposition, idx::Int, layer)
                  vc.layers[idx+1:end]...)
 end
 
+
+#############################################
+# Layer for storing intermediate results in 
+# NIPALS-like factor-fitting procedure
+#############################################
+
+mutable struct NipalsFactors
+    X::AbstractMatrix
+    Y::AbstractMatrix
+    fitted_K::Integer
+    other_layers
+end
+
+@functor NipalsFactors
+
+Flux.trainable(nf::NipalsFactors) = ()
+
+function NipalsFactors(X::AbstractMatrix, Y::AbstractMatrix)
+    return NipalsFactors(zero(X), zero(Y), 0, z->z)
+end
+
+function (nf::NipalsFactors)(Z::AbstractMatrix)
+    return nf.other_layers(transpose(view(nf.X, 1:nf.fitted_K, :)) * view(nf.Y, 1:nf.fitted_K, :) .+ Z)
+end
+
+function view(nf::NipalsFactors, idx1, idx2)
+    return NipalsFactors(view(nf.X, :, idx1),
+                         view(nf.Y, :, idx2),
+                         nf.fitted_K,
+                         view(nf.other_layers, idx1, idx2)
+                        )
+end
+
+
 #############################################
 # Selectively freeze a layer
 #############################################
