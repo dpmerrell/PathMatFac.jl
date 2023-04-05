@@ -8,7 +8,6 @@ DISTRIBUTION_MAP = Dict("mrnaseq" => "normal",
                         "methylation" => "normal",
                         "mutation" => "bernoulli_sq_hinge",
                         "cna" => "ordinal_sq_hinge3",
-                        #"cna" => "ordinal3",
                         "rppa" => "normal")
 
 DOGMA_MAP = Dict("mrnaseq" => "mrna",
@@ -202,6 +201,9 @@ function parse_opts(opt_list)
                 end
             end
         finally
+            if v == "nothing"
+                new_v = nothing
+            end
             push!(parsed_v, new_v)
         end
     end

@@ -122,6 +122,20 @@ function (bs::BatchScale)(Z::AbstractMatrix)
 end
 
 
+function ChainRulesCore.rrule(bs::BatchScale, Z::AbstractMatrix)
+    
+    result, pb = Zygote.pullback((z,d) -> z*exp(d), Z, bs.logdelta)
+
+    function batchscale_pullback(result_bar)
+        Z_bar, logdelta_bar = pb(result_bar)
+        return ChainRulesCore.Tangent{BatchScale}(logdelta=logdelta_bar),
+               Z_bar
+    end
+
+    return result, batchscale_pullback
+end
+
+
 function view(bs::BatchScale, idx1, idx2)
     if typeof(idx2) == Colon
         stp = 0
@@ -135,20 +149,6 @@ end
 
 function Base.getindex(bs::BatchScale, idx1, idx2)
     return view(bs, idx1, idx2)
-end
-
-
-function ChainRulesCore.rrule(bs::BatchScale, Z::AbstractMatrix)
-    
-    result, pb = Zygote.pullback((z,d) -> z*exp(d), Z, bs.logdelta)
-
-    function batchscale_pullback(result_bar)
-        Z_bar, logdelta_bar = pb(result_bar)
-        return ChainRulesCore.Tangent{BatchScale}(logdelta=logdelta_bar),
-               Z_bar
-    end
-
-    return result, batchscale_pullback
 end
 
 

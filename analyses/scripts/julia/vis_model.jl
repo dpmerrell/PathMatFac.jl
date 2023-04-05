@@ -103,8 +103,6 @@ function vis_sigma!(traces, labels, model::PM.PathMatFacModel)
 end
 
 
-
-
 function vis_batch_shift!(traces, labels, model::PathMatFacModel)
 
     if isa(model.matfac.col_transform.layers[4], PM.BatchShift)
@@ -123,6 +121,24 @@ function vis_batch_shift!(traces, labels, model::PathMatFacModel)
     end
 end
 
+
+function vis_batch_scale!(traces, labels, model::PathMatFacModel)
+
+    if isa(model.matfac.col_transform.layers[2], PM.BatchScale)
+        logdelta = model.matfac.col_transform.layers[2].logdelta
+        f_ids = nice_feature_ids(model.feature_ids, model.feature_views)
+
+        for (cr, n, v) in zip(logdelta.col_ranges, logdelta.col_range_ids, logdelta.values)
+            x = f_ids[cr]
+            for k=1:size(v,1)
+                push!(labels, "Batch scale (δ)")
+                push!(traces,
+                      scatter(x=x, y=exp.(v[k,:]), mode="lines", name=string(n, " ", k))
+                     )
+            end
+        end
+    end
+end
 
 function vis_assignments!(traces, labels, model::PathMatFacModel)
     if isa(model.matfac.Y_reg, PM.FeatureSetARDReg)
@@ -174,6 +190,7 @@ function generate_plots(model, flag)
         vis_explained_variance!(traces, labels, model)
         vis_mu!(traces, labels, model)
         vis_batch_shift!(traces, labels, model)
+        vis_batch_scale!(traces, labels, model)
         vis_sigma!(traces, labels, model)
         vis_assignments!(traces, labels, model)
     end
