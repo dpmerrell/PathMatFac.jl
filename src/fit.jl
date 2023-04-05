@@ -218,6 +218,73 @@ function init_ordinal_thresholds!(model::PathMatFacModel; verbosity=1, print_pre
 end
 
 
+function init_factors_nipals!(model::PathMatFacModel; verbosity=1, 
+                                                      print_prefix="", 
+                                                      history=nothing,
+                                                      lr=0.1, kwargs...)
+
+    # Unpack the model, layers, and data
+    matfac = model.matfac
+    orig_layers = matfac.col_transform
+
+    K, M = size(matfac.X)
+    N = size(matfac.Y, 2)
+
+    # Construct a "NipalsFactors" layer to store the factors fitted thus far
+    matfac.col_transform = NipalsFactors(matfac.X, matfac.Y)
+    matfac.col_transform.other_layers = orig_layers
+
+    # Temporarily let X and Y be row vectors -- the factors we're currently fitting
+    matfac.X = zeros_like(matfac.X, 1, M)
+    matfac.Y = zeros_like(matfac.Y, 1, N)
+
+    # Remove regularization from X and Y
+    orig_X_reg = matfac.X_reg
+    orig_Y_reg = matfac.Y_reg
+    matfac.X_reg = x->0
+    matfac.Y_reg = y->0
+
+    for k=1:K
+        # Construct a new optimizer
+        opt = construct_optimizer(model, lr)
+ 
+        # Initialize the next factor
+        matfac.X .= randn_like(matfac.X).*Float32(0.01)
+        matfac.Y .= zeros_like(matfac.Y)
+
+        v_println("Fitting factor ", k; verbosity=verbosity, prefix=print_prefix)
+
+        # fit the next factor
+        h = mf_fit!(model; opt=opt, 
+                           update_X=true,
+                           update_Y=true,
+                           verbosity=verbosity,
+                           print_prefix=string(print_prefix, "    "),
+                           keep_history=(history!=nothing),
+                           kwargs...)
+        history!(history, h; name=string("init_factor_",k))
+
+        # Add the new factors to the fitted factors 
+        matfac.col_transform.X[k,:] .= matfac.X[1,:]
+        matfac.col_transform.Y[k,:] .= matfac.Y[1,:]
+
+        # Increment the `fitted_K`
+        matfac.col_transform.fitted_K = k
+    end
+
+    # Restore the fitted factors to the model
+    matfac.X = matfac.col_transform.X
+    matfac.Y = matfac.col_transform.Y
+
+    # Restore the original layers to the model
+    matfac.col_transform = orig_layers
+    
+    # Restore the original regularizers to the model
+    matfac.X_reg = orig_X_reg
+    matfac.Y_reg = orig_Y_reg
+end
+
+
 ########################################################################
 # BATCH EFFECT MODELING
 ########################################################################
@@ -432,6 +499,7 @@ end
 function basic_fit!(model::PathMatFacModel; fit_batch=false, 
                                             fit_mu=false, fit_logsigma=false,
                                             reweight_losses=false,
+                                            init_factors=false,
                                             fit_factors=false,
                                             init_ordinal=false,
                                             whiten=false,
@@ -510,7 +578,16 @@ function basic_fit!(model::PathMatFacModel; fit_batch=false,
         reweight_col_losses!(model; capacity=capacity)
     end
 
-    # Fit the factors X,Y
+    # Initialize the factors X,Y
+    if init_factors
+        init_factors_nipals!(model; verbosity=verbosity,
+                                    print_prefix=print_prefix,
+                                    max_epochs=max_epochs,
+                                    lr=opt.eta)
+        whiten!(model)
+    end
+
+    # Fit the factors X,Y.
     if fit_factors
         freeze_layer!(model.matfac.col_transform, 1:4)
         v_println("Fitting linear factors X,Y..."; verbosity=verbosity, prefix=print_prefix)
@@ -553,7 +630,7 @@ function basic_fit_reg_weight_eb!(model::PathMatFacModel;
                                                 verbosity=verbosity)
     basic_fit!(model; fit_mu=true, fit_logsigma=true,
                       reweight_losses=true,
-                      fit_batch=true, fit_factors=true,
+                      fit_batch=true, init_factors=true,
                       whiten=true,
                       verbosity=verbosity, print_prefix=n_pref, 
                       capacity=capacity,
@@ -677,7 +754,7 @@ function fit_non_ard!(model::PathMatFacModel; fit_reg_weight="EB",
                                               kwargs...)
     else
         basic_fit!(model; fit_mu=true, fit_logsigma=true, reweight_losses=true,
-                          fit_batch=true, fit_factors=true, #init_ordinal=true, 
+                          fit_batch=true, init_factors=true, fit_factors=true, 
                           whiten=true, 
                           kwargs...)
     end
