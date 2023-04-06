@@ -302,8 +302,8 @@ end
 
 function delta2_eb_mom(delta2_values::Tuple)
 
-    delta2_mean = map(v -> mean(v, dims=2), delta2_values)
-    delta2_var = map(v -> var(v, dims=2), delta2_values)
+    delta2_mean = map(v -> mean(1 ./ v, dims=2), delta2_values)
+    delta2_var = map(v -> var(1 ./ v, dims=2), delta2_values)
 
     beta = map((m,v) -> m ./ v, delta2_mean, delta2_var)
     alpha = map((m,b) -> m .* b, delta2_mean, beta)
@@ -328,6 +328,10 @@ function theta_delta_fixpoint(model::MF.MatFacModel, delta2::Tuple, sigma2::Abst
 
     theta_mean, theta_var = theta_eb_mom(theta.values)
     alpha, beta = delta2_eb_mom(delta2)
+    println("ALPHA")
+    println(alpha)
+    println("BETA")
+    println(beta)
 
     batch_sizes = ba_map(d->isfinite.(d), theta, data)
 
@@ -384,7 +388,7 @@ function init_batch_effects!(model::PathMatFacModel, opt; capacity=Int(10e8),
     N = size(model.matfac.Y,2)
     model.matfac.X = similar(model.matfac.X, K_conditions, M)
     set_array!(model.matfac.X, transpose(condition_mat))
-    model.matfac.Y = zeros_like(model.matfac.X, K_conditions, N)
+    model.matfac.Y = zeros_like(model.matfac.Y, K_conditions, N)
 
     v_println("Fitting column shifts..."; verbosity=verbosity,
                                           prefix=print_prefix)
@@ -432,21 +436,31 @@ function init_batch_effects!(model::PathMatFacModel, opt; capacity=Int(10e8),
                                      model.matfac,
                                      model.data; capacity=capacity))
     col_vars ./= vec(MF.column_nonnan(model.data))
+    println("COLUMN VARIANCES")
+    println(col_vars)
     # Set NaNs to 1
     col_vars[(!isfinite).(col_vars)] .= 1
 
     # Compute batchwise variances
     v_println("Computing batch scales..."; verbosity=verbosity,
                                            prefix=print_prefix)
-    ba_sqerr = ba_map((m, d) -> MF.sqerr_func(m,d) ,
+    ba_sqerr = ba_map((m, d) -> MF.sqerr_func(m,d),
                      theta_ba, model.matfac, model.data)
+    println("BATCH SQUARED ERROR")
+    println(ba_sqerr)
     ba_M = ba_map(d -> isfinite.(d), theta_ba, model.data)
+    println("BATCH M")
+    println(ba_M)
     ba_vars = map((sq, M) -> sq ./ M, ba_sqerr, ba_M)
+    println("BATCH VARIANCES")
+    println(ba_vars)
     nans_to_val!(ba_vars, Float32(1)) # Set NaNs to 1
 
     # Divide batch vars by column vars to obtain "raw" delta^2's
     col_ranges = theta_ba.col_ranges
     delta2_values = map((v, cr) -> v ./ transpose(view(col_vars, cr)), ba_vars, col_ranges)
+    println("DELTA2 VALUES")
+    println(delta2_values)
 
     # Update the estimated batch parameters in an EB fashion
     v_println("Batch effect EB procedure:"; prefix=print_prefix, verbosity=verbosity)
@@ -502,7 +516,7 @@ end
 function basic_fit!(model::PathMatFacModel; fit_batch=false, 
                                             fit_mu=false, fit_logsigma=false,
                                             reweight_losses=false,
-                                            init_factors=false,
+                                            #init_factors=false,
                                             fit_factors=false,
                                             init_ordinal=false,
                                             whiten=false,
@@ -581,13 +595,13 @@ function basic_fit!(model::PathMatFacModel; fit_batch=false,
         reweight_col_losses!(model; capacity=capacity)
     end
 
-    # Initialize the factors X,Y
-    if init_factors
-        init_factors_nipals!(model; verbosity=verbosity,
-                                    print_prefix=print_prefix,
-                                    max_epochs=max_epochs,
-                                    lr=opt.eta)
-    end
+    ## Initialize the factors X,Y
+    #if init_factors
+    #    init_factors_nipals!(model; verbosity=verbosity,
+    #                                print_prefix=print_prefix,
+    #                                max_epochs=max_epochs,
+    #                                lr=opt.eta)
+    #end
 
     # Fit the factors X,Y.
     if fit_factors
@@ -632,7 +646,9 @@ function basic_fit_reg_weight_eb!(model::PathMatFacModel;
                                                 verbosity=verbosity)
     basic_fit!(model; fit_mu=true, fit_logsigma=true,
                       reweight_losses=true,
-                      fit_batch=true, init_factors=true,
+                      fit_batch=true, 
+                      #init_factors=true,
+                      fit_factors=true,
                       whiten=true,
                       verbosity=verbosity, print_prefix=n_pref, 
                       capacity=capacity,
@@ -756,7 +772,9 @@ function fit_non_ard!(model::PathMatFacModel; fit_reg_weight="EB",
                                               kwargs...)
     else
         basic_fit!(model; fit_mu=true, fit_logsigma=true, reweight_losses=true,
-                          fit_batch=true, init_factors=true, fit_factors=true, 
+                          fit_batch=true, 
+                          #init_factors=true, 
+                          fit_factors=true, 
                           whiten=true, 
                           kwargs...)
     end

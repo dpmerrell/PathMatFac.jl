@@ -11,6 +11,17 @@ include("script_util.jl")
 
 PM = PathwayMultiomics
 
+function print_nan_fractions(omic_data, feature_assays)
+
+    for unq_a in unique(feature_assays)
+        rel_idx = (feature_assays .== unq_a)
+
+        rel_data = view(omic_data, :, rel_idx)
+        nanfrac = sum((!isfinite).(rel_data)) / prod(size(rel_data))
+        println(string("NaN fraction for ", unq_a, ": ", nanfrac))
+    end
+
+end
 
 function load_omic_data(omic_hdf, omic_types)
 
@@ -30,6 +41,8 @@ function load_omic_data(omic_hdf, omic_types)
     # Sample ids and conditions
     sample_ids = h5read(omic_hdf, "omic_data/instances")
     sample_conditions = h5read(omic_hdf, "omic_data/instance_groups")
+
+    print_nan_fractions(omic_data, feature_assays)
 
     return omic_data, sample_ids, sample_conditions, feature_genes, feature_assays
 end
@@ -116,7 +129,7 @@ function main(args)
     update_opts!(model_kwargs, cli_opts)
  
     fit_kwargs = Dict{Symbol,Any}(:capacity => Int(10e8),
-                                  :verbosity => 1, 
+                                  :verbosity => 2, 
                                   :lr => 0.1,
                                   :max_epochs => 1000,
                                   :fit_reg_weight => "EB",
@@ -134,7 +147,6 @@ function main(args)
                                   :fsard_term_iter => 10,
                                   :fsard_term_rtol => 1e-5,
                                   :keep_history => false,
-                                  :verbosity => 1
                                   )
     update_opts!(fit_kwargs, cli_opts)
 

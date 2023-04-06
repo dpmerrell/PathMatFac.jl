@@ -11,7 +11,7 @@ function generate_Z(K,M,N)
 
     # Mutation data
     mut_view = view(Z, :, 1:N)
-    mut_view .-= 1.0
+    mut_view .-= 1.1
     mut_view[mut_view .> 0] .= 1
     mut_view[mut_view .<= 0] .= 0
 
@@ -23,7 +23,7 @@ function generate_Z(K,M,N)
     # Column scales
     rna_view .*= 4.0
     # Batch scales
-    rna_view[1:mid_M,:] .*= 1.25
+    rna_view[1:mid_M,:] .*= 1.33
     rna_view[(mid_M+1):end,:] .*= 0.75
 
     # Column shift
