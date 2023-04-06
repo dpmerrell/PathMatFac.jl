@@ -222,7 +222,7 @@ function batch_array_tests()
         @test isapprox(Z, other_test_mat)
         (A_grad, ba_grad) = Zygote.gradient((x,y)->sum(x*y), ones(5,7), ba)
         other_Z = deepcopy(Z)
-        other_Z[:,4] .= 0
+        other_Z[:,4] .= 1
         @test isapprox(A_grad, other_Z)
         @test ba_grad.values == (repeat([3., 2.], inner=(1,3)), 
                                  repeat([2., 3.], inner=(1,2)),
@@ -321,7 +321,7 @@ function batch_array_tests()
         A_grad = cpu(A_grad)
         ba_grad = cpu(ba_grad)
         other_Z_d = deepcopy(Z_d)
-        other_Z_d[:,4] .= 0
+        other_Z_d[:,4] .= 1
         @test isapprox(A_grad, other_Z_d)
         @test all(map(isapprox, ba_grad.values, (repeat([3., 2.], inner=(1,3)), 
                                                 repeat([2., 3.], inner=(1,2)),
