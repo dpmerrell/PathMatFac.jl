@@ -122,7 +122,7 @@ end
 function reweight_col_losses!(model::PathMatFacModel; capacity=Int(10e8), history=nothing)
     
     # Set the noise model's weights to 1
-    N = size(model.data, 2)
+    M, N = size(model.data)
     one_vec = similar(model.data,N)
     one_vec .= 1
     MF.set_weight!(model.matfac.noise_model, one_vec)
@@ -138,8 +138,11 @@ function reweight_col_losses!(model::PathMatFacModel; capacity=Int(10e8), histor
                                                 model.data; 
                                                 capacity=capacity)
                    )
-    M_vec = MF.column_nonnan(model.data)
-    rms_grads = sqrt.(ssq_grads ./ M_vec)
+    #M_vec = MF.column_nonnan(model.data)
+    #rms_grads = sqrt.(ssq_grads ./ M_vec)
+    rms_grads = sqrt.(ssq_grads ./ M) # NOTE: divide by M (rather than the number of non-NaN entries.)
+                                      #       This increases the weight of columns containing
+                                      #       many NaNs, compensating for their "lack of gradient."
 
     # The RMS gradients should be multiplied by the column scales
     rms_grads .*= exp.(model.matfac.col_transform.layers[1].logsigma)

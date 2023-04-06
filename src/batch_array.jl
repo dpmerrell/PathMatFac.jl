@@ -190,9 +190,12 @@ function ChainRulesCore.rrule(::typeof(*), A::AbstractMatrix, B::BatchArray)
     end
  
     function ba_mult_pullback(result_bar)
-        A_bar = copy(result_bar)
+        #A_bar = deepcopy(result_bar)
+        A_bar = zero(A)
+        A_bar .+= result_bar
         for (j, cbr) in enumerate(B.col_ranges)
-            A_bar[:,cbr] .= result_bar[:,cbr].*buffers[j]
+            #A_bar[:,cbr] .= result_bar[:,cbr].*buffers[j]
+            A_bar[:,cbr] .*= buffers[j]
         end
 
         values_bar = map(zero, B.values) 
