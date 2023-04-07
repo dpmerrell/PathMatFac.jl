@@ -15,6 +15,9 @@ function generate_Z(K,M,N)
     mut_view[mut_view .> 0] .= 1
     mut_view[mut_view .<= 0] .= 0
 
+    # Add a lot of NaN rows to the mutation data
+    mut_view[3*div(M,4):end, :] .= NaN
+
     # RNAseq data
     rna_view = view(Z, :, (N+1):(2*N))
     #rna_view .= 10.0 .+ 4.0.*randn(M,N)

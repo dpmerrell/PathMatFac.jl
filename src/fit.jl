@@ -328,10 +328,6 @@ function theta_delta_fixpoint(model::MF.MatFacModel, delta2::Tuple, sigma2::Abst
 
     theta_mean, theta_var = theta_eb_mom(theta.values)
     alpha, beta = delta2_eb_mom(delta2)
-    println("ALPHA")
-    println(alpha)
-    println("BETA")
-    println(beta)
 
     batch_sizes = ba_map(d->isfinite.(d), theta, data)
 
@@ -410,7 +406,6 @@ function init_batch_effects!(model::PathMatFacModel, opt; capacity=Int(10e8),
                        update_X=false,
                        update_Y=true,
                        update_col_layers=false,
-                       reg_relative_weighting=false,
                        update_X_reg=false,
                        update_Y_reg=false,
                        update_row_layers_reg=false,
@@ -436,8 +431,6 @@ function init_batch_effects!(model::PathMatFacModel, opt; capacity=Int(10e8),
                                      model.matfac,
                                      model.data; capacity=capacity))
     col_vars ./= vec(MF.column_nonnan(model.data))
-    println("COLUMN VARIANCES")
-    println(col_vars)
     # Set NaNs to 1
     col_vars[(!isfinite).(col_vars)] .= 1
 
@@ -446,21 +439,13 @@ function init_batch_effects!(model::PathMatFacModel, opt; capacity=Int(10e8),
                                            prefix=print_prefix)
     ba_sqerr = ba_map((m, d) -> MF.sqerr_func(m,d),
                      theta_ba, model.matfac, model.data)
-    println("BATCH SQUARED ERROR")
-    println(ba_sqerr)
     ba_M = ba_map(d -> isfinite.(d), theta_ba, model.data)
-    println("BATCH M")
-    println(ba_M)
     ba_vars = map((sq, M) -> sq ./ M, ba_sqerr, ba_M)
-    println("BATCH VARIANCES")
-    println(ba_vars)
     nans_to_val!(ba_vars, Float32(1)) # Set NaNs to 1
 
     # Divide batch vars by column vars to obtain "raw" delta^2's
     col_ranges = theta_ba.col_ranges
     delta2_values = map((v, cr) -> v ./ transpose(view(col_vars, cr)), ba_vars, col_ranges)
-    println("DELTA2 VALUES")
-    println(delta2_values)
 
     # Update the estimated batch parameters in an EB fashion
     v_println("Batch effect EB procedure:"; prefix=print_prefix, verbosity=verbosity)
