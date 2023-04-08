@@ -66,6 +66,21 @@ function vis_factors!(traces, labels, model::PM.PathMatFacModel)
     end
 end
 
+
+function vis_factors_matrix!(traces, labels, model::PM.PathMatFacModel)
+
+    push!(labels, "Linear factors (Y); matrix view")
+
+    Y = model.matfac.Y
+    K = size(Y,1)
+    feature_ids = model.feature_ids
+
+    trace = heatmap(z=float.(Y), x=feature_ids, y=collect(1:K), type="heatmap", colorscale="Greys", reversescale=true)
+    push!(traces, trace)
+
+    return trace
+end
+
 function vis_explained_variance!(traces, labels, model::PathMatFacModel)
 
     push!(labels, "Explained variance")
@@ -187,6 +202,7 @@ function generate_plots(model, flag)
     else
         vis_X_matrix!(traces, labels, model)
         vis_factors!(traces, labels, model)
+        vis_factors_matrix!(traces, labels, model)
         vis_explained_variance!(traces, labels, model)
         vis_mu!(traces, labels, model)
         vis_batch_shift!(traces, labels, model)

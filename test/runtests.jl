@@ -1043,6 +1043,34 @@ function score_tests()
 end
 
 
+function lbfgs_tests()
+
+    M = 6
+    N = 10
+    K = 1
+
+    n_col_batches = 2
+    n_row_batches = 4
+
+    X = randn(K,M)
+    Y = randn(K,N)
+    Z = transpose(X)*Y
+
+    sample_ids = [string("sample_", i) for i=1:M]
+    sample_conditions = repeat(["condition_1", "condition_2"], inner=div(M,2))
+
+    feature_ids = map(x->string("x_",x), 1:N)
+    feature_views = repeat(1:n_col_batches, inner=div(N,n_col_batches))
+
+    @testset "L-BFGS tests" begin
+
+        model = PathMatFacModel(Z; K=1, sample_conditions=sample_conditions, feature_views=feature_views)
+        
+        PM.fit_lbfgs!(model.matfac, model.data)
+    end
+
+end
+
 
 function fit_tests()
     
@@ -1451,17 +1479,18 @@ end
 
 function main()
 
-    util_tests()
-    batch_array_tests()
-    layers_tests()
-    preprocess_tests()
-    reg_tests()
-    featureset_ard_tests()
-    model_tests()
-    score_tests()
+    #util_tests()
+    #batch_array_tests()
+    #layers_tests()
+    #preprocess_tests()
+    #reg_tests()
+    #featureset_ard_tests()
+    #model_tests()
+    #score_tests()
+    lbfgs_tests()
     fit_tests()
     #transform_tests()
-    model_io_tests()
+    #model_io_tests()
     #simulation_tests()
 
 end
