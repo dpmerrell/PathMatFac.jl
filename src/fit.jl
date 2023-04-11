@@ -148,8 +148,6 @@ function reweight_col_losses!(model::PathMatFacModel; capacity=Int(10e8), histor
     rms_grads .*= exp.(model.matfac.col_transform.layers[1].logsigma)
     weights = 1 ./ rms_grads 
     weights[ (!isfinite).(weights) ] .= 1
-    #weights = map(x -> max(x, 1e-2), weights)
-    #weights = map(x -> min(x, 10.0), weights)
     
     # Set the weights
     MF.set_weight!(model.matfac.noise_model, vec(weights))
@@ -221,7 +219,7 @@ function init_ordinal_thresholds!(model::PathMatFacModel; verbosity=1, print_pre
 end
 
 
-function init_factors_nipals!(model::PathMatFacModel; verbosity=1, 
+function init_factors_nipals!(model::PathMatFacModel;  verbosity=1, 
                                                       print_prefix="", 
                                                       history=nothing,
                                                       lr=0.1, kwargs...)
@@ -267,7 +265,10 @@ function init_factors_nipals!(model::PathMatFacModel; verbosity=1,
         #                   kwargs...)
         #history!(history, h; name=string("init_factor_",k))
         fit_lbfgs!(matfac, model.data; verbosity=verbosity,
-                                       print_prefix=string(print_prefix, "    "))
+                                       print_prefix=string(print_prefix, "    "),
+                                       rel_tol=1e-9,
+                                       abs_tol=1e-6,
+                                       backtrack_shrinkage=0.6)
 
         # Add the new factors to the fitted factors 
         matfac.col_transform.X[k,:] .= matfac.X[1,:]
@@ -287,6 +288,47 @@ function init_factors_nipals!(model::PathMatFacModel; verbosity=1,
     # Restore the original regularizers to the model
     matfac.X_reg = orig_X_reg
     matfac.Y_reg = orig_Y_reg
+end
+
+
+function init_factors!(model::PathMatFacModel, verbosity=1, 
+                                               print_prefix="", 
+                                               history=nothing,
+                                               lr=0.1,
+                                               max_epochs=1000,
+                                               init_factors_method="sgd",
+                                               kwargs...)
+
+    if init_factors_method == "sequential"
+        v_println("Initializing linear factors X,Y sequentially..."; verbosity=verbosity,
+                                                                     prefix=print_prefix)
+        init_factors_nipals!(model; verbosity=verbosity,
+                                    print_prefix=print_prefix,
+                                    max_epochs=max_epochs,
+                                    history=history,
+                                    lr=opt.eta)
+    
+    elseif init_factors_method == "lbfgs"
+        v_println("Initializing linear factors X,Y via L-BFGS..."; verbosity=verbosity,
+                                                                   prefix=print_prefix)
+        fit_lbfgs!(model.matfac, model.data; verbosity=verbosity,
+                                             print_prefix=string(print_prefix, "    "),
+                                             max_iter=max_epochs,
+                                             rel_tol=1e-9,
+                                             abs_tol=1e-6,
+                                             backtrack_shrinkage=0.6)
+        history!(history, h; name="init_factors")
+    else
+        v_println("Initializing linear factors X,Y via AdaGrad..."; verbosity=verbosity,
+                                                                    prefix=print_prefix)
+        h = mf_fit!(model; capacity=capacity, update_X=true, update_Y=true,
+                           opt=opt, max_epochs=max_epochs, 
+                           verbosity=verbosity, print_prefix=n_prefix,
+                           keep_history=keep_history,
+                           kwargs...)
+        history!(history, h; name="init_factors")
+    end
+
 end
 
 
@@ -504,6 +546,7 @@ function basic_fit!(model::PathMatFacModel; fit_batch=false,
                                             fit_mu=false, fit_logsigma=false,
                                             reweight_losses=false,
                                             init_factors=false,
+                                            init_factors_method="sgd",
                                             fit_factors=false,
                                             init_ordinal=false,
                                             whiten=false,
@@ -582,12 +625,14 @@ function basic_fit!(model::PathMatFacModel; fit_batch=false,
         reweight_col_losses!(model; capacity=capacity)
     end
 
-    # Initialize the factors X,Y
+    # Initialize the factors X,Y with some specialized algorithm.
     if init_factors
-        init_factors_nipals!(model; verbosity=verbosity,
-                                    print_prefix=print_prefix,
-                                    max_epochs=max_epochs,
-                                    lr=opt.eta)
+        init_factors!(model, verbosity=verbosity, 
+                             print_prefix=n_prefix, 
+                             history=history,
+                             lr=lr, 
+                             max_epochs=max_epochs,
+                             kwargs...)
     end
 
     # Fit the factors X,Y.
@@ -634,8 +679,8 @@ function basic_fit_reg_weight_eb!(model::PathMatFacModel;
     basic_fit!(model; fit_mu=true, fit_logsigma=true,
                       reweight_losses=true,
                       fit_batch=true, 
-                      init_factors=true,
-                      #fit_factors=true,
+                      #init_factors=true,
+                      fit_factors=true,
                       whiten=true,
                       verbosity=verbosity, print_prefix=n_pref, 
                       capacity=capacity,

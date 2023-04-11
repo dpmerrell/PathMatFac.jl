@@ -112,7 +112,7 @@ sufficient_decrease(l0, l1, s, dd; c=1e-4) = (l1 <= l0 + c*s*dd)
 
 
 function backtrack!(p::NamedTuple, model::MatFacModel, D::AbstractMatrix, l0::Number, g::NamedTuple; 
-                    shrinkage=0.8, capacity=10^8, max_iter=20)
+                    shrinkage=0.5, capacity=10^8, max_iter=20)
 
     # Store the original factors
     orig_X = deepcopy(model.X)
@@ -122,7 +122,11 @@ function backtrack!(p::NamedTuple, model::MatFacModel, D::AbstractMatrix, l0::Nu
     # search vector, p
     p_norm = sqrt(inner_prod(p, p))
     dd = inner_prod(p, g) / p_norm
- 
+    if dd >= 0
+        p.X .= -g.X
+        p.Y .= -g.Y
+    end
+
     l1 = Inf
     iter = 1
     while iter <= max_iter
@@ -166,11 +170,11 @@ end
 function fit_lbfgs!(model::MatFacModel, D::AbstractMatrix; capacity=10^8,
                                                            m=10,
                                                            max_iter=1000,
-                                                           rel_tol=1e-10,
+                                                           rel_tol=1e-9,
                                                            abs_tol=1e-6,
                                                            backtrack_shrinkage=0.8,
                                                            print_prefix="",
-                                                           print_iter=1,
+                                                           print_iter=10,
                                                            verbosity=1
                                                            )
     # A queue of m previous gradient differences
@@ -193,7 +197,7 @@ function fit_lbfgs!(model::MatFacModel, D::AbstractMatrix; capacity=10^8,
         end 
         cur_grad = full_gradient(model, D; capacity=capacity)
 
-        rho = 1
+        sy = 1
         if old_grad != nothing
             if length(y_queue) >= m
                 pop!(p_queue)
@@ -202,14 +206,14 @@ function fit_lbfgs!(model::MatFacModel, D::AbstractMatrix; capacity=10^8,
             end
             pushfirst!(p_queue, p)
             pushfirst!(y_queue, minus(cur_grad, old_grad))
-            rho = 1/inner_prod(y_queue[1], p_queue[1])
-            pushfirst!(rho_queue, rho)
+            sy = inner_prod(y_queue[1], p_queue[1])
+            pushfirst!(rho_queue, 1/sy)
         end
 
         p = deepcopy(cur_grad)
         scalar_mult!(p, -1)
 
-        if rho > 0
+        if sy > 1e-4
             inner_loop!(p, p_queue, y_queue, rho_queue)
         else
             p_queue = []
