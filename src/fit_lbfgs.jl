@@ -2,9 +2,9 @@
 
 function full_loss(model::MF.MatFacModel, D::AbstractMatrix; capacity=10^8)
     data_loss = MF.batched_data_loss(model, D; capacity=capacity)
-    #X_reg_loss = model.X_reg(model.X)
-    #Y_reg_loss = model.Y_reg(model.Y)
-    return data_loss 
+    X_reg_loss = model.X_reg(model.X)
+    Y_reg_loss = model.Y_reg(model.Y)
+    return data_loss + X_reg_loss + Y_reg_loss 
 end
 
 
@@ -44,12 +44,12 @@ function full_gradient(model::MF.MatFacModel, D::Matrix; capacity=10^8)
         Y_g_buffer[th] .= grads[2]
     end
    
-    ## Include regularizer gradients 
-    #X_reg_grads = Zygote.gradient(x->model.X_reg(x), model.X)
-    #X_g_buffer .+= X_reg_grads[1]
+    # Include regularizer gradients 
+    X_reg_grads = Zygote.gradient(x->model.X_reg(x), model.X)
+    X_g_buffer .+= X_reg_grads[1]
 
-    #Y_reg_grads = Zygote.gradient(y->model.Y_reg(y), model.Y)
-    #Y_g_buffer[1] .+= Y_reg_grads[1]
+    Y_reg_grads = Zygote.gradient(y->model.Y_reg(y), model.Y)
+    Y_g_buffer[1] .+= Y_reg_grads[1]
 
     MF.accumulate_sum!(Y_g_buffer)
 
@@ -112,7 +112,7 @@ sufficient_decrease(l0, l1, s, dd; c=1e-4) = (l1 <= l0 + c*s*dd)
 
 
 function backtrack!(p::NamedTuple, model::MatFacModel, D::AbstractMatrix, l0::Number, g::NamedTuple; 
-                    shrinkage=0.5, capacity=10^8, max_iter=20)
+                    shrinkage=0.5, capacity=10^8, max_iter=100)
 
     # Store the original factors
     orig_X = deepcopy(model.X)
@@ -190,10 +190,10 @@ function fit_lbfgs!(model::MatFacModel, D::AbstractMatrix; capacity=10^8,
     p = nothing
     iter = 0
     cur_loss = full_loss(model, D; capacity=capacity)
-    for i=1:max_iter
+    while iter < max_iter
 
-        if i % print_iter == 0
-            v_println("(", i, ") L-BFGS; Loss=",cur_loss; prefix=print_prefix, verbosity=verbosity)
+        if iter % print_iter == 0
+            v_println("(", iter, ") L-BFGS; Loss=",cur_loss; prefix=print_prefix, verbosity=verbosity)
         end 
         cur_grad = full_gradient(model, D; capacity=capacity)
 

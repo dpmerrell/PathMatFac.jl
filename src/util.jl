@@ -55,14 +55,18 @@ end
 # Hardware-agnostic, GPU-enabled functions
 ######################################################
 
-function randn_like(A::CuArray)
-    M, N = size(A)
-    return CUDA.randn(M,N)
+function _randn_like(A::CuArray)
+    return CUDA.randn(size(A)...)
 end
 
-function randn_like(A::Array)
-    M, N = size(A)
-    return randn(M,N)
+function _randn_like(A::Array)
+    return randn(size(A)...)
+end
+
+function randn_like(args...)
+    result = similar(args...)
+    result .= _randn_like(result)
+    return result
 end
 
 function zeros_like(args...)
