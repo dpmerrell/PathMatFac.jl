@@ -36,15 +36,16 @@ def plot_prediction_scores(ax, result_data):
         dat = result_data[method]
         score_jsons = dat["jsons"]
         score_dicts = [json.load(open(rj,"r")) for rj in score_jsons]
-        scores = [score_dict[score_str] for score_dict in score_dicts]
         trivial_scores = [score_dict[trivial_score_str] for score_dict in score_dicts]
-        ymin = min(ymin, np.min(scores))
-        ymax = max(ymax, np.max(scores))
-        all_scores.append(scores)
-        all_trivial_scores |= set(trivial_scores)
+        scores = [score_dict[score_str] for score_dict in score_dicts]
+        rel_scores = [s - t for s,t in zip(scores, trivial_scores]
+        ymin = min(ymin, np.min(rel_scores))
+        ymax = max(ymax, np.max(rel_scores))
+        all_scores.append(rel_scores)
+        #all_trivial_scores |= set(trivial_scores)
 
-    for ts in list(all_trivial_scores):
-        ax.plot([xmin, xmax],[ts, ts], "--", linewidth=0.5, color="grey")
+    #for ts in list(all_trivial_scores):
+    #    ax.plot([xmin, xmax],[ts, ts], "--", linewidth=0.5, color="grey")
  
     method_names = [NAMES[m] for m in methods]
     ax.boxplot(all_scores, labels=method_names)
@@ -91,7 +92,7 @@ if __name__=="__main__":
     fig, axarr = su.make_subplot_grid(plot_prediction_scores, grid, 
                                       [1], target_names, figsize=figsize)
 
-    plt.suptitle("Prediction task performance ({}-fold cross-validation)".format(n_folds))
+    plt.suptitle("Performance relative to trivial baseline ({}-fold cross-validation)".format(n_folds))
     plt.tight_layout()
     plt.savefig(out_png, dpi=300)
 
