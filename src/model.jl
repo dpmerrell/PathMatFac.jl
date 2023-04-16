@@ -197,30 +197,6 @@ end
 # Some extra helper functions
 ##########################################
 
-
-#function Base.getindex(model::PathMatFacModel, idx1, idx2)
-#    
-#    new_data = nothing
-#    if model.data != nothing
-#        new_data = model.data[idx1,idx2]
-#    end
-#
-#    new_conditions = nothing
-#    if model.sample_conditions != nothing
-#        new_conditions = model.sample_conditions[idx1]
-#    end
-#
-#    return PathMatFacModel(model.matfac[idx1,idx2],
-#                           new_data,
-#                           model.sample_ids[idx1],
-#                           new_conditions,
-#                           model.feature_ids[idx2],
-#                           model.feature_views[idx2],
-#                           model.data_idx[idx2])
-#
-#end
-
-
 PMTypes = Union{PathMatFacModel, NetworkRegularizer, GroupRegularizer,
                 SelectiveL1Reg, ColScale, ColShift, BatchScale, BatchShift,
                 BatchArray, BatchArrayReg, ViewableComposition, SequenceReg,

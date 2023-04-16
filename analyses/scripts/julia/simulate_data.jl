@@ -37,7 +37,7 @@ end
 
 function main(args)
 
-    ## Default Values for various parameters
+    # Default Values for various parameters
     opts = Dict(:total_var => 25.0,
                 :snr => 999.0
                )

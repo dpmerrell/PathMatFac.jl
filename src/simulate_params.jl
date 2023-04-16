@@ -11,8 +11,8 @@ function simulate_params!(X::AbstractMatrix, reg::Union{GroupRegularizer,L2Regul
 end
 
 
-function simulate_params!(X::AbstractMatrix, reg::ARDRegularizer; ard_alpha=0.666,
-                                                                  ard_beta=0.666,
+function simulate_params!(X::AbstractMatrix, reg::ARDRegularizer; ard_alpha=3.0,
+                                                                  ard_beta=3.0,
                                                                   kwargs...)
     K, N = size(X)
     gamma_dist = Gamma(ard_alpha, 1/ard_beta)
@@ -95,13 +95,13 @@ VIEW_MU_STD = Dict("mrnaseq" => 2.0,
                    "cna" => 0.1,
                    "mutation" => 0.1)
 
-VIEW_LOGSIGMA_MEAN = Dict("mrnaseq" => 2.0,
-                          "methylation" => 0.0,
+VIEW_LOGSIGMA_MEAN = Dict("mrnaseq" => 0.5,
+                          "methylation" => 0.1,
                           "cna" => 0.0,
                           "mutation" => 0.0)
 
-VIEW_LOGSIGMA_STD = Dict("mrnaseq" => 1.0,
-                         "methylation" => 0.1,
+VIEW_LOGSIGMA_STD = Dict("mrnaseq" => 0.5,
+                         "methylation" => 0.25,
                          "cna" => 0.1,
                          "mutation" => 0.1)
 
@@ -218,7 +218,9 @@ function simulate_data!(model::PathMatFacModel; noise=0.1,
 
     # Sample from the appropriate distributions and introduce noise.
     for (cr, n) in zip(nm.col_ranges, nm.noises)
-        simulate_data!(model.data[:,cr], n; noise=noise)
+        println(string("Noise model: ", typeof(n)))
+        println(string("Column range: ", cr))
+        simulate_data!(view(model.data, :, cr), n; noise=noise)
     end
     
 end

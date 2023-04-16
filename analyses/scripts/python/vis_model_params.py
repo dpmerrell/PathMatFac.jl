@@ -103,7 +103,7 @@ def matrix_heatmap(mat, x_groups=None, dpi=300, w=6, h=3, cmap="Greys", vmin=-2.
 
         plt.suptitle(title) 
 
-    f.tight_layout()
+    f.tight_layout(h_pad=0.05, w_pad=0.05)
 
     return f
 
@@ -153,7 +153,7 @@ def col_param_plot(mu, logsigma, feature_groups=None, w=6, h=4, group_label_rota
                                               horizontalalignment="center", verticalalignment="top")
         plt.suptitle("Column parameters")
 
-    f.tight_layout()
+    f.tight_layout(h_pad=0.05, w_pad=0.05)
 
     return f
 
@@ -210,7 +210,7 @@ def plot_all_batch_params(hfile, w=6, h=5, group_label_rotation=0.0, group_label
 
     plt.suptitle("Batch effect parameters")
 
-    f.tight_layout()
+    f.tight_layout(h_pad=0.05, w_pad=0.05)
 
     return f
 
