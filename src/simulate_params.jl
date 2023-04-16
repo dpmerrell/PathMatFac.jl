@@ -25,25 +25,24 @@ function corrupt_S(S::AbstractMatrix, S_add_corruption, S_rem_corruption)
     S_new = convert(Matrix{Float32}, S)
     L, N = size(S_new)
     for l=1:L
-        cur_set = Int[j for j=1:N if S_new[l,j] == 1]
+        cur_set = Int[j for j=1:N if S_new[l,j] != 0]
         cur_N = length(cur_set)
         rm_N = Int(round(S_rem_corruption*cur_N))
         to_remove = sample(cur_set, rm_N; replace=false)
-
-        cur_complement = Int[j for j=1:N if S_new[l,j] != 1]
+        cur_complement = Int[j for j=1:N if S_new[l,j] == 0]
         add_N = Int(round(cur_N*S_add_corruption))
         to_add = sample(cur_complement, add_N; replace=false)
 
         corrupted_set = union(setdiff(Set(cur_set), Set(to_remove)), Set(to_add))
         S_new[l,:] .= 0
-        S_new[l,sort(collect(corrupted_set))] .= 1
+        S_new[l,sort(collect(corrupted_set))] .= 1/sqrt(length(corrupted_set))
     end
 
     return S_new
 end
 
 
-function simulate_params!(Y::AbstractMatrix, reg::FeatureSetARDReg; ard_alpha=0.666,
+function simulate_params!(Y::AbstractMatrix, reg::FeatureSetARDReg; ard_alpha=2.0,
                                                                     S_add_corruption=0.1,
                                                                     S_rem_corruption=0.1,
                                                                     A_density=0.05,
@@ -53,12 +52,13 @@ function simulate_params!(Y::AbstractMatrix, reg::FeatureSetARDReg; ard_alpha=0.
     L, N = size(reg.A)
     reg.A = rand(L,N)
     reg.A = (reg.A .<= A_density)
-    
+    reg.A = convert(Matrix{Float32}, reg.A)
+    reg.A .*= abs.(randn_like(reg.A).*4) 
     # Corrupt the matrix of genesets
     reg.S = corrupt_S(reg.S, S_add_corruption, S_rem_corruption)
 
     # Compute the entry-specific betas; taus; and then Y
-    beta = transpose(reg.S) * reg.A
+    beta = ard_alpha .+ (transpose(reg.A) * reg.S)
     tau = map(b->rand(Gamma(ard_alpha, 1/b)), beta)
     Y .= randn_like(Y) ./ sqrt.(tau) ./ sqrt(K)
 
@@ -71,19 +71,25 @@ end
 
 #################################
 # Batch scales and shifts
-function simulate_params!(bs::BatchShift, reg::BatchArrayReg; b_shift_mean=0.0, b_shift_std=1.0, kwargs...)
-    simulate_params!(bs.theta, reg; b_mean=b_shift_mean, b_std=b_shift_std, kwargs...)
+function simulate_params!(bs::BatchShift, reg::BatchArrayReg; b_shift_mean=0.0, b_shift_std=0.125, kwargs...)
+    simulate_params!(bs.theta, reg; b_mean=b_shift_mean, between_batch_std=b_shift_std, within_batch_std=0.05, kwargs...)
 end
 
 function simulate_params!(bs::BatchScale, reg::BatchArrayReg; b_scale_mean=0.0, b_scale_std=0.1, kwargs...)
-    simulate_params!(bs.logdelta, reg; b_mean=b_scale_mean, b_std=b_scale_std, kwargs...)
+    simulate_params!(bs.logdelta, reg; b_mean=b_scale_mean, between_batch_std=b_scale_std, within_batch_std=0.05, kwargs...)
 end
 
-function simulate_params!(bs::BatchArray, reg::BatchArrayReg; b_mean=0.0, b_std=1.0, kwargs...)
+function simulate_params!(bs::BatchArray, reg::BatchArrayReg; b_mean=0.0, between_batch_std=0.95, within_batch_std=0.3, kwargs...)
     for v in bs.values
-        v .= (randn_like(v) .* b_std) .+ b_mean
+        centers = randn_like(v, size(v,1)).*between_batch_std .+ b_mean
+        v .= centers .+ (randn_like(v) .* within_batch_std) 
     end
 end
+
+
+######################################
+# Noise model param simulators
+######################################
 
 VIEW_MU_MEAN = Dict("mrnaseq" => 10.0,
                     "methylation" => 0.0, 
@@ -104,11 +110,6 @@ VIEW_LOGSIGMA_STD = Dict("mrnaseq" => 0.5,
                          "methylation" => 0.25,
                          "cna" => 0.1,
                          "mutation" => 0.1)
-
-
-######################################
-# Noise model param simulators
-######################################
 
 function simulate_params!(nm::Union{MF.NormalNoise,MF.SquaredHingeNoise}; kwargs...)
 end
@@ -173,11 +174,8 @@ end
 function simulate_params!(model::PathMatFacModel; kwargs...)
 
     mf = model.matfac
-    println("SIMULATING Y")
     simulate_params!(mf.Y, mf.Y_reg; kwargs...)
-    println("SIMULATING X")
     simulate_params!(mf.X, mf.X_reg; kwargs...)
-    println("SIMULATING LAYER PARAMETERS")
     simulate_params!(mf.col_transform, mf.col_transform_reg; feature_views=model.feature_views,
                                                              kwargs...)
 
@@ -218,8 +216,6 @@ function simulate_data!(model::PathMatFacModel; noise=0.1,
 
     # Sample from the appropriate distributions and introduce noise.
     for (cr, n) in zip(nm.col_ranges, nm.noises)
-        println(string("Noise model: ", typeof(n)))
-        println(string("Column range: ", cr))
         simulate_data!(view(model.data, :, cr), n; noise=noise)
     end
     

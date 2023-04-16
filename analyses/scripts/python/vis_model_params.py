@@ -158,7 +158,7 @@ def col_param_plot(mu, logsigma, feature_groups=None, w=6, h=4, group_label_rota
     return f
 
 
-def batch_param_plot(values, col_ranges, ax, topk=3):
+def batch_param_plot(values, col_ranges, ax, topk=100):
     for (v, cr) in zip(values, col_ranges):
         for i in range(min(v.shape[0], topk)):
             ax.plot(cr, v[i,:], linewidth=0.3)#, color="grey")
