@@ -17,11 +17,14 @@ ASSAY_ORDER = ["mutation", "methylation", "mrnaseq", "rppa", "cna"]
 ASSAY_CMAPS = {"mutation": {"vmin": 0,
                             "vmax": 1,
                             "cmap": "binary"},
-               "methylation": {"vmin": -2.0,
-                               "vmax": 2.0,
+               "methylation": {"vmin": -3.0,
+                               "vmax": 3.0,
                                "cmap": "bwr_r"},
-               "mrnaseq": {"vmin": 0.0,
-                           "vmax": 20.0,
+               "rppa": {"vmin": -2.0,
+                        "vmax": 2.0,
+                        "cmap": "bwr_r"},
+               "mrnaseq": {"vmin": -1.0,
+                           "vmax": 15.0,
                            "cmap": "inferno_r"},
                "cna": {"vmin": 1.0,
                        "vmax": 3.0,
@@ -43,7 +46,7 @@ def data_heatmap(mat, name, ax, vmin=-2.0, vmax=2.0, origin="upper", cmap="bwr_r
                    interpolation="none")
     #ax.set_xticks([0, N-1], [1, N])
 
-    ax.set_title(name, size=8) 
+    ax.set_title(f"{NAMES[name]}\n({N})", size=8) 
     ax.set_xticks([])
     ax.set_xticklabels([])
     ax.set_yticks([])
@@ -70,16 +73,16 @@ def plot_data(in_hdf, w=6, h=5, suptitle="Multiomic dataset", ylabel="Cancer typ
         # Set up the subplots
         width_ratios = [0.025*np.sum(assay_N)] + assay_N 
         fig, axs = plt.subplots(nrows=2, ncols=len(used_assays)+1, #sharey=True, 
-                                         gridspec_kw={"height_ratios": [0.95, 0.05],
+                                         gridspec_kw={"height_ratios": [0.975, 0.025],
                                                       "width_ratios": width_ratios},
                                          figsize=(w,h))
 
-        all_data = f["omic_data/data"][:,:].transpose()
-        M,N = all_data.shape
-        print(all_data.shape)
+        #all_data = f["omic_data/data"][:,:].transpose()
+        N,M = f["omic_data/data"].shape
+        print(M,N)
         for i, ua in enumerate(used_assays):
             print(ua)
-            a_data = all_data[:,a_idx[i]]
+            a_data = f["omic_data/data"][a_idx[i],:].transpose()
             vmin = ASSAY_CMAPS[ua]["vmin"]
             vmax = ASSAY_CMAPS[ua]["vmax"]
             data_heatmap(a_data, ua, axs[0][i+1], vmin=vmin, vmax=vmax,
@@ -96,18 +99,19 @@ def plot_data(in_hdf, w=6, h=5, suptitle="Multiomic dataset", ylabel="Cancer typ
 
         sample_conditions = f["omic_data/instance_groups"][:].astype(str)
         flags, ticks, unq_labels, midpoints = vmp.labels_to_indicators(sample_conditions)
+        counts = np.array(ticks[1:]) - np.array(ticks[:-1])
         axs[0][0].imshow(flags.reshape(M,1), aspect="auto", cmap="binary", vmin=0, vmax=1, origin="upper", interpolation="none")
-        axs[0][0].set_yticks(ticks)
-        axs[0][0].set_yticklabels(ticks)
+        axs[0][0].set_yticks([ticks[-1]])
+        axs[0][0].set_yticklabels([ticks[-1]], fontsize=6)
+        axs[0][0].set_ylabel(ylabel)
         axs[0][0].set_xticks([])
         axs[0][0].set_xticklabels([])
-        axs[0][0].set_ylabel(ylabel)
-        for label, midpoint in zip(unq_labels, midpoints):
-            axs[0][0].text(-1.0, midpoint, label, rotation=0.0, size=group_label_size, 
+        for label, midpoint, c, in zip(unq_labels, midpoints, counts):
+            axs[0][0].text(-1.0, midpoint, f"{label}\n({c})", rotation=0.0, size=group_label_size, 
                                  horizontalalignment="right", verticalalignment="center")
 
     plt.suptitle(suptitle) 
-    fig.tight_layout(h_pad=0.05, w_pad=0.05)
+    fig.tight_layout(h_pad=0.01, w_pad=0.01)
      
     return fig
              
@@ -118,15 +122,21 @@ if __name__=="__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("data_hdf")
     parser.add_argument("out_png")
-    parser.add_argument("--dpi", type=int, default=300)
+    parser.add_argument("--dpi", type=int, default=200)
+    parser.add_argument("--title", type=str, default="Multiomic dataset")
+    parser.add_argument("--width", type=int, default=8)
+    parser.add_argument("--height", type=int, default=6)
 
     args = parser.parse_args()
 
     in_hdf = args.data_hdf
     out_png = args.out_png
     dpi = args.dpi
+    suptitle = args.title
 
-    f = plot_data(in_hdf)
+    print("TITLE: ", suptitle)
+
+    f = plot_data(in_hdf, suptitle=suptitle, w=args.width, h=args.height)
 
     f.savefig(out_png, dpi=dpi)
 

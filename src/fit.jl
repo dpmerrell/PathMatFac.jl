@@ -347,8 +347,9 @@ function init_factors!(model::PathMatFacModel; verbosity=1,
                                                history=nothing,
                                                opt=nothing,
                                                lr=0.1,
+                                               capacity=10^8,
                                                max_epochs=1000,
-                                               init_factors_method="sgd",
+                                               init_factors_method="adagrad",
                                                rel_tol=1e-9,
                                                abs_tol=1e-6,
                                                backtrack_shrinkage=0.8,
@@ -393,9 +394,10 @@ function init_factors!(model::PathMatFacModel; verbosity=1,
     else
         v_println("Initializing linear factors X,Y via AdaGrad..."; verbosity=verbosity,
                                                                     prefix=print_prefix)
+        keep_history = (history != nothing)
         h = mf_fit!(model; capacity=capacity, update_X=true, update_Y=true,
                            lr=lr, max_epochs=max_epochs, 
-                           verbosity=verbosity, print_prefix=print_prefix,
+                           verbosity=verbosity, print_prefix=n_prefix,
                            keep_history=keep_history,
                            kwargs...)
         history!(history, h; name="init_factors")
@@ -618,9 +620,9 @@ function basic_fit!(model::PathMatFacModel; fit_batch=false,
                                             fit_mu=false, fit_logsigma=false,
                                             reweight_losses=false,
                                             init_factors=false,
-                                            init_factors_method="lbfgs",
+                                            #init_factors_method="lbfgs",
                                             #init_factors_method="nipals_lbfgs",
-                                            #init_factors_method="sgd",
+                                            init_factors_method="adagrad",
                                             fit_factors=false,
                                             init_ordinal=false,
                                             whiten=false,
@@ -703,27 +705,26 @@ function basic_fit!(model::PathMatFacModel; fit_batch=false,
     if init_factors
         init_factors!(model; init_factors_method=init_factors_method,
                              verbosity=verbosity, 
-                             print_prefix=n_prefix, 
+                             print_prefix=print_prefix, 
                              history=history,
-                             lr=lr, 
+                             lr=lr,
+                             capacity=capacity, 
                              max_epochs=max_epochs,
                              kwargs...)
     end
 
     # Fit the factors X,Y.
     if fit_factors
-        freeze_layer!(model.matfac.col_transform, 1:4)
         v_println("Fitting linear factors X,Y..."; verbosity=verbosity, prefix=print_prefix)
-        #h = mf_fit!(model; capacity=capacity, update_X=true, update_Y=true,
-        #                   opt=opt, max_epochs=max_epochs, 
-        #                   verbosity=verbosity, print_prefix=n_prefix,
-        #                   keep_history=keep_history,
-        #                   kwargs...)
-        fit_lbfgs!(model.matfac, model.data; capacity=capacity, max_iter=max_epochs,
-                                             verbosity=verbosity, print_prefix=print_prefix,
-                                             kwargs...)
+        h = mf_fit!(model; capacity=capacity, update_X=true, update_Y=true,
+                           opt=opt, max_epochs=max_epochs, 
+                           verbosity=verbosity, print_prefix=n_prefix,
+                           keep_history=keep_history,
+                           kwargs...)
         #history!(history, h; name="fit_factors")
-        unfreeze_layer!(model.matfac.col_transform, 1:4)
+        #fit_lbfgs!(model.matfac, model.data; capacity=capacity, max_iter=max_epochs,
+        #                                     verbosity=verbosity, print_prefix=print_prefix,
+        #                                     kwargs...)
     end
 
     if whiten
@@ -894,7 +895,8 @@ end
 ############################################
 # Fit models with ARD regularization on Y
 
-function fit_ard!(model::PathMatFacModel; lr=0.05, lr_ard=0.01, opt=nothing, 
+function fit_ard!(model::PathMatFacModel; lr=0.05, lr_ard=0.01, opt=nothing,
+                                          max_epochs=1000, capacity=10^8,
                                           verbosity=1, print_prefix="", 
                                           kwargs...)
 
@@ -914,21 +916,25 @@ function fit_ard!(model::PathMatFacModel; lr=0.05, lr_ard=0.01, opt=nothing,
                                                                         prefix=print_prefix)
     basic_fit_reg_weight_eb!(model; opt=opt, verbosity=verbosity,
                                              print_prefix=n_pref,
+                                             max_epochs=max_epochs,
+                                             capacity=capacity,
                                              kwargs...) 
     
     # Next, we put the ARD prior back in place and
     # continue fitting the model.
     v_println("Adjusting with ARD on Y..."; verbosity=verbosity,
-                                           prefix=print_prefix)
+                                            prefix=print_prefix)
     model.matfac.Y_reg = orig_ard
     #reweight_eb!(model.matfac.Y_reg, model.matfac.Y)
-    orig_lr = opt.eta
-    opt.eta = lr_ard
-    basic_fit!(model; opt=opt, fit_factors=true, 
-                               verbosity=verbosity,
-                               print_prefix=n_pref,
-                               kwargs...)
-    opt.eta = orig_lr
+    #orig_lr = opt.eta
+    #opt.eta = lr_ard
+    #basic_fit!(model; opt=opt, fit_factors=true, 
+    #                           verbosity=verbosity,
+    #                           print_prefix=n_pref,
+    #                           kwargs...)
+    fit_lbfgs!(model.matfac, model.data; capacity=capacity, max_iter=max_epochs,
+                                         verbosity=verbosity, print_prefix=print_prefix)
+    #opt.eta = orig_lr
 
 end
 
@@ -937,6 +943,8 @@ end
 ###################################################
 # Fit models with geneset ARD regularization on Y
 function fit_feature_set_ard!(model::PathMatFacModel; lr=0.05, opt=nothing,
+                                                      capacity=10^8,
+                                                      max_epochs=1000,
                                                       fsard_max_iter=10,
                                                       fsard_max_A_iter=1000,
                                                       fsard_n_lambda=20,
@@ -947,7 +955,6 @@ function fit_feature_set_ard!(model::PathMatFacModel; lr=0.05, opt=nothing,
                                                       fsard_term_rtol=1e-5,
                                                       verbosity=1, print_prefix="",
                                                       history=nothing,
-                                                      capacity=Int(10e8),
                                                       kwargs...)
 
     n_pref = string(print_prefix, "    ")
@@ -960,7 +967,8 @@ function fit_feature_set_ard!(model::PathMatFacModel; lr=0.05, opt=nothing,
     model.matfac.Y_reg = ARDRegularizer()
     v_println("##### Pre-fitting with vanilla ARD... #####"; verbosity=verbosity,
                                                  prefix=print_prefix)
-    fit_ard!(model; opt=opt, verbosity=verbosity, print_prefix=n_pref, history=history, kwargs...)
+    fit_ard!(model; opt=opt, max_epochs=max_epochs, capacity=capacity, lr=lr,
+                             verbosity=verbosity, print_prefix=n_pref, history=history, kwargs...)
 
     # Next, put the FeatureSetARDReg back in place and
     # continue fitting the model.
@@ -990,12 +998,14 @@ function fit_feature_set_ard!(model::PathMatFacModel; lr=0.05, opt=nothing,
                                                       history=history) 
 
         # Re-fit the factors X, Y
-        basic_fit!(model; opt=opt, fit_factors=true, capacity=capacity,
-                          whiten=false,
-                          verbosity=verbosity, print_prefix=n_pref,
-                          history=history, 
-                          kwargs...)
-        
+        #basic_fit!(model; opt=opt, fit_factors=true, capacity=capacity,
+        #                  whiten=false,
+        #                  verbosity=verbosity, print_prefix=n_pref,
+        #                  history=history, 
+        #                  kwargs...)
+        fit_lbfgs!(model.matfac, model.data; capacity=capacity, max_iter=max_epochs,
+                                             verbosity=verbosity, print_prefix=print_prefix)
+            
         # Compute the relative change in X
         X_old .-= model.matfac.X
         X_old .= X_old.*X_old
@@ -1095,14 +1105,14 @@ function fit!(model::PathMatFacModel; opt=nothing, lr=0.05,
                                                kwargs...)
     elseif isa(model.matfac.Y_reg, FeatureSetARDReg)
         fit_feature_set_ard!(model; opt=opt, history=hist, 
-                                             fsard_max_iter=10,
-                                             fsard_max_A_iter=1000,
-                                             fsard_n_lambda=20,
-                                             fsard_lambda_atol=1e-3,
-                                             fsard_frac_atol=1e-2,
-                                             fsard_A_prior_frac=0.5,
-                                             fsard_term_iter=5,
-                                             fsard_term_rtol=1e-5,
+                                             fsard_max_iter=fsard_max_iter,
+                                             fsard_max_A_iter=fsard_max_A_iter,
+                                             fsard_n_lambda=fsard_n_lambda,
+                                             fsard_lambda_atol=fsard_lambda_atol,
+                                             fsard_frac_atol=fsard_frac_atol,
+                                             fsard_A_prior_frac=fsard_A_prior_frac,
+                                             fsard_term_iter=fsard_term_iter,
+                                             fsard_term_rtol=fsard_term_rtol,
                                              verbosity=verbosity,
                                              print_prefix=print_prefix,
                                              kwargs...)

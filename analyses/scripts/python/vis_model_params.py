@@ -45,11 +45,14 @@ def labels_to_indicators(labels):
        
     return indicators, xticks, unq_labels, midpoints 
 
-
-
-def matrix_heatmap(mat, x_groups=None, dpi=300, w=6, h=3, cmap="Greys", vmin=-2.0, vmax=2.0,
+def matrix_heatmap(mat, x_groups=None, dpi=300, w=6, h=3, cmap="Greys", vmin=None, vmax=None,
                         xlabel="Features", ylabel="Factors", origin="lower",
                         title="Matrix Y", group_label_rotation=0.0, group_label_size=6):
+
+    if vmax is None:
+        vmax = np.max(mat)
+    if vmin is None:
+        vmin = np.min(mat)
 
     (K, N) = mat.shape
     f = None
@@ -235,9 +238,29 @@ def plot_param(in_hdf, target_param="Y"):
             feature_groups = hfile["feature_views"][:].astype(str)
             logsigma = hfile["logsigma"][:]
             fig = col_param_plot(mu, logsigma, feature_groups=feature_groups)
-
         elif target_param == "batch_params":
             fig = plot_all_batch_params(hfile)
+        elif target_param == "S":
+            S = hfile["fsard/S"][:,:].transpose()
+            S = (S > 0).astype(int)
+            feature_groups = hfile["feature_views"][:].astype(str)
+            fig = matrix_heatmap(S, vmin=0.0, vmax=1.0, cmap="binary", 
+                                    title="Feature sets", x_groups=feature_groups,
+                                    xlabel="Features", ylabel="Gene sets")
+        elif target_param == "A":
+            A = hfile["fsard/A"][:,:].transpose()
+            fig = matrix_heatmap(A, vmin=0.0, vmax=None, cmap="Greys", 
+                                    title="Assignment matrix", x_groups=None,
+                                    xlabel="Factors", ylabel="Gene sets")
+        elif target_param == "tau":
+            S = hfile["fsard/S"][:,:].transpose()
+            A = hfile["fsard/A"][:,:].transpose()
+            feature_groups = hfile["feature_views"][:].astype(str)
+            tau = A.transpose() @ S
+            fig = matrix_heatmap(tau, vmin=0.0, vmax=None, cmap="Greys", 
+                                      title="Matrix of precisions ($\\tau$)", 
+                                      x_groups=feature_groups,
+                                      xlabel="Features", ylabel="Factors")
 
     return fig
 
@@ -247,7 +270,7 @@ if __name__=="__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("params_hdf")
     parser.add_argument("out_png")
-    parser.add_argument("--param", choices=["X", "Y", "col_params", "batch_params", "S", "A"], default="Y")
+    parser.add_argument("--param", choices=["X", "Y", "col_params", "batch_params", "S", "A", "tau"], default="Y")
     parser.add_argument("--dpi", type=int, default=300)
 
     args = parser.parse_args()

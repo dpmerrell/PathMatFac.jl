@@ -33,7 +33,12 @@ NICE_NAMES = {"gender": "Sex",
               "plier": "PLIER",
               "pca": "PCA",
               "paradigm": "PARADIGM",
-              "gsva": "GSVA"
+              "gsva": "GSVA",
+              "mutation": "Mutation",
+              "cna": "CNA",
+              "methylation": "Methylation",
+              "rppa": "RPPA",
+              "mrnaseq": "RNA-seq"
               }
 
 

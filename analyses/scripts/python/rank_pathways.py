@@ -44,7 +44,7 @@ def rank_genesets(genesets, top_k=None):
         max_score = (-1,-1)
         max_k = ""
         for k, gs in genesets.items():
-            score = (len(gs.difference(covered)), len(gs))
+            score = (len(gs.difference(covered)) - len(gs.intersect(covered)), len(gs))
             if score > max_score:
                 max_score = score
                 max_k = k

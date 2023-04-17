@@ -91,7 +91,7 @@ function Adapt.adapt_storage(::Flux.FluxCPUAdaptor, r::FeatureSetARDReg)
 end
 
 function construct_featureset_ard(K, feature_ids, feature_views, feature_sets;
-                                  featureset_names=nothing, beta0=1e-6, lr=0.05)
+                                  featureset_names=nothing, beta0=2.0, lr=0.05)
     L = length(feature_sets)
     N = length(feature_ids)
     f_to_j = value_to_idx(feature_ids)
@@ -295,7 +295,8 @@ end
 # containing a nonzero entry.
 function score_A(A; threshold=1e-3)
     L,K = size(A)
-    return sum(sum(A .> threshold, dims=1) .> 0)/K
+    #return sum(sum(A .> threshold, dims=1) .> 0)/K
+    return sum(A .> threshold)/(L*K)
 end
 
 

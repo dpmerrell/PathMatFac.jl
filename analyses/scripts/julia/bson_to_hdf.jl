@@ -54,7 +54,7 @@ function write_model_to_hdf(out_hdf, model::PM.PathMatFacModel)
     # Featureset ARD params
     if isa(model.matfac.Y_reg, PM.FeatureSetARDReg)
         h5write(out_hdf, string("fsard/A"), model.matfac.Y_reg.A)
-        #h5write(out_hdf, string("fsard/S"), convert(Matrix{Float32}, model.matfac.Y_reg.S))
+        h5write(out_hdf, string("fsard/S"), convert(Matrix{Float32}, model.matfac.Y_reg.S))
     end
 end
 

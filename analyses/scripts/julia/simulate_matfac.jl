@@ -163,7 +163,8 @@ function main(args)
     sim_kwargs = Dict{Symbol,Any}(:S_add_corruption => 0.1,
                                   :S_remove_corruption => 0.1,
                                   :normal_noise => 0.1,
-                                  :missingness => 0.1
+                                  :missingness => 0.1,
+                                  :A_density => 0.1
                                   )
     update_opts!(sim_kwargs, cli_opts)
 
