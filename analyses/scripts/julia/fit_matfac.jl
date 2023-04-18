@@ -134,7 +134,6 @@ function main(args)
                                   :max_epochs => 1000,
                                   :fit_reg_weight => "EB",
                                   :fit_joint => false,
-                                  :lr_joint => 0.01,
                                   :lr_theta => 0.25,
                                   :lr_regress => 0.5,
                                   :fsard_max_iter => 10,

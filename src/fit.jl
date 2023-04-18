@@ -54,15 +54,13 @@ function mf_fit_adapt_lr!(model::PathMatFacModel; lr=1.0,
     opt = construct_optimizer(model, lr)
     epoch = 1
     while epoch <= max_epochs
-        println("LEARNING RATE:")
-        println(opt.eta)     
         h = mf_fit!(model; opt=opt, max_epochs=max_epochs, epoch=epoch, keep_history=true, 
                            print_prefix=print_prefix, verbosity=verbosity, 
                            kwargs...)
         history!(history, h; name=string("mf_fit_lr=", opt.eta))
         
         if h["term_code"] == "loss_increase"
-            v_println("Resuming with smaller learning rate."; verbosity=verbosity, prefix=print_prefix)
+            v_println("Resuming with smaller learning rate (", opt.eta, ")"; verbosity=verbosity, prefix=print_prefix)
             opt.eta *= 0.5
             epoch = h["epochs"]
         else
