@@ -607,7 +607,11 @@ function history!(::Nothing; kwargs...)
     return
 end
 
-function history!(::Nothing, d::Any; kwargs...)
+function history!(::Nothing, d::AbstractDict; kwargs...)
+    return
+end
+
+function history!(::Nothing, d::Nothing; kwargs...)
     return
 end
 

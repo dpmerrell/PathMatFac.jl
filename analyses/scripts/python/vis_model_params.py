@@ -226,6 +226,7 @@ def plot_param(in_hdf, target_param="Y"):
             Y = hfile["Y"][:,:].transpose() 
             feature_groups = hfile["feature_views"][:].astype(str)
             fig = matrix_heatmap(Y, x_groups=feature_groups)
+            fig.tight_layout(h_pad=0.05, w_pad=0.05)
         elif target_param == "X":
             X = hfile["X"][:,:].transpose()
             sample_groups = hfile["sample_conditions"][:].astype(str)
@@ -233,6 +234,7 @@ def plot_param(in_hdf, target_param="Y"):
                                     title="Matrix X", 
                                     ylabel="Embedding dims.",
                                     xlabel="Samples")
+            fig.tight_layout(h_pad=0.05, w_pad=0.05)
         elif target_param == "col_params":
             mu = hfile["mu"][:]
             feature_groups = hfile["feature_views"][:].astype(str)
@@ -252,15 +254,17 @@ def plot_param(in_hdf, target_param="Y"):
             fig = matrix_heatmap(A, vmin=0.0, vmax=None, cmap="Greys", 
                                     title="Assignment matrix", x_groups=None,
                                     xlabel="Factors", ylabel="Gene sets")
-        elif target_param == "tau":
+            fig.tight_layout(h_pad=0.05, w_pad=0.05)
+        elif target_param == "beta":
             S = hfile["fsard/S"][:,:].transpose()
             A = hfile["fsard/A"][:,:].transpose()
             feature_groups = hfile["feature_views"][:].astype(str)
             tau = A.transpose() @ S
             fig = matrix_heatmap(tau, vmin=0.0, vmax=None, cmap="Greys", 
-                                      title="Matrix of precisions ($\\tau$)", 
+                                      title="Matrix of ($\\beta$)", 
                                       x_groups=feature_groups,
                                       xlabel="Features", ylabel="Factors")
+            fig.tight_layout(h_pad=0.05, w_pad=0.05)
 
     return fig
 
@@ -270,7 +274,7 @@ if __name__=="__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("params_hdf")
     parser.add_argument("out_png")
-    parser.add_argument("--param", choices=["X", "Y", "col_params", "batch_params", "S", "A", "tau"], default="Y")
+    parser.add_argument("--param", choices=["X", "Y", "col_params", "batch_params", "S", "A", "beta"], default="Y")
     parser.add_argument("--dpi", type=int, default=300)
 
     args = parser.parse_args()
