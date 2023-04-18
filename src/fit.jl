@@ -56,10 +56,10 @@ function mf_fit_adapt_lr!(model::PathMatFacModel; lr=1.0,
     while epoch <= max_epochs
         println("LEARNING RATE:")
         println(opt.eta)     
-        h = mf_fit!(model; max_epochs=max_epochs, epoch=epoch, keep_history=true, 
+        h = mf_fit!(model; opt=opt, max_epochs=max_epochs, epoch=epoch, keep_history=true, 
                            print_prefix=print_prefix, verbosity=verbosity, 
                            kwargs...)
-        history!(history, h; name=string("mf_fit_lr=",opt.eta))
+        history!(history, h; name=string("mf_fit_lr=", opt.eta))
         
         if h["term_code"] == "loss_increase"
             v_println("Resuming with smaller learning rate."; verbosity=verbosity, prefix=print_prefix)
@@ -591,11 +591,10 @@ function basic_fit!(model::PathMatFacModel; fit_batch=false,
 
     # Initialize the factors X,Y with some specialized algorithm.
     if init_factors
-        init_factors!(model; init_factors_method=init_factors_method,
+        init_factors!(model; lr=lr, init_factors_method=init_factors_method,
                              verbosity=verbosity, 
                              print_prefix=print_prefix, 
                              history=history,
-                             lr=lr,
                              capacity=capacity, 
                              max_epochs=max_epochs,
                              kwargs...)
@@ -729,7 +728,7 @@ end
 
 ###################################################
 # Fit models with geneset ARD regularization on Y
-function fit_feature_set_ard!(model::PathMatFacModel; lr=0.05, 
+function fit_feature_set_ard!(model::PathMatFacModel; lr=1.0, 
                                                       capacity=10^8,
                                                       max_epochs=1000,
                                                       fsard_max_iter=10,
@@ -820,7 +819,7 @@ end
 """ 
     fit!(model::PathMatFacModel; capacity=Int(10e8),
                                  verbosity=1, 
-                                 lr=0.05,
+                                 lr=1.0,
                                  max_epochs=1000,
                                  fit_reg_weight="EB",
                                  lambda_max=1.0, 
@@ -849,7 +848,6 @@ function fit!(model::PathMatFacModel; lr=1.0,
                                       lambda_min_frac=1e-3, 
                                       keep_history=false,
                                       fit_joint=false,
-                                      lr_joint=0.0005,
                                       fsard_max_iter=10,
                                       fsard_max_A_iter=1000,
                                       fsard_n_lambda=20,
@@ -876,7 +874,8 @@ function fit!(model::PathMatFacModel; lr=1.0,
                                       print_prefix=print_prefix,
                                       kwargs...)
     elseif isa(model.matfac.Y_reg, FeatureSetARDReg)
-        fit_feature_set_ard!(model; history=hist, 
+        fit_feature_set_ard!(model; lr=lr,
+                                    history=hist, 
                                     fsard_max_iter=fsard_max_iter,
                                     fsard_max_A_iter=fsard_max_A_iter,
                                     fsard_n_lambda=fsard_n_lambda,
