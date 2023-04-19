@@ -780,7 +780,7 @@ function fit_feature_set_ard!(model::PathMatFacModel; lr=1.0,
 
         # Re-fit the factors X, Y
         fit_lbfgs!(model.matfac, model.data; capacity=capacity, max_iter=max_epochs,
-                                             verbosity=verbosity, print_prefix=print_prefix)
+                                             verbosity=verbosity, print_prefix=n_pref)
             
         # Compute the relative change in X
         X_old .-= model.matfac.X
