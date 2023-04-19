@@ -111,7 +111,7 @@ function init_theta!(model::PathMatFacModel; capacity=Int(10e8), max_epochs=500,
                      max_epochs=max_epochs, 
                      verbosity=verbosity,
                      print_prefix=print_prefix,
-                     keep_history=(history != nothing))
+                     history=history)
 
     unfreeze_layer!(model.matfac.col_transform, 1:3)
     history!(history; name="init_theta") 
@@ -275,11 +275,10 @@ function init_factors!(model::PathMatFacModel; verbosity=1,
     else
         v_println("Initializing linear factors X,Y via AdaGrad..."; verbosity=verbosity,
                                                                     prefix=print_prefix)
-        keep_history = (history != nothing)
         mf_fit_adapt_lr!(model; capacity=capacity, update_X=true, update_Y=true,
                                 lr=lr, max_epochs=max_epochs, 
                                 verbosity=verbosity, print_prefix=n_prefix,
-                                keep_history=keep_history,
+                                history=history,
                                 kwargs...)
         history!(history; name="init_factors")
     end
@@ -409,7 +408,7 @@ function init_batch_effects!(model::PathMatFacModel; capacity=Int(10e8),
                             update_Y_reg=false,
                             update_row_layers_reg=false,
                             update_col_layers_reg=false,
-                            keep_history=(history != nothing))
+                            history=history)
     history!(history; name="regress_against_sample_conditions")
 
     # Fit its batch shift (without regularization; "least-squares")
@@ -602,9 +601,10 @@ function basic_fit!(model::PathMatFacModel; fit_batch=false,
     if fit_factors
         v_println("Fitting linear factors X,Y..."; verbosity=verbosity, prefix=print_prefix)
         mf_fit_adapt_lr!(model; capacity=capacity, update_X=true, update_Y=true,
+                                lr=lr,
                                 max_epochs=max_epochs, 
                                 verbosity=verbosity, print_prefix=n_prefix,
-                                keep_history=keep_history,
+                                history=history,
                                 kwargs...)
     end
 
@@ -693,7 +693,9 @@ end
 # Fit models with ARD regularization on Y
 
 function fit_ard!(model::PathMatFacModel; max_epochs=1000, capacity=10^8,
-                                          verbosity=1, print_prefix="", 
+                                          verbosity=1, print_prefix="",
+                                          history=nothing,
+                                          lr=1.0, lr_regress=1.0, lr_theta=1.0,
                                           kwargs...)
 
     n_pref = string(print_prefix, "    ")
@@ -706,10 +708,12 @@ function fit_ard!(model::PathMatFacModel; max_epochs=1000, capacity=10^8,
     model.matfac.Y_reg = L2Regularizer(ones_like(model.matfac.Y, K))
     v_println("Pre-fitting with Empirical Bayes L2 regularization..."; verbosity=verbosity,
                                                                         prefix=print_prefix)
-    basic_fit_reg_weight_eb!(model; verbosity=verbosity,
+    basic_fit_reg_weight_eb!(model; lr_regress=1.0, lr_theta=1.0,
+                                    verbosity=verbosity,
                                     print_prefix=n_pref,
                                     max_epochs=max_epochs,
                                     capacity=capacity,
+                                    history=history,
                                     kwargs...) 
     
     # Next, we put the ARD prior back in place and
@@ -717,8 +721,15 @@ function fit_ard!(model::PathMatFacModel; max_epochs=1000, capacity=10^8,
     v_println("Adjusting with ARD on Y..."; verbosity=verbosity,
                                             prefix=print_prefix)
     model.matfac.Y_reg = orig_ard
-    fit_lbfgs!(model.matfac, model.data; capacity=capacity, max_iter=max_epochs,
-                                         verbosity=verbosity, print_prefix=print_prefix)
+    #fit_lbfgs!(model.matfac, model.data; capacity=capacity, max_iter=max_epochs,
+    #                                     verbosity=verbosity, print_prefix=print_prefix)
+    mf_fit_adapt_lr!(model; capacity=capacity, update_X=true, update_Y=true,
+                            lr=lr,
+                            max_epochs=max_epochs,
+                            verbosity=verbosity,
+                            print_prefix=print_prefix,
+                            history=history,
+                            kwargs...)
 
 end
 
@@ -779,8 +790,15 @@ function fit_feature_set_ard!(model::PathMatFacModel; lr=1.0,
                                                       history=history) 
 
         # Re-fit the factors X, Y
-        fit_lbfgs!(model.matfac, model.data; capacity=capacity, max_iter=max_epochs,
-                                             verbosity=verbosity, print_prefix=n_pref)
+        #fit_lbfgs!(model.matfac, model.data; capacity=capacity, max_iter=max_epochs,
+        #                                     verbosity=verbosity, print_prefix=n_pref)
+        keep_history = (history != nothing)
+        mf_fit_adapt_lr!(model; capacity=capacity, update_X=true, update_Y=true,
+                                lr=lr,
+                                max_epochs=max_epochs,
+                                verbosity=verbosity,
+                                print_prefix=n_pref,
+                                history=history)
             
         # Compute the relative change in X
         X_old .-= model.matfac.X
@@ -902,14 +920,13 @@ function fit!(model::PathMatFacModel; lr=1.0,
         unfreeze_layer!(model.matfac.col_transform, 3:4) # batch and column shift 
         v_println("Jointly adjusting parameters..."; verbosity=verbosity, prefix=print_prefix)
         n_prefix = string(print_prefix, "    ") 
-        h = mf_fit_adapt_lr!(model; capacity=capacity, update_X=true, update_Y=true,
-                                    update_col_layers=true,
-                                    max_epochs=max_epochs,
-                                    verbosity=verbosity,
-                                    print_prefix=n_prefix,
-                                    keep_history=keep_history,
-                                    kwargs...)
-        history!(history, h; name="fit_joint")
+        mf_fit_adapt_lr!(model; capacity=capacity, update_X=true, update_Y=true,
+                                lr=lr,
+                                update_col_layers=true,
+                                max_epochs=max_epochs,
+                                verbosity=verbosity,
+                                print_prefix=n_prefix,
+                                history=hist)
         unfreeze_layer!(model.matfac.col_transform, 1:2)
     end
 

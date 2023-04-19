@@ -295,8 +295,8 @@ end
 # containing a nonzero entry.
 function score_A(A; threshold=1e-3)
     L,K = size(A)
-    return sum(sum(A .> threshold, dims=1) .> 0)/K
-    #return sum(A .> threshold)/(L*K)
+    #return sum(sum(A .> threshold, dims=1) .> 0)/K
+    return sum(A .> threshold)/(L*K)
 end
 
 
