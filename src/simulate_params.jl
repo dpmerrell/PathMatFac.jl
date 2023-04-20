@@ -6,18 +6,17 @@
 
 function simulate_params!(X::AbstractMatrix, reg::Union{GroupRegularizer,L2Regularizer}; kwargs...)
     K, N = size(X)
-    invsq_K = 1/sqrt(K) 
-    X .= randn_like(X).*invsq_K
+    X .= randn_like(X)
 end
 
 
-function simulate_params!(X::AbstractMatrix, reg::ARDRegularizer; ard_alpha=3.0,
-                                                                  ard_beta=3.0,
+function simulate_params!(X::AbstractMatrix, reg::ARDRegularizer; ard_alpha=2.0,
+                                                                  ard_beta=2.0,
                                                                   kwargs...)
     K, N = size(X)
     gamma_dist = Gamma(ard_alpha, 1/ard_beta)
     tau = rand(gamma_dist, K, N)
-    X .= randn_like(X) ./ sqrt.(tau) ./ sqrt(K) 
+    X .= randn_like(X) ./ sqrt.(tau) 
 end
 
 
@@ -60,7 +59,7 @@ function simulate_params!(Y::AbstractMatrix, reg::FeatureSetARDReg; ard_alpha=2.
     # Compute the entry-specific betas; taus; and then Y
     beta = ard_alpha .+ (transpose(reg.A) * reg.S)
     tau = map(b->rand(Gamma(ard_alpha, 1/b)), beta)
-    Y .= randn_like(Y) ./ sqrt.(tau) ./ sqrt(K)
+    Y .= randn_like(Y) ./ sqrt.(tau) 
 
 end
 
@@ -91,6 +90,22 @@ end
 # Noise model param simulators
 ######################################
 
+function simulate_params!(nm::Union{MF.NormalNoise,MF.SquaredHingeNoise}; kwargs...)
+end
+
+function simulate_params!(nm::MF.OrdinalSqHingeNoise; kwargs...)
+    nm.ext_thresholds .*= 2.0
+end
+
+function simulate_params!(nm::MF.CompositeNoise; kwargs...)
+    for n in nm.noises
+        simulate_params!(n; kwargs...)
+    end
+end
+
+################################
+# Column scales and shifts 
+
 VIEW_MU_MEAN = Dict("mrnaseq" => 10.0,
                     "methylation" => 0.0, 
                     "cna" => 0.0,
@@ -103,29 +118,14 @@ VIEW_MU_STD = Dict("mrnaseq" => 2.0,
 
 VIEW_LOGSIGMA_MEAN = Dict("mrnaseq" => 0.5,
                           "methylation" => 0.1,
-                          "cna" => 0.0,
-                          "mutation" => 0.0)
+                          "cna" => log(2.0),
+                          "mutation" => log(1.0))
 
-VIEW_LOGSIGMA_STD = Dict("mrnaseq" => 0.5,
-                         "methylation" => 0.25,
-                         "cna" => 0.1,
-                         "mutation" => 0.1)
+VIEW_LOGSIGMA_STD = Dict("mrnaseq" => 0.1,
+                         "methylation" => 0.1,
+                         "cna" => 0.001,
+                         "mutation" => 0.001)
 
-function simulate_params!(nm::Union{MF.NormalNoise,MF.SquaredHingeNoise}; kwargs...)
-end
-
-function simulate_params!(nm::MF.OrdinalSqHingeNoise; kwargs...)
-    nm.ext_thresholds .*= 1.5
-end
-
-function simulate_params!(nm::MF.CompositeNoise; kwargs...)
-    for n in nm.noises
-        simulate_params!(n; kwargs...)
-    end
-end
-
-################################
-# Column scales and shifts 
 function simulate_params!(cs::ColScale, reg::ColParamReg; feature_views=nothing,
                                                           view_mean=VIEW_LOGSIGMA_MEAN,
                                                           view_std=VIEW_LOGSIGMA_STD, 
@@ -178,10 +178,12 @@ end
 function simulate_params!(model::PathMatFacModel; kwargs...)
 
     mf = model.matfac
+    K = size(mf.X, 1)
     simulate_params!(mf.Y, mf.Y_reg; kwargs...)
     simulate_params!(mf.X, mf.X_reg; kwargs...)
     simulate_params!(mf.col_transform, mf.col_transform_reg; feature_views=model.feature_views,
                                                              kwargs...)
+    mf.col_transform.layers[1].logsigma .-= log(sqrt(K))
 
     simulate_params!(mf.noise_model; kwargs...)
 end

@@ -140,7 +140,7 @@ function init_logsigma!(model::PathMatFacModel; capacity=Int(10e8), history=noth
     col_vars ./= vec(MF.column_nonnan(model.data))
     
     K = size(model.matfac.X, 1)
-    model.matfac.col_transform.layers[1].logsigma .= log.(sqrt.(col_vars) ./ sqrt(K))
+    model.matfac.col_transform.layers[1].logsigma .= log.(sqrt.(col_vars))# ./ sqrt(K))
 
     model.matfac.X = orig_X
     model.matfac.Y = orig_Y
@@ -461,7 +461,7 @@ function init_batch_effects!(model::PathMatFacModel; capacity=Int(10e8),
     
     # We reduce the column scales by 1/√K so that the entries of X, Y take reasonable values
     K = size(model.matfac.X,1)
-    model.matfac.col_transform.layers[1].logsigma = log.(sqrt.(col_vars ./ K)) 
+    model.matfac.col_transform.layers[1].logsigma = log.(sqrt.(col_vars))# ./ K)) 
 
     model.matfac.col_transform.layers[2].logdelta.values = map(v->log.(sqrt.(v)), delta2_values)
     model.matfac.col_transform.layers[4].theta.values = theta_values
@@ -476,19 +476,23 @@ end
 # Variance is reallocated to Y; and then reallocated to logsigma.
 function whiten!(model::PathMatFacModel)
     X_std = std(model.matfac.X, dims=2)
+    println("WHITENING")
+    println(string("\tX_std: ", X_std))
     model.matfac.X ./= X_std
     model.matfac.Y .*= X_std
 
     # For each view, reallocate variance in Y to sigma.
-    for cr in model.matfac.noise_model.col_ranges
+    view_crs = ids_to_ranges(model.feature_views)
+    for cr in view_crs
         # Compute row-wise standard deviations in Y:
         Y_view_std = std(view(model.matfac.Y, :, cr), dims=2)
+        println(string("\tY_view_std (", cr,"): ", Y_view_std))
         
         # Select the largest one and use it to 
         # rescale both Y and sigma.
         Y_std_max = maximum(Y_view_std)
         model.matfac.Y[:,cr] ./= Y_std_max
-        model.matfac.col_transform.layers[1].logsigma .+= log(Y_std_max)
+        model.matfac.col_transform.layers[1].logsigma[cr] .+= log(Y_std_max)
     end
 
     return model.matfac.col_transform.layers[1].logsigma
@@ -686,9 +690,9 @@ function fit_non_ard!(model::PathMatFacModel; fit_reg_weight="EB",
     else
         basic_fit!(model; fit_mu=true, fit_logsigma=true, reweight_losses=true,
                           fit_batch=true, 
-                          init_factors=true, 
-                          #fit_factors=true, 
-                          whiten=true, 
+                          #init_factors=true, 
+                          fit_factors=true, 
+                          #whiten=true, 
                           kwargs...)
     end
 end
@@ -705,26 +709,35 @@ function fit_ard!(model::PathMatFacModel; max_epochs=1000, capacity=10^8,
 
     n_pref = string(print_prefix, "    ")
 
-    # First, we fit the model in an Empirical Bayes fashion
-    # with an L2 regularizer on Y
+    # First, we fit the model without regularization
+    orig_X_reg = model.matfac.X_reg
     orig_ard = model.matfac.Y_reg
 
     K = size(model.matfac.Y, 1)
-    model.matfac.Y_reg = L2Regularizer(ones_like(model.matfac.Y, K))
-    v_println("Pre-fitting with Empirical Bayes L2 regularization..."; verbosity=verbosity,
-                                                                        prefix=print_prefix)
-    basic_fit_reg_weight_eb!(model; lr_regress=1.0, lr_theta=1.0,
-                                    verbosity=verbosity,
-                                    print_prefix=n_pref,
-                                    max_epochs=max_epochs,
-                                    capacity=capacity,
-                                    history=history,
-                                    kwargs...) 
+    v_println("Pre-fitting without regularization..."; verbosity=verbosity,
+                                                       prefix=print_prefix)
+    model.matfac.X_reg = X -> 0 
+    model.matfac.Y_reg = Y -> 0 
+    basic_fit!(model; fit_batch=true,
+                      fit_mu=true,
+                      fit_logsigma=true,
+                      init_factors=true,
+                      reweight_losses=true,
+                      whiten=true,
+                      lr_regress=lr_regress, lr_theta=lr_theta,
+                      verbosity=verbosity,
+                      print_prefix=n_pref,
+                      max_epochs=max_epochs,
+                      capacity=capacity,
+                      history=history,
+                      kwargs...) 
     
     # Next, we put the ARD prior back in place and
     # continue fitting the model.
     v_println("Adjusting with ARD on Y..."; verbosity=verbosity,
                                             prefix=print_prefix)
+    model.matfac.X_reg = orig_X_reg
+    reweight_eb!(model.matfac.X_reg, model.matfac.X)
     model.matfac.Y_reg = orig_ard
     #fit_lbfgs!(model.matfac, model.data; capacity=capacity, max_iter=max_epochs,
     #                                     verbosity=verbosity, print_prefix=print_prefix)
@@ -732,7 +745,7 @@ function fit_ard!(model::PathMatFacModel; max_epochs=1000, capacity=10^8,
                             lr=lr, min_lr=0.01,
                             max_epochs=max_epochs,
                             verbosity=verbosity,
-                            print_prefix=print_prefix,
+                            print_prefix=n_pref,
                             history=history,
                             kwargs...)
 

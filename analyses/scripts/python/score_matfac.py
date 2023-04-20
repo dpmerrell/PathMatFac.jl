@@ -20,7 +20,7 @@ def score_batch_param(true_values, fitted_values):
 
 
 ##########################################################
-# Scores for the linear factors (Y) 
+# Scores for the factors X,Y 
 ##########################################################
 def generalized_cosine_similarity(Y_true, Y_fitted):
     ip_tf = np.dot(Y_true, Y_fitted.transpose())
@@ -124,19 +124,27 @@ def compute_scores(true_hdf, fitted_hdf):
             scores["Y_cossim_null"] = cossim_null
             scores["Y_cossim_pvalue"] = cossim_p_value
 
+            print("Scoring X...")
+            X_true = f_true["X"][:,:].transpose()
+            X_fitted = f_fitted["X"][:,:].transpose()
+            scores["X_cossim"] = generalized_cosine_similarity(X_true, X_fitted)
+            cossim_null, cossim_p_value = generalized_cossim_pvalue(X_true, X_fitted, scores["X_cossim"])
+            scores["X_cossim_null"] = cossim_null
+            scores["X_cossim_pvalue"] = cossim_p_value
+
             if ("fsard" in f_true.keys()) and ("fsard" in f_fitted.keys()): 
                 print("Scoring A...")
                 A_true = f_true["fsard/A"][:,:].transpose()
                 A_fitted = f_fitted["fsard/A"][:,:].transpose()
 
                 aucroc_fn = lambda at, af: safe_aucroc((at>0).astype(int), af)
-                scores["A_aucroc"] = maximal_pairwise_score(A_true, A_fitted, aucroc_fn)
+                scores["A_aucroc"] = maximal_pairwise_score(A_true, A_fitted, aucroc_fn, verbose=True)
                 A_aucroc_null, A_aucroc_pvalue = mps_pvalue(A_true, A_fitted, aucroc_fn, scores["A_aucroc"])
                 scores["A_aucroc_null"] = A_aucroc_null
                 scores["A_aucroc_pvalue"] = A_aucroc_pvalue
                 
                 aucpr_fn = lambda at, af: average_precision_score((at>0).astype(int), af)
-                scores["A_aucpr"] = maximal_pairwise_score(A_true, A_fitted, aucpr_fn)
+                scores["A_aucpr"] = maximal_pairwise_score(A_true, A_fitted, aucpr_fn, verbose=True)
                 A_aucpr_null, A_aucpr_pvalue = mps_pvalue(A_true, A_fitted, aucpr_fn, scores["A_aucpr"])
                 scores["A_aucpr_null"] = A_aucpr_null
                 scores["A_aucpr_pvalue"] = A_aucpr_pvalue
@@ -150,7 +158,8 @@ def compute_scores(true_hdf, fitted_hdf):
                 beta_fitted = np.matmul(A_fitted.transpose(), S_fitted)
                 scores["beta_aucroc"] = maximal_pairwise_score(beta_true.transpose(), 
                                                                beta_fitted.transpose(), 
-                                                               lambda bt, bf: safe_aucroc((bt>0).astype(int), bf))
+                                                               lambda bt, bf: safe_aucroc((bt>0).astype(int), bf),
+                                                               verbose=True)
 
             
             print("Scoring mu...")

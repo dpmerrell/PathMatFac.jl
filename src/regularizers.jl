@@ -38,8 +38,8 @@ end
 
 function reweight_eb!(reg::L2Regularizer, X::AbstractMatrix; mixture_p=Float32(1.0))
     row_vars = vec(var(X, dims=2))
-    row_precs = 1 ./ row_vars
-    reg.weights .= (mixture_p .* row_precs)
+    max_var = maximum(row_vars)
+    reg.weights .= (mixture_p / max_var)
 end 
 
 function reweight_eb!(reg::L2Regularizer, x::AbstractVector; mixture_p=Float32(1.0))
@@ -401,8 +401,9 @@ end
 
 function reweight_eb!(gr::GroupRegularizer, X::AbstractMatrix; mixture_p=1.0)
     new_vars = map(idx -> mean(view(X,:,idx).^2, dims=2), gr.group_idx)
-    new_weights = map(v -> Float32(1e-6 .+ 0.5) ./ (Float32(1e-6) .+ Float32(0.5).*v), new_vars)
-    
+    max_vars = map(v -> fill(maximum(v), size(v)), new_vars)
+    new_weights = map(v -> Float32(1e-6 .+ 0.5) ./ (Float32(1e-6) .+ Float32(0.5).*v), max_vars)
+     
     gr.group_weights = new_weights
 end
 
@@ -499,8 +500,8 @@ end
 
 @functor ARDRegularizer
 
-function ARDRegularizer(;alpha=Float32(1e-6), 
-                         beta=Float32(1e-6),
+function ARDRegularizer(;alpha=Float32(0.1), 
+                         beta=Float32(0.1),
                          weight=1.0)
     return ARDRegularizer(alpha, beta, weight)
 end

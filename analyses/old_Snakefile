@@ -75,7 +75,7 @@ REACTOME_URL = config["reactome_url"]
 #####################################################################
 # Unpack simulation study parameters
 #####################################################################
-SIM_PARAMS = config["sim_params"]
+SIM_PARAMS = config["graph_sim_params"]
 SIM_PARAMS = {analysis: {size: OrderedDict([("methods", ["__".join(["method={}".format(m), l]) for m, m_param in s_params["methods"].items() for l in param_dict_to_list(m_param) ] ),\
                                             ("schema", param_dict_to_list(s_params["schema"]) ),\
                                             ("sim", param_dict_to_list(s_params["sim"]) ),\
