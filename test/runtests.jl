@@ -1487,10 +1487,10 @@ function main()
     #featureset_ard_tests()
     #model_tests()
     #score_tests()
-    lbfgs_tests()
+    #lbfgs_tests()
     fit_tests()
     #transform_tests()
-    #model_io_tests()
+    model_io_tests()
     #simulation_tests()
 
 end

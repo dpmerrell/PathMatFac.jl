@@ -158,11 +158,15 @@ function simulate_params!(v::AbstractVector, reg::ColParamReg; feature_views=not
     end 
 end
 
+
 ############################
 # Composition of layers
 function simulate_params!(transform::ViewableComposition, reg::SequenceReg; kwargs...)
 
     for (layer, r) in zip(transform.layers, reg.regs)
+        if isa(layer, Function)
+            continue
+        end
         simulate_params!(layer, r; kwargs...)
     end
 end

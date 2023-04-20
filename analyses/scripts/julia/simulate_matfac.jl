@@ -196,10 +196,10 @@ function main(args)
         model_kwargs[:sample_conditions] = sample_conditions 
     end
 
-    barcode_data = []
-    barcode_columns = []
+    #barcode_data = []
+    #barcode_columns = []
+    barcode_data, barcode_columns, batch_dict = load_batches(omic_hdf, omic_types)
     if script_opts[:use_batch]
-        barcode_data, barcode_columns, batch_dict = load_batches(omic_hdf, omic_types)
         model_kwargs[:batch_dict] = batch_dict 
     end
 

@@ -43,7 +43,8 @@ function construct_optimizer(model, lr)
 end
 
 
-function mf_fit_adapt_lr!(model::PathMatFacModel; lr=1.0, 
+function mf_fit_adapt_lr!(model::PathMatFacModel; lr=1.0,
+                                                  min_lr=0.001, 
                                                   max_epochs=1000,
                                                   history=nothing,
                                                   keep_history=true,
@@ -60,8 +61,11 @@ function mf_fit_adapt_lr!(model::PathMatFacModel; lr=1.0,
         history!(history, h; name=string("mf_fit_lr=", opt.eta))
         
         if h["term_code"] == "loss_increase"
-            v_println("Resuming with smaller learning rate (", opt.eta, ")"; verbosity=verbosity, prefix=print_prefix)
             opt.eta *= 0.5
+            if opt.eta < min_lr
+                break
+            end
+            v_println("Resuming with smaller learning rate (", opt.eta, ")"; verbosity=verbosity, prefix=print_prefix)
             epoch = h["epochs"]
         else
             break
@@ -276,7 +280,7 @@ function init_factors!(model::PathMatFacModel; verbosity=1,
         v_println("Initializing linear factors X,Y via AdaGrad..."; verbosity=verbosity,
                                                                     prefix=print_prefix)
         mf_fit_adapt_lr!(model; capacity=capacity, update_X=true, update_Y=true,
-                                lr=lr, max_epochs=max_epochs, 
+                                lr=lr, min_lr=0.05, max_epochs=max_epochs, 
                                 verbosity=verbosity, print_prefix=n_prefix,
                                 history=history,
                                 kwargs...)
@@ -399,6 +403,7 @@ function init_batch_effects!(model::PathMatFacModel; capacity=Int(10e8),
     model.matfac.Y_reg = y->0
     mf_fit_adapt_lr!(model; capacity=capacity, max_epochs=max_epochs,
                             lr=lr_regress,
+                            min_lr=0.05,
                             verbosity=verbosity-1, print_prefix=n_pref,
                             scale_column_losses=false,
                             update_X=false,
@@ -601,7 +606,7 @@ function basic_fit!(model::PathMatFacModel; fit_batch=false,
     if fit_factors
         v_println("Fitting linear factors X,Y..."; verbosity=verbosity, prefix=print_prefix)
         mf_fit_adapt_lr!(model; capacity=capacity, update_X=true, update_Y=true,
-                                lr=lr,
+                                lr=lr, min_lr=0.05,
                                 max_epochs=max_epochs, 
                                 verbosity=verbosity, print_prefix=n_prefix,
                                 history=history,
@@ -724,7 +729,7 @@ function fit_ard!(model::PathMatFacModel; max_epochs=1000, capacity=10^8,
     #fit_lbfgs!(model.matfac, model.data; capacity=capacity, max_iter=max_epochs,
     #                                     verbosity=verbosity, print_prefix=print_prefix)
     mf_fit_adapt_lr!(model; capacity=capacity, update_X=true, update_Y=true,
-                            lr=lr,
+                            lr=lr, min_lr=0.01,
                             max_epochs=max_epochs,
                             verbosity=verbosity,
                             print_prefix=print_prefix,
@@ -794,7 +799,7 @@ function fit_feature_set_ard!(model::PathMatFacModel; lr=1.0,
         #                                     verbosity=verbosity, print_prefix=n_pref)
         keep_history = (history != nothing)
         mf_fit_adapt_lr!(model; capacity=capacity, update_X=true, update_Y=true,
-                                lr=lr,
+                                lr=lr, min_lr=0.01,
                                 max_epochs=max_epochs,
                                 verbosity=verbosity,
                                 print_prefix=n_pref,
