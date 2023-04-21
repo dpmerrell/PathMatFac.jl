@@ -1,86 +1,140 @@
 
 
-output_dir = "temp/"
+output_dir: "temp/"
 
 
 matfac_simulation_study:
     # List experiments here
-    config_comparison_sims:
-        n_reps: 5
+    # Questions:
+    # * How sensitive are different model configurations to misspecified K?
+    # * Do L2- or ARD-regularization "prune away" spurious factors?
+    K_robustness_sims_cpu:
+        n_reps: 1
+        data_params:
+            kept_ctypes: ["HNSC:CESC:ESCA:STAD"]
+            heldout_ctypes: [""]
+        pathways: ["hallmark"] 
         sim_params:
+            configuration: ["fsard"]
+            use_batch: ["true"]
+            var_filter: [0.01]
+            K: [5, 10, 20]
+            S_add_corruption: [0.05]
+            S_remove_corruption: [0.05]
+            normal_noise: [0.1]
+            missingness: [0.1]
+            A_density: [0.1]
         fit_params:
-    lbfgs_sims:
-        n_reps: 5
-        sim_params:
-        fit_params:
-    noise_robustness_sims:
-        n_reps: 5
-        sim_params:
-        fit_params:
-    size_sims_cpu:
-        n_reps: 5
-        sim_params:
-        fit_params:
-    geneset_robustness_sims:
-        n_reps: 5
-        sim_params:
-            omic_types:
-        fit_params:
-    batch_sims:
-        n_reps: 5
-        sim_params:
-        fit_params:
-    size_sims_gpu:
-        n_reps: 5
-        sim_params:
-        fit_params:
+            configuration: ["basic", "ard", "fsard"]
+            use_batch: ["true"]
+            var_filter: [1.0]
+            K: [5, 10, 20]
+            max_epochs: [5000]
+            lr: [1.0]
+            lr_theta: [1.0]
+            lr_regress: [1.0]
+            fsard_max_iter: [20]
+            fsard_A_prior_frac: [0.1]
+#    # Questions:
+#    #     * How does runtime vary with problem size?
+#    #     * How does factor recovery vary with problem size?
+#    #     * How does K-sensitivity interact with problem size? 
+#    size_sims_cpu:
+#        n_reps: 1
+#        sim_params:
+#            samples:
+#                kept_ctypes: ["HNSC", "HNSC:CESC:ESCA:STAD", "HNSC:CESC:ESCA:STAD:BRCA:LUSC:OV"]
+#                heldout_ctypes: ["", "", ""]
+#            pathways: ["msigdb"]
+#            configuration: ["fsard"]
+#            use_batch: ["true"]
+#            var_filter: [0.01, 0.02, 0.04]
+#            K: [10]
+#            S_add_corruption: [0.05]
+#            S_remove_corruption: [0.05]
+#            normal_noise: [0.1]
+#            missingness: [0.1]
+#            A_density: [0.1]
+#        fit_params:
+#            pathways: ["msigdb"]
+#            configuration: ["basic"]
+#            use_batch: ["true"]
+#            var_filter: [1.0]
+#            K: [5, 10, 20]
+#            max_epochs: [10000]
+#            fsard_max_iter: [20]
+#            fsard_A_prior_frac: [0.1]
+#    config_comparison_sims:
+#        n_reps: 1
+#        sim_params:
+#        fit_params:
+#    noise_robustness_sims:
+#        n_reps: 1
+#        sim_params:
+#        fit_params:
+#    lbfgs_sims:
+#        n_reps: 1
+#        sim_params:
+#        fit_params:
+#    geneset_robustness_sims:
+#        n_reps: 1
+#        sim_params:
+#            omic_types:
+#        fit_params:
+#    batch_sims:
+#        n_reps: 1
+#        sim_params:
+#        fit_params:
+#    size_sims_gpu:
+#        n_reps: 1
+#        sim_params:
+#        fit_params:
 
 
-matfac_tcga_runs:
-    config_comparison_full:
-        data_params:
-        fit_params:
-    config_comparison_hpv:
-        data_params:
-        fit_params:
-    
-    batch_effect_runs_full:
-        data_params:
-        fit_params:
-    batch_effect_runs_hpv:
-        data_params:
-        fit_params:
-    
+#matfac_tcga_runs:
+#    config_comparison_full:
+#        data_params:
+#        fit_params:
+#    config_comparison_hpv:
+#        data_params:
+#        fit_params:
+#    
+#    batch_effect_runs_full:
+#        data_params:
+#        fit_params:
+#    batch_effect_runs_hpv:
+#        data_params:
+#        fit_params:
+#    
 
-supervised_tasks:
-    multiomic_setting:
-        data_params:
-        method_params:
-            matfac_params:
-            pca_params:
-            mofa_params:
-            plier_params:
-    mrnaseq_setting:
-        data_params:
-        method_params:
-            matfac_params:
-            pca_params:
-            mofa_params:
-            plier_params:
-    mrnaseq_methyl_setting:
-        data_params:
-        method_params:
-            matfac_params:
-            pca_params:
-            mofa_params:
-            plier_params:
-    batch_effect_test:
-        data_params:
-        method_params:
-            matfac_params:
-            pca_params:
-            mofa_params:
-            plier_params:
-    
+supervised_folds: 5
+
+#supervised_tasks:
+#    multiomic_setting:
+#        data_params:
+#        method_params:
+#            matfac_params:
+#            pca_params:
+#            mofa_params:
+#            plier_params:
+#    mrnaseq_setting:
+#        data_params:
+#        method_params:
+#            matfac_params:
+#            pca_params:
+#            mofa_params:
+#            plier_params:
+#    mrnaseq_methyl_setting:
+#        data_params:
+#        method_params:
+#            matfac_params:
+#            pca_params:
+#            mofa_params:
+#            plier_params:
+#    batch_effect_test:
+#        data_params:
+#        method_params:
+#            matfac_params:
+#    
         
  

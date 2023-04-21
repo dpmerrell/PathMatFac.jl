@@ -1,0 +1,308 @@
+
+from os import path 
+from itertools import product
+from collections import OrderedDict
+
+
+configfile: "config.yaml"
+
+###################################
+# Scripts
+PY_SCRIPT_DIR = "scripts/python/"
+JL_SCRIPT_DIR = "scripts/julia/"
+R_SCRIPT_DIR = "scripts/R/"
+
+
+####################################
+# Raw data
+RAW_DATA_DIR = "data"
+RAW_TCGA_DIR = path.join(RAW_DATA_DIR, "tcga")
+RAW_REACTOME_DIR = path.join(RAW_DATA_DIR, "reactome")
+RAW_MSIGDB_DIR = path.join(RAW_DATA_DIR, "msigdb")
+RAW_PARADIGM_DIR = path.join(RAW_DATA_DIR, "paradigm")
+
+OUT_DIR = config["output_dir"]
+
+
+####################################
+# Preprocessed data
+PREP_DATA_DIR = path.join(OUT_DIR, "prepped_data")
+PREP_TCGA_DIR = path.join(PREP_DATA_DIR, "tcga")
+PREP_PARADIGM_DIR = path.join(PREP_DATA_DIR, "paradigm")
+PREP_PWY_DIR = path.join(PREP_DATA_DIR, "pathways")
+
+
+####################################
+# MatFac simulation study
+SIM_DIR = path.join(OUT_DIR, "simulation_study")
+SIM_DATA_DIR = path.join(OUT_DIR, "simulated_data")
+SIM_PARAM_DIR = path.join(OUT_DIR, "simulated_params")
+
+ALL_SIM_PARAMS = config["matfac_simulation_study"]
+ALL_SIM_EXPERIMENTS = list(ALL_SIM_PARAMS.keys())
+
+def collect_params(param_dict):
+    factors = []
+    for (k,v) in param_dict.items():
+        if isinstance(v, list):
+            factors.append(["{}={}".format(k, vi) for vi in v])
+        elif isinstance(v, dict):
+            names = list(v.keys())
+            value_lists = [v[i] for i in names]
+            unrolled = [["{}={}".format(name,value) for value in v_list] for (name, v_list) in zip(names, value_lists)]
+            factors.append(["__".join(t) for t in zip(*unrolled)])
+    combs = product(*factors)
+    return ["__".join(c) for c in combs]
+
+SIM_REPS = [["rep={}".format(n) for n in range(ALL_SIM_PARAMS[k]["n_reps"])] for k in ALL_SIM_EXPERIMENTS]
+SIM_PWY_PARAMS = [ALL_SIM_PARAMS[k]["pathways"] for k in ALL_SIM_EXPERIMENTS]
+SIM_DATA_PARAMS = [collect_params(ALL_SIM_PARAMS[k]["data_params"]) for k in ALL_SIM_EXPERIMENTS]
+SIM_PARAMS = [collect_params(ALL_SIM_PARAMS[k]["sim_params"]) for k in ALL_SIM_EXPERIMENTS]
+SIM_FIT_PARAMS = [collect_params(ALL_SIM_PARAMS[k]["fit_params"]) for k in ALL_SIM_EXPERIMENTS]
+
+SIM_COMBINATIONS = [path.join(*t) for tup in zip(SIM_DATA_PARAMS, SIM_PWY_PARAMS, SIM_PARAMS, SIM_REPS) for t in product(*tup)]
+SIM_FIT_COMBINATIONS = [path.join(*t) for tup in zip(SIM_DATA_PARAMS, SIM_PWY_PARAMS, SIM_PARAMS, SIM_FIT_PARAMS, SIM_REPS) for t in product(*tup)]
+
+
+####################################
+# Supervised learning tasks
+TCGA_FOLDS = config["supervised_folds"]
+
+rule all:
+    input:
+        pwy_json=path.join(PREP_PWY_DIR,"hallmark.json"),
+        prep_tcga=path.join(PREP_TCGA_DIR, "kept_ctypes=HNSC:CESC:ESCA:STAD.hdf"),
+        simulated_hdfs=expand(path.join(SIM_DATA_DIR, "{sim_combinations}.hdf"),
+                              sim_combinations=SIM_COMBINATIONS)
+
+
+#################################################################
+# Simulation study
+#################################################################
+
+rule score_matfac_sim:
+    input:
+        src=path.join(PY_SCRIPT_DIR, "score_matfac.py"),
+        true_hdf="",
+        fitted_hdf=""
+    output:
+        score_json=""
+    shell:
+        "python {input.src} {input.true_hdf} {input.fitted_hdf} {output.score_json}"
+
+
+rule param_bson_to_hdf:
+    input:
+        src=path.join(JL_SCRIPT_DIR, "bson_to_hdf.jl"),
+        bson="",
+    output:
+        hdf=""
+    shell:
+        "julia --project=. {input.src} {input.bson} {output.hdf}"
+
+
+rule fit_matfac:
+    input:
+        src=path.join(JL_SCRIPT_DIR, "fit_matfac.jl"),
+        data_hdf="",
+        pwy_json="",
+    output:
+        fitted_bson="",
+        transformed_hdf="",
+    params:
+        parsed_opts=""
+    shell:
+        "julia --project=. {input.src} {input.data_hdf} {input.pwy_json} {output.fitted_bson} {output.transformed_hdf} {params.parsed_opts}"
+
+
+rule simulate_data:
+    input:
+        src=path.join(JL_SCRIPT_DIR, "simulate_matfac.jl"),
+        template_data_hdf=path.join(PREP_TCGA_DIR, "{tcga_params}.hdf"),
+        template_pwys_json=path.join(PREP_PWY_DIR, "{pwy_params}.json")
+    output:
+        true_param_bson=path.join(SIM_PARAM_DIR, "{tcga_params}/{pwy_params}/{sim_params}/rep={rep}.bson"),
+        simulated_hdf=path.join(SIM_DATA_DIR, "{tcga_params,[^/]+}/{pwy_params,[^/]+}/{sim_params,[^/]+}/rep={rep,[0-9]+}.hdf")
+    params:
+        parsed_opts=lambda wc: wc["sim_params"].split("__") 
+    shell:
+        "julia --project=. {input.src} {input.template_data_hdf} {input.template_pwys_json} {output.true_param_bson} {output.simulated_hdf} {params.parsed_opts}"
+
+
+
+#####################################################################
+# Supervised tasks
+#####################################################################
+
+rule prep_tcga_splits:
+    input:
+        src="scripts/python/prep_tcga_splits.py",
+        data_hdf=path.join(PREP_TCGA_DIR, "{data}.hdf"),
+        clinical_hdf=path.join(RAW_TCGA_DIR, "tcga_clinical.hdf"),
+        paradigm_hdf=path.join(PREP_PARADIGM_DIR, "paradigm.hdf")
+    output:
+        train_sets=[path.join(PREP_TCGA_DIR, "{data,[_.=:0-9a-zA-Z]+}__"+"fold={}".format(i)+"__target={target,[_:a-z]*}__train.hdf") for i in range(TCGA_FOLDS)],
+        test_sets=[path.join(PREP_TCGA_DIR, "{data,[_.=:0-9a-zA-Z]+}__"+"fold={}".format(i)+"__target={target,[_:a-z]*}__test.hdf") for i in range(TCGA_FOLDS)]
+    params:
+        prefix=lambda wc: path.join(PREP_TCGA_DIR, wc["data"]),
+    shell:
+        "python {input.src} {input.data_hdf} {input.clinical_hdf} {input.paradigm_hdf} {params.prefix} --n_folds {TCGA_FOLDS} --target {wildcards.target} --paradigm_filter"
+
+
+#####################################################################
+# Download and preprocess precomputed PARADIGM outputs
+#####################################################################
+
+rule exp_prep_paradigm:
+    input:
+        src="scripts/python/prep_paradigm.py",
+        paradigm_txt=path.join(RAW_PARADIGM_DIR, "merge_merged_reals.txt"),
+    output:
+        out_hdf=path.join(PREP_PARADIGM_DIR, "paradigm.hdf")
+    shell:
+        "python {input.src} {input.paradigm_txt} {output.out_hdf}"
+
+rule exp_download_paradigm:
+    output:
+        paradigm_tar=path.join(RAW_PARADIGM_DIR, "merge_merged_reals.tar.gz"),
+        paradigm_txt=path.join(RAW_PARADIGM_DIR, "merge_merged_reals.txt")
+    shell:
+        "curl {PARADIGM_URL} --output {output.paradigm_tar} && tar -xvzf {output.paradigm_tar} --directory {RAW_PARADIGM_DIR}"
+
+
+#####################################################################
+# Preprocess MSigDB
+#####################################################################
+
+def collect_msigdb_names(wc):
+    return wc["name"].split(":")
+
+
+rule prep_msigdb_json:
+    input:
+        src=path.join(PY_SCRIPT_DIR, "prep_msigdb_json.py"),
+        raw_jsons=lambda wc: [path.join(RAW_MSIGDB_DIR, n+".json") for n in wc["name"].split(":")]
+    output:
+        pwy_json=path.join(PREP_PWY_DIR,"{name}.json")
+    shell:
+        "python {input.src} {input.raw_jsons} {output.pwy_json}"
+
+
+#####################################################################
+# Download and preprocess Reactome
+#####################################################################
+
+rule select_topk_pwys:
+    input:
+        src="scripts/python/prep_select_pathways.py",
+        ranked_json=path.join(RAW_REACTOME_DIR, "reactome_ranked.json"),
+    output:
+        pwy_json=path.join(RAW_REACTOME_DIR, "top_pwys={topk, [0-9]+}.json"),
+    resources:
+        mem_mb=500
+    shell:
+        "python {input.src} {input.ranked_json} {wildcards.topk} {output.pwy_json}"
+
+
+rule rank_pwys:
+    input:
+        src="scripts/python/rank_pathways.py",
+        feature_json=path.join(PREP_TCGA_DIR, "features__heldout_ctypes=.json"),
+        all_pwy_json=path.join(RAW_REACTOME_DIR, "reactome.json")
+    output:
+        ranked_json=path.join(RAW_REACTOME_DIR, "reactome_ranked.json")
+    resources:
+        mem_mb=500
+    shell:
+        "python {input.src} {input.all_pwy_json} {input.feature_json} {output.ranked_json}"
+
+
+rule reactome_txt_to_json:
+    input:
+        src="scripts/python/reactome_txt_to_json.py",
+        txt=path.join(RAW_REACTOME_DIR, "reactome.hgnc.txt"),
+    output:
+        json=path.join(RAW_REACTOME_DIR, "reactome.json")
+    shell:
+        "python {input.src} {input.txt} {output.json}"
+
+
+rule unzip_reactome:
+    input:
+        zipped=path.join(RAW_REACTOME_DIR, "reactome.hgnc.txt.gz")
+    output:
+        tsv=path.join(RAW_REACTOME_DIR, "reactome.hgnc.txt")
+    shell:
+        "gunzip {input.zipped}"
+
+
+rule download_reactome:
+    output:
+        tarball=path.join(RAW_REACTOME_DIR, "reactome.hgnc.txt.gz")
+    shell:
+        "curl {REACTOME_URL} --output {output.tarball}"
+
+
+#####################################################################
+# Download and preprocess TCGA
+#####################################################################
+
+#rule extract_samples_features:
+#    input:
+#        src="scripts/python/prep_extract_samples_features.py",
+#        tcga_hdf=path.join(PREP_TCGA_DIR, "{kwargs}.hdf")
+#    output:
+#        samples_json=path.join(PREP_TCGA_DIR, "samples__{kwargs,[_:=a-zA-Z]*}.json"),
+#        features_json=path.join(PREP_TCGA_DIR, "features__{kwargs,[_:=a-zA-Z]*}.json")
+#    shell:
+#        "python {input.src} {input.tcga_hdf} {output.samples_json} {output.features_json}"
+
+rule preprocess_tcga:
+    input:
+        src="scripts/python/preprocess_tcga.py",
+        tcga_hdf=path.join(RAW_TCGA_DIR, "tcga_omic.hdf")
+    output:
+        prep_hdf=path.join(PREP_TCGA_DIR, "{kwargs,[_:=a-zA-Z]*}.hdf") 
+    params:
+        opts=lambda wc: " ".join(wc["kwargs"].split("__"))
+    resources:
+        mem_mb=5000
+    shell:
+        "python {input.src} {input.tcga_hdf} {output.prep_hdf} std_assays= {params.opts}"
+
+rule unzip_hdf:
+    input:
+        zipped="data/{path}/{head}.tar.gz"
+    output:
+        unzipped="data/{path}/{head,[_a-zA-Z0-9]+}.hdf"
+    shell:
+        "tar -xvzf {input.zipped} -C data/{wildcards.path}/"
+
+rule download_tcga_omic:
+    output:
+        tcga_omic=path.join(RAW_TCGA_DIR, "tcga_omic.tar.gz"),
+    shell:
+        "curl https://zenodo.org/record/6977490/files/tcga_omic.tar.gz?download=1 -o {output.tcga_omic}"
+
+
+rule download_tcga_clinical:
+    output:
+        tcga_clinical=path.join(RAW_TCGA_DIR, "tcga_clinical.tar.gz")
+    shell:
+        "curl https://zenodo.org/record/6977490/files/tcga_clinical.tar.gz?download=1 -o {output.tcga_clinical}"
+
+
+
+#####################################################################
+# GPU status
+#####################################################################
+rule initialize_gpu_status:
+    input:
+        src=path.join("scripts", "julia", "init_gpu_status.jl")
+    output:
+        status_file="gpu_status.txt"
+    shell:
+        "julia --project=. -t 1 {input.src} > {output.status_file}"
+
+
+
