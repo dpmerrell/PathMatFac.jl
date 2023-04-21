@@ -4,24 +4,83 @@ output_dir = "temp/"
 
 
 matfac_simulation_study:
-    main_cpu_sims:
+    # List experiments here
+    config_comparison_sims:
+        n_reps: 5
+        sim_params:
+        fit_params:
+    lbfgs_sims:
+        n_reps: 5
+        sim_params:
+        fit_params:
+    noise_robustness_sims:
+        n_reps: 5
+        sim_params:
+        fit_params:
+    size_sims_cpu:
+        n_reps: 5
+        sim_params:
+        fit_params:
+    geneset_robustness_sims:
+        n_reps: 5
         sim_params:
             omic_types:
-            
         fit_params:
     batch_sims:
+        n_reps: 5
         sim_params:
         fit_params:
-    main_gpu_sims:
+    size_sims_gpu:
+        n_reps: 5
         sim_params:
         fit_params:
 
 
 matfac_tcga_runs:
-    main_cpu_runs:
-    main_gpu_runs:
+    config_comparison_full:
+        data_params:
+        fit_params:
+    config_comparison_hpv:
+        data_params:
+        fit_params:
+    
+    batch_effect_runs_full:
+        data_params:
+        fit_params:
+    batch_effect_runs_hpv:
+        data_params:
+        fit_params:
+    
 
-
-supervised_task_comparison:
-    data_params:
-    method_params:    
+supervised_tasks:
+    multiomic_setting:
+        data_params:
+        method_params:
+            matfac_params:
+            pca_params:
+            mofa_params:
+            plier_params:
+    mrnaseq_setting:
+        data_params:
+        method_params:
+            matfac_params:
+            pca_params:
+            mofa_params:
+            plier_params:
+    mrnaseq_methyl_setting:
+        data_params:
+        method_params:
+            matfac_params:
+            pca_params:
+            mofa_params:
+            plier_params:
+    batch_effect_test:
+        data_params:
+        method_params:
+            matfac_params:
+            pca_params:
+            mofa_params:
+            plier_params:
+    
+        
+ 
