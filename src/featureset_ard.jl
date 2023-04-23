@@ -36,7 +36,7 @@ Flux.trainable(r::FeatureSetARDReg) = ()
 function FeatureSetARDReg(K::Integer, S::AbstractMatrix,
                           feature_views::AbstractVector,
                           featureset_ids::AbstractVector; 
-                          beta0=1e-6, lr=0.05)
+                          beta0=1e-2, lr=0.05)
 
     n_sets, N = size(S)
     feature_view_ids = unique(feature_views)

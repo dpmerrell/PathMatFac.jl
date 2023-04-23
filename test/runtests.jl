@@ -747,12 +747,12 @@ function reg_tests()
         K = 3
         N = 5
         test_Y = randn(K,N)
-        reg = PM.ARDRegularizer()
+        reg = PM.ARDRegularizer([1,1,1,2,2])
         l, grads = Zygote.withgradient(reg, test_Y)
-        b = 1 .+ (0.5/reg.beta).*(test_Y.*test_Y)
-        @test isapprox(l, (0.5 + reg.alpha).*sum(log.(b)))
+        b = 1 .+ (0.5/reg.beta[1]).*(test_Y.*test_Y)
+        @test isapprox(l, (0.5 + reg.alpha[1]).*sum(log.(b)))  # This should work only because alpha==beta==0.01 after initialization.
         @test length(grads) == 1
-        @test isapprox(grads[1], ((0.5 .+ reg.alpha)/reg.beta).* test_Y ./ b)
+        @test isapprox(grads[1], ((0.5 .+ reg.alpha[1])/reg.beta[1]).* test_Y ./ b)
     end
 
 
@@ -801,7 +801,7 @@ function featureset_ard_tests()
     n_sets = length(feature_sets)
 
     reg = PM.construct_featureset_ard(K, feature_ids, feature_views, feature_sets;
-                                      beta0=1e-6, lr=0.1)
+                                      beta0=1e-1, lr=0.1)
     
     test_A = (rand(Bool, n_sets, 10) .* randn(4,10))
     test_S = zeros(n_sets, N)
@@ -816,8 +816,8 @@ function featureset_ard_tests()
 
         @test length(reg.feature_views) == 2
         @test reg.feature_view_ids == [1,2]
-        @test all(reg.alpha .== 1e-6)
-        @test isapprox(reg.beta0, 1e-6)
+        @test all(reg.alpha .== 1e-1)
+        @test isapprox(reg.beta0, 1e-1)
 
         @test size(reg.A) == (length(feature_sets), K)
 
@@ -1479,15 +1479,15 @@ end
 
 function main()
 
-    #util_tests()
-    #batch_array_tests()
-    #layers_tests()
-    #preprocess_tests()
-    #reg_tests()
-    #featureset_ard_tests()
-    #model_tests()
-    #score_tests()
-    #lbfgs_tests()
+    util_tests()
+    batch_array_tests()
+    layers_tests()
+    preprocess_tests()
+    reg_tests()
+    featureset_ard_tests()
+    model_tests()
+    score_tests()
+    lbfgs_tests()
     fit_tests()
     #transform_tests()
     model_io_tests()

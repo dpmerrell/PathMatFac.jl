@@ -402,7 +402,7 @@ end
 function reweight_eb!(gr::GroupRegularizer, X::AbstractMatrix; mixture_p=1.0)
     new_vars = map(idx -> mean(view(X,:,idx).^2, dims=2), gr.group_idx)
     max_vars = map(v -> fill(maximum(v), size(v)), new_vars)
-    new_weights = map(v -> Float32(1e-6 .+ 0.5) ./ (Float32(1e-6) .+ Float32(0.5).*v), max_vars)
+    new_weights = map(v -> Float32(1e-1 .+ 0.5) ./ (Float32(1e-1) .+ Float32(0.5).*v), max_vars)
      
     gr.group_weights = new_weights
 end
@@ -459,7 +459,7 @@ end
 function reweight_eb!(cpr::ColParamReg, v::AbstractVector; mixture_p=1.0)
     new_centers = map(r->mean(v[r]), cpr.col_ranges)
     new_vars = map(r->var(v[r]), cpr.col_ranges)
-    new_weights = mixture_p .* Float32(1e-6 + 0.5) ./ (Float32(1e-6) .+ Float32(0.5).*new_vars)
+    new_weights = mixture_p .* Float32(1e-1 + 0.5) ./ (Float32(1e-1) .+ Float32(0.5).*new_vars)
     
     cpr.centers = new_centers
     cpr.weights = new_weights
@@ -493,49 +493,94 @@ end
 ###########################################
 
 mutable struct ARDRegularizer
-    alpha::Number
-    beta::Number
+    alpha::Tuple
+    beta::Tuple
+    col_ranges::Tuple
     weight::Number
 end
 
 @functor ARDRegularizer
 
-function ARDRegularizer(;alpha=Float32(0.1), 
-                         beta=Float32(0.1),
-                         weight=1.0)
-    return ARDRegularizer(alpha, beta, weight)
+function ARDRegularizer(column_groups::AbstractVector; alpha=Float32(0.01), 
+                                                       beta=Float32(0.01),
+                                                       weight=1.0)
+    col_ranges = ids_to_ranges(column_groups)
+    n_ranges = length(col_ranges)
+    alpha = Tuple(fill(alpha, n_ranges))
+    beta = Tuple(fill(beta, n_ranges))
+    return ARDRegularizer(alpha, beta, Tuple(col_ranges), weight)
 end
 
 
 function (ard::ARDRegularizer)(X::AbstractMatrix)
-    b = 1 .+ (0.5/ard.beta).*(X.*X)
-    return (0.5 + ard.alpha)*sum(log.(b))
+    buffer = zero(X)
+    result = 0 
+    for (a,b,cr) in zip(ard.alpha, ard.beta, ard.col_ranges)
+        X_v = view(X, :, cr)
+        buffer[:,cr] .= 1 .+ (0.5/b).*(X_v.*X_v)
+        buffer[:,cr] .= log.(buffer[:,cr])
+        result += (0.5 + a)*sum(view(buffer,:,cr))
+    end
+    return sum(result)
+    #b = 1 .+ (0.5/ard.beta).*(X.*X)
+    #return (0.5 + ard.alpha)*sum(log.(b))
 end
 
 
 function ChainRulesCore.rrule(ard::ARDRegularizer, X::AbstractMatrix)
     
-    b = 1 .+ (0.5/ard.beta).*(X.*X)
-    function ard_pullback(loss_bar)
-        X_bar = similar(X)
-        X_bar .= (loss_bar/ard.beta)*(0.5 + ard.alpha) .* X ./ b 
-        return NoTangent(), X_bar
+    buffer = zero(X)
+    result = 0 
+    for (b,cr) in zip(ard.beta, ard.col_ranges)
+        X_v = view(X, :, cr)
+        buffer[:,cr] .= 1 .+ (0.5/b).*(X_v.*X_v)
     end
 
-    return (0.5 .+ ard.alpha)*sum(log.(b)), ard_pullback
+    function ard_pullback(loss_bar)
+        X_bar = similar(X)
+        for (a, b, cr) in zip(ard.alpha, ard.beta, ard.col_ranges)
+            Xb_v = view(X_bar, :, cr)
+            Xb_v .= (loss_bar/b)*(0.5 + a) .* view(X,:,cr) ./ view(buffer,:,cr)
+            #buffer[:,cr] .= 1 .+ (0.5/b).*(Xb_v.*Xb_v)
+        end
+        return NoTangent(), X_bar 
+    end
+
+    for (a, cr) in zip(ard.alpha, ard.col_ranges)
+        result += (0.5 + a)*sum(log.(view(buffer,:,cr)))
+    end
+
+    return result, ard_pullback
+    #return sum(result)
+    #b = 1 .+ (0.5/ard.beta).*(X.*X)
+    #function ard_pullback(loss_bar)
+    #    X_bar = similar(X)
+    #    X_bar .= (loss_bar/ard.beta)*(0.5 + ard.alpha) .* X ./ b 
+    #    return NoTangent(), X_bar
+    #end
+
+    #return (0.5 .+ ard.alpha)*sum(log.(b)), ard_pullback
 end
 
 
 function reweight_eb!(reg::ARDRegularizer, X::AbstractMatrix)
-    tau_pm = Float32(1e-6 + 0.5) ./ (Float32(1e-6) .+ Float32(0.5) .* (X.*X))
-    tau_mean = mean(tau_pm)
-    tau_var = var(tau_pm)
-    
-    beta_mom = tau_mean / tau_var
-    alpha_mom = tau_mean * beta_mom
 
-    reg.alpha = alpha_mom
-    reg.beta = beta_mom 
+    alpha_mom = zeros(length(reg.alpha))
+    beta_mom = zeros(length(reg.beta))
+    for (i,cr) in enumerate(reg.col_ranges)
+        X_v = view(X, :, cr)
+        max_var_idx = argmax(vec(var(X_v, dims=2)))
+
+        tau_pm = Float32(1e-1 + 0.5) ./ (Float32(1e-1) .+ Float32(0.5) .* (X_v[max_var_idx,:].^2))
+        tau_mean = mean(tau_pm)#, dims=2)
+        tau_var = var(tau_pm)#, dims=2)
+        
+        beta_mom[i] = tau_mean / tau_var
+        alpha_mom[i] = tau_mean * beta_mom[i]
+    end
+
+    reg.alpha = Tuple(alpha_mom)
+    reg.beta = Tuple(beta_mom)
 end
 
 
@@ -634,7 +679,7 @@ function construct_Y_reg(K, N, feature_ids, feature_views, feature_sets, feature
                                         featureset_names=featureset_names) 
     end
     if Y_ard
-        return ARDRegularizer() 
+        return ARDRegularizer(feature_views) 
     end
 
     # If neither ARD flag is set `true`, then 

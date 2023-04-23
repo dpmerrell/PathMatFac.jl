@@ -4,9 +4,23 @@
 # Factor param simulators
 ###############################################################
 
-function simulate_params!(X::AbstractMatrix, reg::Union{GroupRegularizer,L2Regularizer}; kwargs...)
+function simulate_params!(X::AbstractMatrix, reg::Union{GroupRegularizer,L2Regularizer}; sample_conditions=nothing,
+                                                                                         sample_condition_var=0.1,
+                                                                                         kwargs...)
     K, N = size(X)
     X .= randn_like(X)
+
+    if sample_conditions != nothing
+        cond_ranges = ids_to_ranges(sample_conditions)
+        rescaling = sqrt(1 - sample_condition_var)
+        X .*= rescaling
+
+        sample_condition_std = sqrt(sample_condition_var)
+        sample_effects = [randn(length(K)).*sample_condition_std for r in cond_ranges]
+        for (se, r) in zip(sample_effects, cond_ranges)
+            X[:,r] .+= se 
+        end
+    end
 end
 
 
@@ -175,16 +189,28 @@ end
 # The "master" simulate_params! function
 ######################################################################
 
-function simulate_params!(model::PathMatFacModel; kwargs...)
+function simulate_params!(model::PathMatFacModel; use_sample_conditions=true, sample_condition_var=0.15, kwargs...)
 
     mf = model.matfac
     K = size(mf.X, 1)
+
+    # Simulate Y
     simulate_params!(mf.Y, mf.Y_reg; kwargs...)
-    simulate_params!(mf.X, mf.X_reg; kwargs...)
+
+    # Simulate X
+    sample_conditions = nothing
+    if use_sample_conditions
+        sample_conditions = model.sample_conditions
+    end
+    simulate_params!(mf.X, mf.X_reg; sample_conditions=sample_conditions, 
+                                     sample_condition_var=sample_condition_var, kwargs...)
+
+    # Simulate the layer parameters
     simulate_params!(mf.col_transform, mf.col_transform_reg; feature_views=model.feature_views,
                                                              kwargs...)
     mf.col_transform.layers[1].logsigma .-= log(sqrt(K))
 
+    # Simulate any parameters in the noise model
     simulate_params!(mf.noise_model; kwargs...)
 end
 

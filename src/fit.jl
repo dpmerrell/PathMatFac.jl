@@ -476,8 +476,6 @@ end
 # Variance is reallocated to Y; and then reallocated to logsigma.
 function whiten!(model::PathMatFacModel)
     X_std = std(model.matfac.X, dims=2)
-    println("WHITENING")
-    println(string("\tX_std: ", X_std))
     model.matfac.X ./= X_std
     model.matfac.Y .*= X_std
 
@@ -739,6 +737,7 @@ function fit_ard!(model::PathMatFacModel; max_epochs=1000, capacity=10^8,
     model.matfac.X_reg = orig_X_reg
     reweight_eb!(model.matfac.X_reg, model.matfac.X)
     model.matfac.Y_reg = orig_ard
+    reweight_eb!(model.matfac.Y_reg, model.matfac.Y)
     #fit_lbfgs!(model.matfac, model.data; capacity=capacity, max_iter=max_epochs,
     #                                     verbosity=verbosity, print_prefix=print_prefix)
     mf_fit_adapt_lr!(model; capacity=capacity, update_X=true, update_Y=true,
@@ -774,7 +773,7 @@ function fit_feature_set_ard!(model::PathMatFacModel; lr=1.0,
 
     # First, fit the model under a "vanilla" ARD regularizer.
     orig_reg = model.matfac.Y_reg
-    model.matfac.Y_reg = ARDRegularizer()
+    model.matfac.Y_reg = ARDRegularizer(model.feature_views)
     v_println("##### Pre-fitting with vanilla ARD... #####"; verbosity=verbosity,
                                                  prefix=print_prefix)
     fit_ard!(model; max_epochs=max_epochs, capacity=capacity, lr=lr,
