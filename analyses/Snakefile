@@ -89,6 +89,8 @@ rule all:
                        sim_fit_comb=SIM_FIT_COMBINATIONS),
         sim_fit_y_plots=expand(path.join(SIM_VIS_FITTED, "{sim_fit_comb}/Y.png"),
                        sim_fit_comb=SIM_FIT_COMBINATIONS),
+        sim_fit_col_param_plots=expand(path.join(SIM_VIS_FITTED, "{sim_fit_comb}/col_params.png"),
+                               sim_fit_comb=SIM_FIT_COMBINATIONS),
         sim_x_plots=expand(path.join(SIM_VIS_TRUE, "{sim_comb}/X.png"),
                            sim_comb=SIM_COMBINATIONS),
         sim_y_plots=expand(path.join(SIM_VIS_TRUE, "{sim_comb}/Y.png"),
@@ -119,6 +121,14 @@ rule vis_matfac_fit_Y:
     shell:
         "python {input.src} {input.param_hdf} {output.param_png} --param Y"
 
+rule vis_matfac_fit_col_param:
+    input:
+        src=path.join(PY_SCRIPT_DIR, "vis_model_params.py"),
+        param_hdf=path.join(SIM_FIT_PARAM_DIR, "{path}.hdf")
+    output:
+        param_png=path.join(SIM_VIS_FITTED, "{path}/col_params.png")
+    shell:
+        "python {input.src} {input.param_hdf} {output.param_png} --param col_params"
 
 rule vis_matfac_sim_X:
     input:
