@@ -61,7 +61,7 @@ function mf_fit_adapt_lr!(model::PathMatFacModel; lr=1.0,
         history!(history, h; name=string("mf_fit_lr=", opt.eta))
         
         if h["term_code"] == "loss_increase"
-            opt.eta *= 0.5
+            opt.eta *= Float32(0.5)
             if opt.eta < min_lr
                 break
             end
@@ -365,7 +365,7 @@ function theta_delta_fixpoint(model::MF.MatFacModel, delta2::Tuple, sigma2::Abst
 end
 
 
-function init_batch_effects!(model::PathMatFacModel; capacity=Int(10e8), 
+function init_batch_effects!(model::PathMatFacModel; capacity=10^8, 
                                                      max_epochs=5000,
                                                      lr_regress=0.25,
                                                      lr_mu=0.25,
@@ -480,11 +480,10 @@ function whiten!(model::PathMatFacModel)
     model.matfac.Y .*= X_std
 
     # For each view, reallocate variance in Y to sigma.
-    view_crs = ids_to_ranges(model.feature_views)
+    view_crs = ids_to_ranges(cpu(model.feature_views))
     for cr in view_crs
         # Compute row-wise standard deviations in Y:
         Y_view_std = std(view(model.matfac.Y, :, cr), dims=2)
-        println(string("\tY_view_std (", cr,"): ", Y_view_std))
         
         # Select the largest one and use it to 
         # rescale both Y and sigma.
@@ -493,7 +492,7 @@ function whiten!(model::PathMatFacModel)
         model.matfac.col_transform.layers[1].logsigma[cr] .+= log(Y_std_max)
     end
 
-    return model.matfac.col_transform.layers[1].logsigma
+    #return model.matfac.col_transform.layers[1].logsigma
 end
 
 

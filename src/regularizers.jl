@@ -403,17 +403,39 @@ function reweight_eb!(gr::GroupRegularizer, X::AbstractMatrix; mixture_p=1.0)
     new_vars = map(idx -> mean(view(X,:,idx).^2, dims=2), gr.group_idx)
     max_vars = map(v -> fill(maximum(v), size(v)), new_vars)
     new_weights = map(v -> Float32(1e-1 .+ 0.5) ./ (Float32(1e-1) .+ Float32(0.5).*v), max_vars)
+    if isa(X, CuArray)
+        new_weights = map(v -> gpu(v), new_weights)
+    end
      
     gr.group_weights = new_weights
 end
 
 
 function (gr::GroupRegularizer)(X::AbstractMatrix)
-    return 0.5*sum( map((w, idx)->sum( w.*view(X,:,idx).^2), 
-                        gr.group_weights, gr.group_idx
-                        ) 
-                  )
+    return Float32(0.5)*sum(map((w, idx)->sum( w.*view(X,:,idx).^2), 
+                                gr.group_weights, gr.group_idx
+                               ) 
+                           )
 end
+
+
+function ChainRulesCore.rrule(gr::GroupRegularizer, X::AbstractMatrix)
+
+    diffs = zero(X)
+    for (w,cr) in zip(gr.group_weights, gr.group_idx)
+        X_view = view(X,:,cr)
+        diffs_view = view(diffs,:,cr)
+        diffs_view .= w.*X_view
+    end
+    loss = Float32(0.5)*sum(diffs.*X)
+
+    function groupreg_pullback(loss_bar)
+        return NoTangent(), loss_bar.*diffs
+    end
+
+    return loss, groupreg_pullback
+end
+
 
 function reorder_reg!(reg::GroupRegularizer, p)
     reg.group_weights = map(w -> w[p], reg.group_weights)
@@ -504,7 +526,7 @@ end
 function ARDRegularizer(column_groups::AbstractVector; alpha=Float32(0.01), 
                                                        beta=Float32(0.01),
                                                        weight=1.0)
-    col_ranges = ids_to_ranges(column_groups)
+    col_ranges = ids_to_ranges(cpu(column_groups))
     n_ranges = length(col_ranges)
     alpha = Tuple(fill(alpha, n_ranges))
     beta = Tuple(fill(beta, n_ranges))
