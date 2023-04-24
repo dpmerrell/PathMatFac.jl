@@ -952,6 +952,7 @@ function fit!(model::PathMatFacModel; lr=1.0,
 
     history!(hist; name="finish")
     hist = finalize_history(hist)
+
     return hist
 end
 

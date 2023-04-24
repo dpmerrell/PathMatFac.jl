@@ -3,7 +3,6 @@
 #
 
 using PathwayMultiomics
-using CUDA
 using JSON
 using Flux
 using Random

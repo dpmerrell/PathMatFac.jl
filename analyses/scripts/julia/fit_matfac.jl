@@ -256,6 +256,7 @@ function main(args)
     #######################################################
     # FIT THE MODEL 
     #######################################################
+    h = nothing
     try
         # Move to GPU (if applicable)
         if use_gpu
