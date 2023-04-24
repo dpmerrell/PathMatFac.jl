@@ -39,6 +39,7 @@ SIM_DATA_DIR = path.join(OUT_DIR, "simulated_data")
 SIM_PARAM_DIR = path.join(OUT_DIR, "simulated_params")
 SIM_FIT_PARAM_DIR = path.join(OUT_DIR, "fitted_params")
 SIM_FIT_TRANS_DIR = path.join(OUT_DIR, "transformed_data")
+SIM_FIT_HIST_DIR = path.join(OUT_DIR, "training_histories")
 SIM_SCORE_JSON_DIR = path.join(OUT_DIR, "score_jsons") 
 SIM_VIS_DIR = path.join(OUT_DIR, "visuals") 
 
@@ -80,16 +81,16 @@ TCGA_FOLDS = config["supervised_folds"]
 
 rule all:
     input:
-        #score_jsons=expand(path.join(SIM_SCORE_JSON_DIR, "{sim_fit_comb}.json"),
-        #                   sim_fit_comb=SIM_FIT_COMBINATIONS),
+        score_jsons=expand(path.join(SIM_SCORE_JSON_DIR, "{sim_fit_comb}.json"),
+                           sim_fit_comb=SIM_FIT_COMBINATIONS),
         sim_y_plots=expand(path.join(SIM_VIS_DIR, "{sim_comb}/Y.png"),
                            sim_comb=SIM_COMBINATIONS),
-        #sim_fit_y_plots=expand(path.join(SIM_VIS_DIR, "{sim_fit_comb}/Y.png"),
-        #               sim_fit_comb=SIM_FIT_COMBINATIONS),
+        sim_fit_y_plots=expand(path.join(SIM_VIS_DIR, "{sim_fit_comb}/Y.png"),
+                       sim_fit_comb=SIM_FIT_COMBINATIONS),
         sim_x_plots=expand(path.join(SIM_VIS_DIR, "{sim_comb}/X.png"),
                            sim_comb=SIM_COMBINATIONS),
-        #sim_fit_x_plots=expand(path.join(SIM_VIS_DIR, "{sim_fit_comb}/X.png"),
-        #               sim_fit_comb=SIM_FIT_COMBINATIONS),
+        sim_fit_x_plots=expand(path.join(SIM_VIS_DIR, "{sim_fit_comb}/X.png"),
+                       sim_fit_comb=SIM_FIT_COMBINATIONS),
         sim_dataset_plots=expand(path.join(SIM_VIS_DIR, "{sim_comb}/dataset.png"),
                                 sim_comb=SIM_COMBINATIONS),
 
@@ -189,13 +190,14 @@ rule fit_matfac:
     output:
         fitted_bson=path.join(SIM_FIT_PARAM_DIR, "{tcga_params,[^/]+}/{pwy_params,[^/]+}/{sim_params,[^/]+}/{fit_params,[^/]+}/rep={rep,[0-9]+}.bson"),
         transformed_hdf=path.join(SIM_FIT_TRANS_DIR, "{tcga_params}/{pwy_params}/{sim_params}/{fit_params}/rep={rep}.hdf")
+        history_json=path.join(SIM_FIT_HIST_DIR, "{tcga_params}/{pwy_params}/{sim_params}/{fit_params}/rep={rep}.hdf")
     params:
         parsed_opts=lambda wc: wc["fit_params"].split("__")
     resources:
         mem_mb=8000,
         threads=4
     shell:
-        "julia --project=. {input.src} {input.data_hdf} {input.pwy_json} {output.fitted_bson} {output.transformed_hdf} {params.parsed_opts}"
+        "julia --project=. {input.src} {input.data_hdf} {input.pwy_json} {output.fitted_bson} {output.transformed_hdf} {params.parsed_opts} history_json={history_json}"
 
 
 rule simulate_data:

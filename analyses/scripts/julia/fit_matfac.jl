@@ -266,7 +266,7 @@ function main(args)
         end
         
         start_time = time()
-        PM.fit!(model_d; fit_kwargs...)
+        h = PM.fit!(model_d; fit_kwargs...)
         end_time = time()
 
         println("ELAPSED TIME (s):")
@@ -298,6 +298,12 @@ function main(args)
                      sample_ids, sample_conditions, 
                      target, transformed_hdf)
 
+    history_json = script_opts[:history_json]
+    if history_json  != nothing
+        open(history_json, "w") do f
+            JSON.print(f, h)
+        end 
+    end
 end
 
 
