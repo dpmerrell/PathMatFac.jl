@@ -79,7 +79,7 @@ end
 # PARAMETER INITIALIZATION
 ########################################################################
 
-function init_mu!(model::PathMatFacModel; capacity=Int(10e8), lr_mu=0.25, max_epochs=500, 
+function init_mu!(model::PathMatFacModel; capacity=Int(10e8), lr_mu=0.1, max_epochs=500, 
                                           verbosity=1, print_prefix="", history=nothing, kwargs...)
     
     keep_history = (history != nothing)
@@ -255,8 +255,8 @@ function init_factors!(model::PathMatFacModel; verbosity=1,
                                                capacity=10^8,
                                                max_epochs=1000,
                                                init_factors_method="adagrad",
-                                               rel_tol=1e-9,
-                                               abs_tol=1e-6,
+                                               rel_tol=1e-5,
+                                               abs_tol=1e-5,
                                                backtrack_shrinkage=0.8,
                                                kwargs...)
     n_prefix = string(print_prefix, "    ")
@@ -368,7 +368,7 @@ end
 function init_batch_effects!(model::PathMatFacModel; capacity=10^8, 
                                                      max_epochs=5000,
                                                      lr_regress=0.25,
-                                                     lr_mu=0.25,
+                                                     lr_mu=0.1,
                                                      batch_eb_max_iter=10,
                                                      verbosity=1, print_prefix="",
                                                      history=nothing, kwargs...)
@@ -496,6 +496,22 @@ function whiten!(model::PathMatFacModel)
 end
 
 
+function rotate_by_svd!(model::PathMatFacModel)
+
+    # Compute SVD of Y
+    F = svd(model.matfac.Y)
+    U = F.U
+    s = F.S
+    Vt = F.Vt
+
+    # Reassign Y <- S*Vt
+    model.matfac.Y .= s .* Vt
+
+    # Rotate X <- X*U
+    model.matfac.X .= transpose(transpose(model.matfac.X)*U)
+end
+
+
 function reorder_by_importance!(model::PathMatFacModel)
     Y_ssq = cpu(vec(sum(model.matfac.Y .* model.matfac.Y, dims=2)))
     srt_idx = sortperm(Y_ssq, rev=true)
@@ -521,14 +537,15 @@ function basic_fit!(model::PathMatFacModel; fit_batch=false,
                                             init_factors_method="adagrad",
                                             fit_factors=false,
                                             init_ordinal=false,
+                                            svd_rotate=false,
                                             whiten=false,
                                             capacity=Int(10e8),
                                             lr=1.0, max_epochs=1000,
                                             verbosity=1, print_prefix="",
                                             history=nothing,
-                                            lr_regress=0.25,
-                                            lr_mu=0.25,
-                                            lr_theta=0.25,
+                                            lr_regress=1.0,
+                                            lr_mu=0.1,
+                                            lr_theta=1.0,
                                             kwargs...)
 
 
@@ -614,6 +631,11 @@ function basic_fit!(model::PathMatFacModel; fit_batch=false,
                                 kwargs...)
     end
 
+    if svd_rotate
+        v_println("Rotating factors via SVD."; verbosity=verbosity, prefix=print_prefix)
+        rotate_by_svd!(model)
+    end
+
     if whiten
         v_println("Whitening X."; verbosity=verbosity, prefix=print_prefix)
         whiten!(model)
@@ -647,6 +669,7 @@ function basic_fit_reg_weight_eb!(model::PathMatFacModel;
                       fit_batch=true, 
                       init_factors=true,
                       #fit_factors=true,
+                      svd_rotate=true,
                       whiten=true,
                       verbosity=verbosity, print_prefix=n_pref, 
                       capacity=capacity,
@@ -720,6 +743,7 @@ function fit_ard!(model::PathMatFacModel; max_epochs=1000, capacity=10^8,
                       fit_logsigma=true,
                       init_factors=true,
                       reweight_losses=true,
+                      svd_rotate=true,
                       whiten=true,
                       lr_regress=lr_regress, lr_theta=lr_theta,
                       verbosity=verbosity,
@@ -888,6 +912,8 @@ function fit!(model::PathMatFacModel; lr=1.0,
                                       fsard_A_prior_frac=0.5,
                                       fsard_term_iter=5,
                                       fsard_term_rtol=1e-5,
+                                      rel_tol=1e-5,
+                                      abs_tol=1e-5,
                                       verbosity=1,
                                       print_prefix="",
                                       kwargs...)
