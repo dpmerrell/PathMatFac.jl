@@ -11,14 +11,14 @@ matfac_simulation_study:
     test_experiment:
         n_reps: 1
         data_params:
-            kept_ctypes: ["HNSC", "HNSC:CESC:ESCA:STAD","HNSC:CESC:ESCA:STAD:OV:LUSC"]
+            kept_ctypes: ["HNSC"] #, "HNSC:CESC:ESCA:STAD","HNSC:CESC:ESCA:STAD:OV:LUSC"]
             heldout_ctypes: [""]
         pathways: ["hallmark"] 
         sim_params:
             configuration: ["ard"]
             use_batch: ["false"]
-            var_filter: [0.025,0.05,0.1]
-            K: [10]
+            var_filter: [0.025] #,0.05,0.1]
+            K: [5]
             S_add_corruption: [0.05]
             S_remove_corruption: [0.05]
             normal_noise: [0.1]
@@ -29,7 +29,7 @@ matfac_simulation_study:
             use_batch: ["false"]
             var_filter: [1.0]
             K: [5]
-            max_epochs: [100]
+            max_epochs: [5000]
             lr: [1.0]
             lr_theta: [1.0]
             lr_regress: [1.0]

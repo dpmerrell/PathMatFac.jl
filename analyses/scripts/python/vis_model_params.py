@@ -45,14 +45,19 @@ def labels_to_indicators(labels):
        
     return indicators, xticks, unq_labels, midpoints 
 
-def matrix_heatmap(mat, x_groups=None, dpi=300, w=6, h=3, cmap="Greys", vmin=None, vmax=None,
+def matrix_heatmap(mat, x_groups=None, dpi=300, w=6, h=3, cmap="bwr_r", vmin=None, vmax=None,
+                        symmetrize=False,
                         xlabel="Features", ylabel="Factors", origin="lower",
                         title="Matrix Y", group_label_rotation=0.0, group_label_size=6):
 
     if vmax is None:
-        vmax = np.max(mat)
+        vmax = np.nanquantile(mat, 0.9)
     if vmin is None:
-        vmin = np.min(mat)
+        vmin = np.nanquantile(mat, 0.1)
+    if symmetrize:
+        bound = max(abs(vmin), abs(vmax))
+        vmax = bound
+        vmin = -bound
 
     (K, N) = mat.shape
     f = None
@@ -225,7 +230,7 @@ def plot_param(in_hdf, target_param="Y"):
         if target_param == "Y":
             Y = hfile["Y"][:,:].transpose() 
             feature_groups = hfile["feature_views"][:].astype(str)
-            fig = matrix_heatmap(Y, x_groups=feature_groups)
+            fig = matrix_heatmap(Y, x_groups=feature_groups, symmetrize=True)
             fig.tight_layout(h_pad=0.05, w_pad=0.05)
         elif target_param == "X":
             X = hfile["X"][:,:].transpose()
@@ -233,7 +238,8 @@ def plot_param(in_hdf, target_param="Y"):
             fig = matrix_heatmap(X, x_groups=sample_groups,
                                     title="Matrix X", 
                                     ylabel="Embedding dims.",
-                                    xlabel="Samples")
+                                    xlabel="Samples",
+                                    symmetrize=True)
             fig.tight_layout(h_pad=0.05, w_pad=0.05)
         elif target_param == "col_params":
             mu = hfile["mu"][:]

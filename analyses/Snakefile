@@ -35,13 +35,15 @@ PREP_PWY_DIR = path.join(PREP_DATA_DIR, "pathways")
 ####################################
 # MatFac simulation study
 SIM_DIR = path.join(OUT_DIR, "simulation_study")
-SIM_DATA_DIR = path.join(OUT_DIR, "simulated_data")
-SIM_PARAM_DIR = path.join(OUT_DIR, "simulated_params")
-SIM_FIT_PARAM_DIR = path.join(OUT_DIR, "fitted_params")
-SIM_FIT_TRANS_DIR = path.join(OUT_DIR, "transformed_data")
-SIM_FIT_HIST_DIR = path.join(OUT_DIR, "training_histories")
-SIM_SCORE_JSON_DIR = path.join(OUT_DIR, "score_jsons") 
-SIM_VIS_DIR = path.join(OUT_DIR, "visuals") 
+SIM_DATA_DIR = path.join(SIM_DIR, "simulated_data")
+SIM_PARAM_DIR = path.join(SIM_DIR, "simulated_params")
+SIM_FIT_PARAM_DIR = path.join(SIM_DIR, "fitted_params")
+SIM_FIT_TRANS_DIR = path.join(SIM_DIR, "transformed_data")
+SIM_FIT_HIST_DIR = path.join(SIM_DIR, "training_histories")
+SIM_SCORE_JSON_DIR = path.join(SIM_DIR, "score_jsons") 
+SIM_VIS_DIR = path.join(SIM_DIR, "visuals") 
+SIM_VIS_FITTED = path.join(SIM_VIS_DIR, "fitted")
+SIM_VIS_TRUE = path.join(SIM_VIS_DIR, "true")
 
 ALL_SIM_PARAMS = config["matfac_simulation_study"]
 ALL_SIM_EXPERIMENTS = list(ALL_SIM_PARAMS.keys())
@@ -83,15 +85,15 @@ rule all:
     input:
         score_jsons=expand(path.join(SIM_SCORE_JSON_DIR, "{sim_fit_comb}.json"),
                            sim_fit_comb=SIM_FIT_COMBINATIONS),
-        sim_y_plots=expand(path.join(SIM_VIS_DIR, "{sim_comb}/Y.png"),
-                           sim_comb=SIM_COMBINATIONS),
-        sim_fit_y_plots=expand(path.join(SIM_VIS_DIR, "{sim_fit_comb}/Y.png"),
+        sim_fit_x_plots=expand(path.join(SIM_VIS_FITTED, "{sim_fit_comb}/X.png"),
                        sim_fit_comb=SIM_FIT_COMBINATIONS),
-        sim_x_plots=expand(path.join(SIM_VIS_DIR, "{sim_comb}/X.png"),
-                           sim_comb=SIM_COMBINATIONS),
-        sim_fit_x_plots=expand(path.join(SIM_VIS_DIR, "{sim_fit_comb}/X.png"),
+        sim_fit_y_plots=expand(path.join(SIM_VIS_FITTED, "{sim_fit_comb}/Y.png"),
                        sim_fit_comb=SIM_FIT_COMBINATIONS),
-        sim_dataset_plots=expand(path.join(SIM_VIS_DIR, "{sim_comb}/dataset.png"),
+        sim_x_plots=expand(path.join(SIM_VIS_TRUE, "{sim_comb}/X.png"),
+                           sim_comb=SIM_COMBINATIONS),
+        sim_y_plots=expand(path.join(SIM_VIS_TRUE, "{sim_comb}/Y.png"),
+                           sim_comb=SIM_COMBINATIONS),
+        sim_dataset_plots=expand(path.join(SIM_VIS_TRUE, "{sim_comb}/dataset.png"),
                                 sim_comb=SIM_COMBINATIONS),
 
 
@@ -104,7 +106,7 @@ rule vis_matfac_fit_X:
         src=path.join(PY_SCRIPT_DIR, "vis_model_params.py"),
         param_hdf=path.join(SIM_FIT_PARAM_DIR, "{path}.hdf")
     output:
-        param_png=path.join(SIM_VIS_DIR, "{path}/X.png")
+        param_png=path.join(SIM_VIS_FITTED, "{path}/X.png")
     shell:
         "python {input.src} {input.param_hdf} {output.param_png} --param X"
 
@@ -113,26 +115,17 @@ rule vis_matfac_fit_Y:
         src=path.join(PY_SCRIPT_DIR, "vis_model_params.py"),
         param_hdf=path.join(SIM_FIT_PARAM_DIR, "{path}.hdf")
     output:
-        param_png=path.join(SIM_VIS_DIR, "{path}/Y.png")
+        param_png=path.join(SIM_VIS_FITTED, "{path}/Y.png")
     shell:
         "python {input.src} {input.param_hdf} {output.param_png} --param Y"
 
-
-rule vis_matfac_sim_dataset:
-    input:
-        src=path.join(PY_SCRIPT_DIR, "vis_dataset.py"),
-        param_hdf=path.join(SIM_DATA_DIR, "{path}.hdf")
-    output:
-        param_png=path.join(SIM_VIS_DIR, "{path}/dataset.png")
-    shell:
-        "python {input.src} {input.param_hdf} {output.param_png} --title \"Simulated dataset\""
 
 rule vis_matfac_sim_X:
     input:
         src=path.join(PY_SCRIPT_DIR, "vis_model_params.py"),
         param_hdf=path.join(SIM_PARAM_DIR, "{path}.hdf")
     output:
-        param_png=path.join(SIM_VIS_DIR, "{path}/X.png")
+        param_png=path.join(SIM_VIS_TRUE, "{path}/X.png")
     shell:
         "python {input.src} {input.param_hdf} {output.param_png} --param X"
 
@@ -141,9 +134,18 @@ rule vis_matfac_sim_Y:
         src=path.join(PY_SCRIPT_DIR, "vis_model_params.py"),
         param_hdf=path.join(SIM_PARAM_DIR, "{path}.hdf")
     output:
-        param_png=path.join(SIM_VIS_DIR, "{path}/Y.png")
+        param_png=path.join(SIM_VIS_TRUE, "{path}/Y.png")
     shell:
         "python {input.src} {input.param_hdf} {output.param_png} --param Y"
+
+rule vis_matfac_sim_dataset:
+    input:
+        src=path.join(PY_SCRIPT_DIR, "vis_dataset.py"),
+        param_hdf=path.join(SIM_DATA_DIR, "{path}.hdf")
+    output:
+        param_png=path.join(SIM_VIS_TRUE, "{path}/dataset.png")
+    shell:
+        "python {input.src} {input.param_hdf} {output.param_png} --title \"Simulated dataset\""
 
 
 #################################################################
@@ -189,15 +191,15 @@ rule fit_matfac:
         pwy_json=path.join(PREP_PWY_DIR, "{pwy_params}.json")
     output:
         fitted_bson=path.join(SIM_FIT_PARAM_DIR, "{tcga_params,[^/]+}/{pwy_params,[^/]+}/{sim_params,[^/]+}/{fit_params,[^/]+}/rep={rep,[0-9]+}.bson"),
-        transformed_hdf=path.join(SIM_FIT_TRANS_DIR, "{tcga_params}/{pwy_params}/{sim_params}/{fit_params}/rep={rep}.hdf")
-        history_json=path.join(SIM_FIT_HIST_DIR, "{tcga_params}/{pwy_params}/{sim_params}/{fit_params}/rep={rep}.hdf")
+        transformed_hdf=path.join(SIM_FIT_TRANS_DIR, "{tcga_params}/{pwy_params}/{sim_params}/{fit_params}/rep={rep}.hdf"),
+        history_json=path.join(SIM_FIT_HIST_DIR, "{tcga_params}/{pwy_params}/{sim_params}/{fit_params}/rep={rep}.json")
     params:
         parsed_opts=lambda wc: wc["fit_params"].split("__")
     resources:
         mem_mb=8000,
         threads=4
     shell:
-        "julia --project=. {input.src} {input.data_hdf} {input.pwy_json} {output.fitted_bson} {output.transformed_hdf} {params.parsed_opts} history_json={history_json}"
+        "julia --project=. {input.src} {input.data_hdf} {input.pwy_json} {output.fitted_bson} {output.transformed_hdf} {params.parsed_opts} history_json={output.history_json}"
 
 
 rule simulate_data:
