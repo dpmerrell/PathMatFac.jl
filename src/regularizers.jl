@@ -754,25 +754,31 @@ end
 
 
 ##########################################################
-# Construct a regularizer for the Bernoulli columns
-# of a model
+# Construct a regularizer for the first phase of training.
+# This prevents the model parameters from 
+# taking crazy values during the first phase.
+# It's especially important for columns of data that are
+# sparse (and therefore admit many possible solutions).
 ##########################################################
 
-function construct_bernoulli_regularizer(model)
+function construct_minimal_regularizer(model)
 
     K,M = size(model.matfac.X)
     N = size(model.matfac.Y, 2)
 
-    # Construct a GroupRegularizer that only penalizes 
-    # parameters for the Bernoulli columns
+    # Construct a GroupRegularizer based on the column losses
     group_labels = [string(typeof(n)) for n in model.matfac.noise_model.noises]
     group_idx = deepcopy(model.matfac.noise_model.col_ranges)
     n_groups = length(group_idx)
     group_weights = [zeros_like(model.matfac.Y, K) for _=1:n_groups]
     
-    for i=1:n_groups
-        if occursin("SquaredHingeNoise", group_labels[i])
-            group_weights[i] .= K
+    # L2-penalize factors for Bernoulli and ordinal data
+    # in a way that accounts for K, layer gradients, and the 
+    # density/sparseness of the data 
+    sigma = exp.(model.matfac.col_transform.layers[1].logsigma)
+    for (gidx, gl, gw) in zip(group_idx, group_labels, group_weights)
+        if any(map(n->occursin(n, gl), ("SquaredHingeNoise", "OrdinalSqHingeNoise")))
+            gw .= K*mean(sigma[gidx].^2)#/var(view(model.data, :, gidx))
         end
     end
     reg = GroupRegularizer(group_labels,

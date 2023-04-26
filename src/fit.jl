@@ -651,20 +651,21 @@ function basic_fit_reg_weight_eb!(model::PathMatFacModel;
                                   capacity=Int(10e8), lr=1.0, max_epochs=1000, 
                                   verbosity=1, print_prefix="", history=nothing, kwargs...) 
 
+    K = size(model.matfac.X,1)
     n_pref = string(print_prefix, "    ")
-
     freeze_reg!(model.matfac.col_transform_reg, 1:4)
 
     orig_X_reg = model.matfac.X_reg
-    model.matfac.X_reg = X->0
-
     orig_Y_reg = model.matfac.Y_reg
-    model.matfac.Y_reg = construct_bernoulli_regularizer(model)
+
+    # model.matfac.X_reg = L2Regularizer(K, Float32(1.0))
+    model.matfac.X_reg = X -> Float32(0.0) 
+    model.matfac.Y_reg = construct_minimal_regularizer(model)
 
     # Fit the model without regularization (except the Bernoulli factors).
     # Whiten the embedding.
-    v_println("Pre-fitting model without regularization..."; prefix=print_prefix,
-                                                             verbosity=verbosity)
+    v_println("Pre-fitting model with minimal regularization..."; prefix=print_prefix,
+                                                                 verbosity=verbosity)
     basic_fit!(model; fit_mu=true, fit_logsigma=true,
                       reweight_losses=true,
                       fit_batch=true, 
@@ -689,8 +690,8 @@ function basic_fit_reg_weight_eb!(model::PathMatFacModel;
     history!(history; name="reweight_eb")
 
     # Re-fit the model with regularized factors
-    v_println("Refitting with regularization..."; prefix=print_prefix, 
-                                                  verbosity=verbosity)
+    v_println("Refitting with full regularization..."; prefix=print_prefix, 
+                                                       verbosity=verbosity)
     basic_fit!(model; reweight_losses=true,
                       fit_factors=true, 
                       verbosity=verbosity, print_prefix=n_pref,
@@ -736,10 +737,11 @@ function fit_ard!(model::PathMatFacModel; max_epochs=1000, capacity=10^8,
     orig_ard = model.matfac.Y_reg
 
     K = size(model.matfac.Y, 1)
-    v_println("Pre-fitting without regularization..."; verbosity=verbosity,
-                                                       prefix=print_prefix)
-    model.matfac.X_reg = X -> 0 
-    model.matfac.Y_reg = construct_bernoulli_regularizer(model) 
+    v_println("Pre-fitting with minimal regularization..."; verbosity=verbosity,
+                                                           prefix=print_prefix)
+    #model.matfac.X_reg = L2Regularizer(K, Float32(1.0))
+    model.matfac.X_reg = X -> Float32(0.0) 
+    model.matfac.Y_reg = construct_minimal_regularizer(model) 
     basic_fit!(model; fit_batch=true,
                       fit_mu=true,
                       fit_logsigma=true,
