@@ -37,9 +37,13 @@ function (reg::L2Regularizer)(x::AbstractVector)
 end
 
 function reweight_eb!(reg::L2Regularizer, X::AbstractMatrix; mixture_p=Float32(1.0))
-    row_vars = vec(var(X, dims=2))
-    max_var = maximum(row_vars)
-    reg.weights .= (mixture_p / max_var)
+    #row_vars = vec(var(X, dims=2))
+    #max_var = maximum(row_vars)
+    #reg.weights .= (mixture_p / max_var)
+    F = svd(X)
+    S = F.S
+    max_var = S[1]^2
+    reg.weights .= mixture_p / max_var
 end 
 
 function reweight_eb!(reg::L2Regularizer, x::AbstractVector; mixture_p=Float32(1.0))
@@ -399,15 +403,25 @@ function construct_new_group_reg(new_group_labels::AbstractVector,
 end
 
 
-function reweight_eb!(gr::GroupRegularizer, X::AbstractMatrix; mixture_p=1.0)
-    new_vars = map(idx -> mean(view(X,:,idx).^2, dims=2), gr.group_idx)
-    max_vars = map(v -> fill(maximum(v), size(v)), new_vars)
-    new_weights = map(v -> Float32(1e-1 .+ 0.5) ./ (Float32(1e-1) .+ Float32(0.5).*v), max_vars)
-    if isa(X, CuArray)
-        new_weights = map(v -> gpu(v), new_weights)
+function reweight_eb!(gr::GroupRegularizer, X::AbstractMatrix; mixture_p=Float32(1.0))
+    #new_vars = map(idx -> mean(view(X,:,idx).^2, dims=2), gr.group_idx)
+    #max_vars = map(v -> fill(maximum(v), size(v)), new_vars)
+    #new_weights = map(v -> Float32(1e-1 .+ 0.5) ./ (Float32(1e-1) .+ Float32(0.5).*v), max_vars)
+    #if isa(X, CuArray)
+    #    new_weights = map(v -> gpu(v), new_weights)
+    #end
+    # 
+    #gr.group_weights = new_weights
+    K = size(X,1)
+    new_weights = []
+    for gidx in gr.group_idx
+        X_v = view(X, :, gidx)
+        F = svd(X_v)
+        s = F.S
+        v_max = s[1]^2
+        push!(new_weights, fill(Float32(mixture_p/v_max), K))
     end
-     
-    gr.group_weights = new_weights
+    gr.group_weights = Tuple(new_weights)
 end
 
 
@@ -587,19 +601,22 @@ end
 
 function reweight_eb!(reg::ARDRegularizer, X::AbstractMatrix)
 
-    alpha_mom = zeros(length(reg.alpha))
-    beta_mom = zeros(length(reg.beta))
-    for (i,cr) in enumerate(reg.col_ranges)
-        X_v = view(X, :, cr)
-        max_var_idx = argmax(vec(var(X_v, dims=2)))
+    alpha_mom = fill(0.001, length(reg.alpha))
+    beta_mom = fill(0.001, length(reg.beta)) 
+    #alpha_mom = zeros(length(reg.alpha))
+    #beta_mom = zeros(length(reg.beta))
 
-        tau_pm = Float32(1e-1 + 0.5) ./ (Float32(1e-1) .+ Float32(0.5) .* (X_v[max_var_idx,:].^2))
-        tau_mean = mean(tau_pm)#, dims=2)
-        tau_var = var(tau_pm)#, dims=2)
-        
-        beta_mom[i] = tau_mean / tau_var
-        alpha_mom[i] = tau_mean * beta_mom[i]
-    end
+    #for (i,cr) in enumerate(reg.col_ranges)
+    #    X_v = view(X, :, cr)
+    #    tau_pm = Float32(1e-6 + 0.5) ./ (Float32(1e-6) .+ Float32(0.5) .* (X_v.*X_v))
+    #    tau_mean_vec = mean(tau_pm, dims=2)
+    #    max_mean_idx = argmax(vec(tau_mean_vec))
+    #    tau_mean = tau_mean_vec[max_mean_idx]
+    #    tau_var = var(tau_pm[max_mean_idx,:])
+    #    
+    #    beta_mom[i] = tau_mean / tau_var
+    #    alpha_mom[i] = tau_mean*tau_mean/tau_var
+    #end
 
     reg.alpha = Tuple(alpha_mom)
     reg.beta = Tuple(beta_mom)
@@ -733,6 +750,35 @@ function construct_Y_reg(K, N, feature_ids, feature_views, feature_sets, feature
     end
     mixture_p ./= s
     return construct_composite_reg(regularizers, mixture_p) 
+end
+
+
+##########################################################
+# Construct a regularizer for the Bernoulli columns
+# of a model
+##########################################################
+
+function construct_bernoulli_regularizer(model)
+
+    K,M = size(model.matfac.X)
+    N = size(model.matfac.Y, 2)
+
+    # Construct a GroupRegularizer that only penalizes 
+    # parameters for the Bernoulli columns
+    group_labels = [string(typeof(n)) for n in model.matfac.noise_model.noises]
+    group_idx = deepcopy(model.matfac.noise_model.col_ranges)
+    n_groups = length(group_idx)
+    group_weights = [zeros_like(model.matfac.Y, K) for _=1:n_groups]
+    
+    for i=1:n_groups
+        if occursin("SquaredHingeNoise", group_labels[i])
+            group_weights[i] .= K
+        end
+    end
+    reg = GroupRegularizer(group_labels,
+                           group_idx,
+                           Tuple(group_weights))
+    return reg
 end
 
 

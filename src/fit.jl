@@ -89,7 +89,7 @@ function init_mu!(model::PathMatFacModel; capacity=Int(10e8), lr_mu=0.1, max_epo
                                     capacity=capacity, max_epochs=max_epochs,
                                     opt=opt, verbosity=verbosity, print_prefix=print_prefix,
                                     keep_history=keep_history,
-                                    rel_tol=1e-6, abs_tol=1e-3) 
+                                    rel_tol=1e-5, abs_tol=1e-3) 
     # Awkwardly handle the variable-length output
     h = nothing
     M_estimates = result
@@ -489,6 +489,7 @@ function whiten!(model::PathMatFacModel)
         # rescale both Y and sigma.
         Y_std_max = maximum(Y_view_std)
         model.matfac.Y[:,cr] ./= Y_std_max
+
         model.matfac.col_transform.layers[1].logsigma[cr] .+= log(Y_std_max)
     end
 
@@ -507,7 +508,7 @@ function rotate_by_svd!(model::PathMatFacModel)
     # Reassign Y <- S*Vt
     model.matfac.Y .= s .* Vt
 
-    # Rotate X <- X*U
+    # Rotate Xt <- Xt * U
     model.matfac.X .= transpose(transpose(model.matfac.X)*U)
 end
 
@@ -631,14 +632,14 @@ function basic_fit!(model::PathMatFacModel; fit_batch=false,
                                 kwargs...)
     end
 
-    if svd_rotate
-        v_println("Rotating factors via SVD."; verbosity=verbosity, prefix=print_prefix)
-        rotate_by_svd!(model)
-    end
-
     if whiten
         v_println("Whitening X."; verbosity=verbosity, prefix=print_prefix)
         whiten!(model)
+    end
+
+    if svd_rotate
+        v_println("Rotating factors via SVD."; verbosity=verbosity, prefix=print_prefix)
+        rotate_by_svd!(model)
     end
 
     # Unfreeze all the layers
@@ -658,18 +659,18 @@ function basic_fit_reg_weight_eb!(model::PathMatFacModel;
     model.matfac.X_reg = X->0
 
     orig_Y_reg = model.matfac.Y_reg
-    model.matfac.Y_reg = Y->0
+    model.matfac.Y_reg = construct_bernoulli_regularizer(model)
 
-    # Fit the model without regularization. 
+    # Fit the model without regularization (except the Bernoulli factors).
     # Whiten the embedding.
-    v_println("Fitting unregularized model..."; prefix=print_prefix,
-                                                verbosity=verbosity)
+    v_println("Pre-fitting model without regularization..."; prefix=print_prefix,
+                                                             verbosity=verbosity)
     basic_fit!(model; fit_mu=true, fit_logsigma=true,
                       reweight_losses=true,
                       fit_batch=true, 
                       init_factors=true,
                       #fit_factors=true,
-                      svd_rotate=true,
+                      #svd_rotate=true,
                       whiten=true,
                       verbosity=verbosity, print_prefix=n_pref, 
                       capacity=capacity,
@@ -690,7 +691,8 @@ function basic_fit_reg_weight_eb!(model::PathMatFacModel;
     # Re-fit the model with regularized factors
     v_println("Refitting with regularization..."; prefix=print_prefix, 
                                                   verbosity=verbosity)
-    basic_fit!(model; fit_factors=true, 
+    basic_fit!(model; reweight_losses=true,
+                      fit_factors=true, 
                       verbosity=verbosity, print_prefix=n_pref,
                       history=history,
                       capacity=capacity,
@@ -737,13 +739,13 @@ function fit_ard!(model::PathMatFacModel; max_epochs=1000, capacity=10^8,
     v_println("Pre-fitting without regularization..."; verbosity=verbosity,
                                                        prefix=print_prefix)
     model.matfac.X_reg = X -> 0 
-    model.matfac.Y_reg = Y -> 0 
+    model.matfac.Y_reg = construct_bernoulli_regularizer(model) 
     basic_fit!(model; fit_batch=true,
                       fit_mu=true,
                       fit_logsigma=true,
                       init_factors=true,
                       reweight_losses=true,
-                      svd_rotate=true,
+                      #svd_rotate=true,
                       whiten=true,
                       lr_regress=lr_regress, lr_theta=lr_theta,
                       verbosity=verbosity,
@@ -755,14 +757,17 @@ function fit_ard!(model::PathMatFacModel; max_epochs=1000, capacity=10^8,
     
     # Next, we put the ARD prior back in place and
     # continue fitting the model.
-    v_println("Adjusting with ARD on Y..."; verbosity=verbosity,
-                                            prefix=print_prefix)
     model.matfac.X_reg = orig_X_reg
     reweight_eb!(model.matfac.X_reg, model.matfac.X)
     model.matfac.Y_reg = orig_ard
     reweight_eb!(model.matfac.Y_reg, model.matfac.Y)
     #fit_lbfgs!(model.matfac, model.data; capacity=capacity, max_iter=max_epochs,
     #                                     verbosity=verbosity, print_prefix=print_prefix)
+    v_println("Reweighting column losses..."; verbosity=verbosity,
+                                            prefix=print_prefix)
+    reweight_col_losses!(model; capacity=capacity)
+    v_println("Adjusting with ARD on Y..."; verbosity=verbosity,
+                                            prefix=print_prefix)
     mf_fit_adapt_lr!(model; capacity=capacity, update_X=true, update_Y=true,
                             lr=lr, min_lr=0.01,
                             max_epochs=max_epochs,
@@ -930,9 +935,13 @@ function fit!(model::PathMatFacModel; lr=1.0,
     if isa(model.matfac.Y_reg, ARDRegularizer)
         fit_ard!(model; history=hist, verbosity=verbosity,
                                       print_prefix=print_prefix,
+                                      rel_tol=rel_tol,
+                                      abs_tol=abs_tol,
                                       kwargs...)
     elseif isa(model.matfac.Y_reg, FeatureSetARDReg)
         fit_feature_set_ard!(model; lr=lr,
+                                    rel_tol=rel_tol,
+                                    abs_tol=abs_tol,
                                     history=hist, 
                                     fsard_max_iter=fsard_max_iter,
                                     fsard_max_A_iter=fsard_max_A_iter,
@@ -947,6 +956,8 @@ function fit!(model::PathMatFacModel; lr=1.0,
                                     kwargs...)
     else
         fit_non_ard!(model; history=hist, 
+                            rel_tol=rel_tol,
+                            abs_tol=abs_tol,
                             fit_reg_weight=fit_reg_weight, 
                             lambda_max=lambda_max, 
                             n_lambda=n_lambda, 
