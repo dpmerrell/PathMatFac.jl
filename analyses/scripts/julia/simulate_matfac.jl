@@ -163,7 +163,9 @@ function main(args)
                                   :S_remove_corruption => 0.1,
                                   :normal_noise => 0.1,
                                   :missingness => 0.1,
-                                  :A_density => 0.1
+                                  :A_density => 0.1,
+                                  :between_batch_std => 0.25,
+                                  :within_batch_std => 0.05
                                   )
     update_opts!(sim_kwargs, cli_opts)
 

@@ -47,7 +47,8 @@ def compare_batch_params(true_file, fitted_file, batch_view_names, w=6, h=5):
 
     n_views = len(true_theta)
  
-    f, axs = plt.subplots(nrows=n_views, ncols=2, figsize=(w,h)) 
+    f, axs = plt.subplots(nrows=n_views, ncols=2, figsize=(w,h),
+                          gridspec_kw={"wspace":0.05, "hspace":0.05}) 
                           #gridspec_kw={"height_ratios":[0.49, 0.49, 0.02]})
     
     for view_idx, (t_th, f_th, t_ld, f_ld, rbids) in enumerate(zip(true_theta, fitted_theta, true_logdelta, fitted_logdelta, row_batch_ids)):
@@ -62,11 +63,10 @@ def compare_batch_params(true_file, fitted_file, batch_view_names, w=6, h=5):
         #t_th = t_th.flatten()
         #f_th = f_th.flatten()
         th_ax = axs[view_idx][0]
-        th_ax.plot([0,0],[-100,100], "--", color="silver", linewidth=0.75)
-        th_ax.plot([-100,100],[0,0], "--", color="silver", linewidth=0.75)
-        #th_ax.scatter(t_th, f_th, color="k", s=0.5)
+        th_ax.plot([0,0],[-100,100], "--", color="black", linewidth=0.75)
+        th_ax.plot([-100,100],[0,0], "--", color="black", linewidth=0.75)
         scatter_values(th_ax, t_th, f_th)
-        th_ax.set_ylabel(f"Fitted value\n\n{NAMES[batch_view_names[view_idx]]}")
+        th_ax.set_ylabel(NAMES[batch_view_names[view_idx]], labelpad=0.0)
 
         #min_v = min(np.quantile(t_th,0.001), np.quantile(f_th,0.001))
         #max_v = max(np.quantile(t_th,0.999), np.quantile(f_th,0.999))
@@ -74,14 +74,14 @@ def compare_batch_params(true_file, fitted_file, batch_view_names, w=6, h=5):
         #th_ax.set_ylim([min_v, max_v])
         th_ax.set_xlim([-1, 1])
         th_ax.set_ylim([-1, 1])
+        th_ax.set_yticks([-1, 1])
 
         # Plot logdelta for this view
         #t_ld = t_ld.flatten()
         #f_ld = f_ld.flatten()
         ld_ax = axs[view_idx][1]
-        ld_ax.plot([0,0],[-100,100], "--", color="silver", linewidth=0.75)
-        ld_ax.plot([-100,100],[0,0], "--", color="silver", linewidth=0.75)
-        #ld_ax.scatter(t_ld, f_ld, color="k", s=0.5)
+        ld_ax.plot([0,0],[-100,100], "--", color="black", linewidth=0.75)
+        ld_ax.plot([-100,100],[0,0], "--", color="black", linewidth=0.75)
         scatter_values(ld_ax, t_ld, f_ld)
         
         #min_v = min(np.quantile(t_ld,0.01), np.quantile(f_ld,0.01))
@@ -90,15 +90,25 @@ def compare_batch_params(true_file, fitted_file, batch_view_names, w=6, h=5):
         #ld_ax.set_ylim([min_v, max_v])
         ld_ax.set_xlim([-1, 1])
         ld_ax.set_ylim([-1, 1])
+        ld_ax.set_yticks([])
+   
+        if view_idx == n_views - 1: 
+            th_ax.set_xticks([-1, 1])
+            ld_ax.set_xticks([-1, 1])
+        else:
+            th_ax.set_xticks([])
+            ld_ax.set_xticks([])
 
     axs[0][0].set_title("Batch shift ($\\theta$)")
     axs[0][1].set_title("Batch scale (log $\\delta$)")
 
-    axs[-1][0].set_xlabel("True value")
-    axs[-1][1].set_xlabel("True value")
+
     plt.suptitle("Batch effect estimation")
 
-    f.tight_layout()
+    f.text(0.51, 0.01, "True values", ha="center")
+    f.text(0.01, 0.5, "Estimated values", va="center", rotation="vertical")
+
+    #f.tight_layout(h_pad=0.05, w_pad=0.05)
     return f
 
 
