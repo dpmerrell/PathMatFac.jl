@@ -84,12 +84,12 @@ end
 
 #################################
 # Batch scales and shifts
-function simulate_params!(bs::BatchShift, reg::BatchArrayReg; b_shift_mean=0.0, b_shift_std=0.125, kwargs...)
-    simulate_params!(bs.theta, reg; b_mean=b_shift_mean, between_batch_std=b_shift_std, within_batch_std=0.05, kwargs...)
+function simulate_params!(bs::BatchShift, reg::BatchArrayReg; b_shift_mean=0.0, b_shift_std=0.25, kwargs...)
+    simulate_params!(bs.theta, reg; b_mean=b_shift_mean, between_batch_std=b_shift_std, within_batch_std=0.25, kwargs...)
 end
 
-function simulate_params!(bs::BatchScale, reg::BatchArrayReg; b_scale_mean=0.0, b_scale_std=0.1, kwargs...)
-    simulate_params!(bs.logdelta, reg; b_mean=b_scale_mean, between_batch_std=b_scale_std, within_batch_std=0.05, kwargs...)
+function simulate_params!(bs::BatchScale, reg::BatchArrayReg; b_scale_mean=0.0, b_scale_std=0.25, kwargs...)
+    simulate_params!(bs.logdelta, reg; b_mean=b_scale_mean, between_batch_std=b_scale_std, within_batch_std=0.25, kwargs...)
 end
 
 function simulate_params!(bs::BatchArray, reg::BatchArrayReg; b_mean=0.0, between_batch_std=0.95, within_batch_std=0.3, kwargs...)

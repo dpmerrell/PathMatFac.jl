@@ -1,7 +1,7 @@
 
 
 from sklearn.metrics import average_precision_score, roc_auc_score, r2_score
-from scipy.stats import spearmanr
+from scipy.stats import spearmanr, pearsonr
 from scipy.optimize import linear_sum_assignment
 import script_util as su
 import numpy as np
@@ -9,12 +9,13 @@ import argparse
 import h5py
 import json
 
-def score_col_param(v_true, v_fitted):
-    return r2_score(v_true, v_fitted)    
+def score_col_param(v_true, v_fitted, score_fn):
+    return score_fn(v_true, v_fitted)    
 
 
-def score_batch_param(true_values, fitted_values):
-    scores = [r2_score(v_true, v_fitted, multioutput="uniform_average") for (v_true, v_fitted) in zip(true_values, fitted_values)]
+def score_batch_param(true_values, fitted_values, score_fn):
+    #scores = [r2_score(v_true, v_fitted, multioutput="uniform_average") for (v_true, v_fitted) in zip(true_values, fitted_values)]
+    scores = [score_fn(v_true, v_fitted) for (v_true, v_fitted) in zip(true_values, fitted_values)]
     sizes = [np.prod(v.shape) for v in true_values]
     return np.dot(scores, sizes)/sum(sizes)
 
@@ -165,23 +166,41 @@ def compute_scores(true_hdf, fitted_hdf):
             print("Scoring mu...")
             mu_true = f_true["mu"][:]
             mu_fitted = f_fitted["mu"][:]
-            scores["mu_r2"] = score_col_param(mu_true, mu_fitted)
+            scores["mu_r2"] = score_col_param(mu_true, mu_fitted, r2_score)
 
             print("Scoring logsigma...")
             logsigma_true = f_true["logsigma"][:]
             logsigma_fitted = f_fitted["logsigma"][:]
-            scores["logsigma_r2"] = score_col_param(logsigma_true, logsigma_fitted)
+            scores["logsigma_r2"] = score_col_param(logsigma_true, logsigma_fitted, r2_score)
+            scores["logsigma_spearman"] = score_col_param(logsigma_true, logsigma_fitted, lambda mt,mf: spearmanr(mt,mf)[0])
+            scores["logsigma_pearson"] = score_col_param(logsigma_true, logsigma_fitted, lambda mt,mf: pearsonr(mt,mf)[0])
 
-            if ("theta" in f_true.keys()):
+            if ("theta" in f_fitted.keys()) and ("theta" in f_true.keys()):
                 print("Scoring batch parameters...")
                 n_batches = len([k for k in f_true["theta"].keys() if k.startswith("values_")])
                 theta_true = [f_true[f"theta/values_{k+1}"][:,:] for k in range(n_batches)]
+                theta_true = [v.flatten() for v in theta_true]
                 theta_fitted = [f_fitted[f"theta/values_{k+1}"][:,:] for k in range(n_batches)]
-                scores["theta_r2"] = score_batch_param(theta_true, theta_fitted)
+                theta_fitted = [v.flatten() for v in theta_fitted]
+
+                batch_r2 = lambda tr,fit: r2_score(tr,fit)
+                batch_pearson = lambda tr,fit: pearsonr(tr,fit)[0]
+                batch_spearman = lambda tr,fit: spearmanr(tr,fit)[0]
+
+                scores["theta_r2"] = score_batch_param(theta_true, theta_fitted, batch_r2)
+                scores["theta_pearson"] = score_batch_param(theta_true, theta_fitted, batch_pearson)
+                scores["theta_spearman"] = score_batch_param(theta_true, theta_fitted, batch_spearman)
                 
                 logdelta_true = [f_true[f"logdelta/values_{k+1}"][:,:] for k in range(n_batches)]
+                logdelta_true = [v.flatten() for v in logdelta_true]
                 logdelta_fitted = [f_fitted[f"logdelta/values_{k+1}"][:,:] for k in range(n_batches)]
-                scores["logdelta_r2"] = score_batch_param(logdelta_true, logdelta_fitted)
+                logdelta_fitted = [v.flatten() for v in logdelta_fitted]
+                for ldf in logdelta_fitted:
+                    ldf[np.logical_not(np.isfinite(ldf))] = 0
+
+                scores["logdelta_r2"] = score_batch_param(logdelta_true, logdelta_fitted, batch_r2)
+                scores["logdelta_pearson"] = score_batch_param(logdelta_true, logdelta_fitted, batch_pearson)
+                scores["logdelta_spearman"] = score_batch_param(logdelta_true, logdelta_fitted, batch_spearman)
 
     return scores
 

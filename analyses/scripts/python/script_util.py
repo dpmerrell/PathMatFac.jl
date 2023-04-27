@@ -215,15 +215,14 @@ def parse_value(v):
             return v
     
 
-def parse_path_kvs(filepath):
+def parse_path_kvs(filepath, kv_sep="__"):
 
     result = {}
     dir_strs = filepath.split(path.sep)
     # Exclude file extension
     dir_strs[-1] = ".".join(dir_strs[-1].split(".")[:-1]) 
     for dir_str in dir_strs:
-        sep = "__"
-        for kv_str in dir_str.split(sep):
+        for kv_str in dir_str.split(kv_sep):
             k_v = kv_str.split("=")
             if len(k_v) == 2:
                 result[k_v[0]] = parse_value(k_v[1])

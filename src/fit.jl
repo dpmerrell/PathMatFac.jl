@@ -296,20 +296,19 @@ end
 
 # Method of Moments estimators for setting the
 # theta and delta priors
-function theta_eb_mom(theta_values::Tuple)
+function theta_mom(theta_values::Tuple)
     theta_mean = map(v -> mean(v, dims=2), theta_values)
     theta_var = map(v -> var(v, dims=2), theta_values)
     return theta_mean, theta_var
 end
 
-function delta2_eb_mom(delta2_values::Tuple)
+function delta2_mom(delta2_values::Tuple)
 
-    delta2_mean = map(v -> mean(1 ./ v, dims=2), delta2_values)
-    delta2_var = map(v -> var(1 ./ v, dims=2), delta2_values)
+    delta2_mean = map(v -> mean(v, dims=2), delta2_values)
+    delta2_var = map(v -> var(v, dims=2), delta2_values)
 
-    beta = map((m,v) -> m ./ v, delta2_mean, delta2_var)
-    alpha = map((m,b) -> m .* b, delta2_mean, beta)
-
+    alpha = map((m,v) -> Float32(2) .+ (m.*m)./v, delta2_mean, delta2_var)
+    beta = map((m,a) -> m .* (a .- Float32(1)), delta2_mean, alpha)
     return alpha, beta 
 end
 
@@ -321,32 +320,33 @@ function nans_to_val!(tup, val)
 end
 
 
-function theta_delta_fixpoint(model::MF.MatFacModel, delta2::Tuple, sigma2::AbstractVector, data::AbstractMatrix; 
-                              capacity=10^8, batch_eb_max_iter=10, batch_eb_rtol=1e-8, verbosity=1, print_prefix="", history=nothing)
+function theta_delta_em(model::MF.MatFacModel, delta2::Tuple, sigma2::AbstractVector, data::AbstractMatrix; 
+                        capacity=10^8, batch_em_max_iter=3, batch_em_rtol=1e-8, verbosity=1, print_prefix="", history=nothing)
 
     theta = model.col_transform.layers[4].theta
     theta_lsq = deepcopy(theta.values)
-    mu = model.col_transform.layers[3].mu
-
-    theta_mean, theta_var = theta_eb_mom(theta.values)
-    alpha, beta = delta2_eb_mom(delta2)
-
+    delta2_new = deepcopy(delta2)
     batch_sizes = ba_map(d->isfinite.(d), theta, data)
-
+        
     diffs = MutableLinkedList() 
-    for iter=1:batch_eb_max_iter
+    for iter=1:batch_em_max_iter
+    
+        # Update priors  
+        theta_mean, theta_var = theta_mom(theta.values)
+        alpha, beta = delta2_mom(delta2)
 
+        # Update batch shift (theta)
+        theta.values = map((e_th, v_th, d2, th_lsq, bs, cr)-> (e_th.*d2.*transpose(view(sigma2, cr)) .+ th_lsq.*bs.*v_th)./(transpose(view(sigma2, cr)).*d2 .+ bs.*v_th), 
+                           theta_mean, theta_var, delta2_new, theta_lsq, batch_sizes, theta.col_ranges)
+        
+        # Update batch scale (delta^2)
         batch_col_sqerr = ba_map((m, d) -> MF.sqerr_func(m,d),
                                  theta, model, data)
         nans_to_val!(batch_col_sqerr, Float32(0))
  
-        delta2_new = map((a, b, sq, bs, cr) -> (b .+ Float32(0.5).*(sq ./ transpose(view(sigma2, cr)))) ./ (a .+ (Float32(0.5).*bs)), 
+        delta2_new = map((a, b, sq, bs, cr) -> (b .+ Float32(0.5).*(sq ./ transpose(view(sigma2, cr)))) ./ (a .+ (Float32(0.5).*bs) .- Float32(1)), 
                          alpha, beta, batch_col_sqerr, batch_sizes, theta.col_ranges)
         nans_to_val!(delta2_new, 1) 
- 
-        theta.values = map((e_th, v_th, d2, th_lsq, bs, cr)-> (e_th.*d2.*transpose(view(sigma2, cr)) .+ th_lsq.*bs.*v_th)./(transpose(view(sigma2, cr)).*d2 .+ bs.*v_th), 
-                           theta_mean, theta_var, delta2_new, theta_lsq, batch_sizes, theta.col_ranges)
-        nans_to_val!(delta2_new, 0) 
 
         delta2_diff = sum(map((d2,d2n)->sum((d2 .- d2n).^2), delta2, delta2_new))/sum(map(d2->sum(d2.*d2), delta2))
         v_println("(",iter, ") ||δ - δ'||^2/||δ||^2 : ", delta2_diff; verbosity=verbosity, prefix=print_prefix)
@@ -354,12 +354,12 @@ function theta_delta_fixpoint(model::MF.MatFacModel, delta2::Tuple, sigma2::Abst
 
         delta2 = delta2_new
 
-        if delta2_diff < batch_eb_rtol
+        if delta2_diff < batch_em_rtol
             break
         end 
     end
 
-    history!(history; name="batch_effect_EB_fixpoint_procedure", diffs=collect(diffs))
+    history!(history; name="batch_effect_EM_procedure", diffs=collect(diffs))
 
     return theta.values, delta2
 end
@@ -369,7 +369,9 @@ function init_batch_effects!(model::PathMatFacModel; capacity=10^8,
                                                      max_epochs=5000,
                                                      lr_regress=0.25,
                                                      lr_mu=0.1,
-                                                     batch_eb_max_iter=10,
+                                                     batch_em=true,
+                                                     batch_em_rtol=0.01,
+                                                     batch_em_max_iter=3,
                                                      verbosity=1, print_prefix="",
                                                      history=nothing, kwargs...)
 
@@ -384,7 +386,7 @@ function init_batch_effects!(model::PathMatFacModel; capacity=10^8,
     # its Y matrix will regress each column against them.
     condition_mat = ids_to_ind_mat(model.sample_conditions)
     M, K_conditions = size(condition_mat)
-    N = size(model.matfac.Y,2)
+    N = size(model.matfac.Y, 2)
     model.matfac.X = similar(model.matfac.X, K_conditions, M)
     set_array!(model.matfac.X, transpose(condition_mat))
     model.matfac.Y = zeros_like(model.matfac.Y, K_conditions, N)
@@ -450,11 +452,15 @@ function init_batch_effects!(model::PathMatFacModel; capacity=10^8,
     delta2_values = map((v, cr) -> v ./ transpose(view(col_vars, cr)), ba_vars, col_ranges)
 
     # Update the estimated batch parameters in an EB fashion
-    v_println("Batch effect EB procedure:"; prefix=print_prefix, verbosity=verbosity)
-    theta_values, delta2_values = theta_delta_fixpoint(model.matfac, delta2_values, col_vars, model.data;
-                                                       capacity=capacity,
-                                                       batch_eb_max_iter=batch_eb_max_iter,
-                                                       print_prefix=n_pref, verbosity=verbosity) 
+    theta_values = model.matfac.col_transform.layers[4].theta.values
+    if batch_em
+        v_println("Batch effect EM procedure:"; prefix=print_prefix, verbosity=verbosity)
+        theta_values, delta2_values = theta_delta_em(model.matfac, delta2_values, col_vars, model.data;
+                                                     capacity=capacity,
+                                                     batch_em_max_iter=batch_em_max_iter,
+                                                     batch_em_rtol=batch_em_rtol,
+                                                     print_prefix=n_pref, verbosity=verbosity)
+    end
 
     # Set the model's parameters to the fitted values
     model.matfac = orig_matfac
@@ -971,8 +977,8 @@ function fit!(model::PathMatFacModel; lr=1.0,
 
     # Finally: allow the fitted parameters to share information
     if fit_joint
-        freeze_layer!(model.matfac.col_transform, 1:2) # batch and column scale 
-        unfreeze_layer!(model.matfac.col_transform, 3:4) # batch and column shift 
+        freeze_layer!(model.matfac.col_transform, 1:3) # batch and column scale 
+        unfreeze_layer!(model.matfac.col_transform, 4) # batch and column shift 
         v_println("Jointly adjusting parameters..."; verbosity=verbosity, prefix=print_prefix)
         n_prefix = string(print_prefix, "    ") 
         mf_fit_adapt_lr!(model; capacity=capacity, update_X=true, update_Y=true,
@@ -982,7 +988,7 @@ function fit!(model::PathMatFacModel; lr=1.0,
                                 verbosity=verbosity,
                                 print_prefix=n_prefix,
                                 history=hist)
-        unfreeze_layer!(model.matfac.col_transform, 1:2)
+        unfreeze_layer!(model.matfac.col_transform, 1:3)
     end
 
     whiten!(model)

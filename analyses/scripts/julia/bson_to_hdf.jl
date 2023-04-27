@@ -44,9 +44,11 @@ function write_model_to_hdf(out_hdf, model::PM.PathMatFacModel)
 
     if isa(model.matfac.col_transform.layers[4], PM.BatchShift)
         theta = model.matfac.col_transform.layers[4].theta
-        for (i, (v, cr)) in enumerate(zip(theta.values, theta.col_ranges))
+        for (i, (v, cr, rbids)) in enumerate(zip(theta.values, theta.col_ranges, theta.row_batch_ids))
+         
             h5write(out_hdf, string("theta/values_", i), v)
             h5write(out_hdf, string("theta/col_range_", i), collect(cr))
+            h5write(out_hdf, string("theta/batch_ids_", i), convert(Vector{String}, rbids))
         end
     end
 
