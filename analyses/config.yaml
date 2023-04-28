@@ -3,210 +3,210 @@
 output_dir: "temp/"
 
 matfac_simulation_study:
-    # List experiments here
-    test_experiment:
-        n_reps: 1
+#    # List experiments here
+#    test_experiment:
+#        n_reps: 1
+#        data_params:
+#            kept_ctypes: ["ACC:CESC"] 
+#            heldout_ctypes: [""]
+#        pathways: ["hallmark"] 
+#        sim_params:
+#            configuration: ["ard"]
+#            use_batch: ["true"]
+#            var_filter: [0.025] 
+#            K: [20]
+#            S_add_corruption: [0.05]
+#            S_remove_corruption: [0.05]
+#            normal_noise: [0.1]
+#            missingness: [0.1]
+#            A_density: [0.1]
+#            b_scale_std: [1.0]
+#            b_shift_std: [1.0]
+#        fit_params:
+#            configuration: ["ard"]
+#            use_batch: ["true"]
+#            use_gpu: ["false"]
+#            omic_types: ["mutation:methylation:mrnaseq:cna"]
+#            var_filter: [1.0]
+#            K: [10]
+#            max_epochs: [500]
+#            fsard_max_iter: [20]
+#            fsard_A_prior_frac: [0.1]
+#            rel_tol: [0.00001]
+#            abs_tol: [0.0001]
+    # Questions:
+    # * How many iterations are necessary for a useful fit? 
+    # * How does this change with the size and rank of the data? 
+    early_stopping_cpu:
+        n_reps: 5
         data_params:
-            kept_ctypes: ["ACC:CESC"] 
+            kept_ctypes: ["HNSC", "HNSC:CESC:ESCA:STAD:BRCA:LUSC"]
             heldout_ctypes: [""]
         pathways: ["hallmark"] 
         sim_params:
             configuration: ["ard"]
             use_batch: ["true"]
-            var_filter: [0.025] 
+            var_filter: [0.02]
+            K: [10, 40]
+            S_add_corruption: [0.05]
+            S_remove_corruption: [0.05]
+            normal_noise: [0.1]
+            missingness: [0.1]
+            A_density: [0.1]
+            between_batch_std: [0.1]
+        fit_params:
+            configuration: ["basic", "ard"]
+            use_batch: ["true"]
+            use_gpu: ["false"]
+            var_filter: [1.0]
+            K: [20]
+            max_epochs: [50, 500, 5000]
+            fsard_max_iter: [20]
+            fsard_A_prior_frac: [0.1]
+    # Questions:
+    # * How sensitive are different model configurations to misspecified K?
+    # * Do L2- or ARD-regularization "prune away" spurious factors?
+    K_robustness_sims_cpu:
+        n_reps: 5
+        data_params:
+            kept_ctypes: ["HNSC:CESC:ESCA:STAD"]
+            heldout_ctypes: [""]
+        pathways: ["hallmark"] 
+        sim_params:
+            configuration: ["fsard"]
+            use_batch: ["true"]
+            var_filter: [0.02]
+            K: [10, 20, 40]
+            S_add_corruption: [0.05]
+            S_remove_corruption: [0.05]
+            normal_noise: [0.1]
+            missingness: [0.1]
+            A_density: [0.1]
+            between_batch_std: [0.1]
+        fit_params:
+            configuration: ["basic", "ard"]
+            use_batch: ["true"]
+            use_gpu: ["false"]
+            var_filter: [1.0]
+            K: [10, 20, 40]
+            max_epochs: [5000]
+            fsard_max_iter: [20]
+            fsard_A_prior_frac: [0.1]
+    # Questions:
+    #     * How does runtime vary with problem size?
+    #     * How does factor recovery vary with problem size?
+    #     * How does K-sensitivity interact with problem size? 
+    size_sims_cpu:
+        n_reps: 5
+        data_params:
+            kept_ctypes: ["HNSC", "HNSC:CESC:ESCA:STAD", "HNSC:CESC:ESCA:STAD:BRCA:LUSC"]
+            heldout_ctypes: [""]
+        pathways: ["hallmark"] 
+        sim_params:
+            configuration: ["fsard"]
+            use_batch: ["true"]
+            var_filter: [0.01, 0.02, 0.04]
             K: [20]
             S_add_corruption: [0.05]
             S_remove_corruption: [0.05]
             normal_noise: [0.1]
             missingness: [0.1]
             A_density: [0.1]
-            b_scale_std: [1.0]
-            b_shift_std: [1.0]
+            between_batch_std: [0.1]
         fit_params:
-            configuration: ["ard"]
+            configuration: ["basic", "ard"]
             use_batch: ["true"]
             use_gpu: ["false"]
-            omic_types: ["mutation:methylation:mrnaseq:cna"]
             var_filter: [1.0]
-            K: [10]
-            max_epochs: [500]
+            K: [10, 20, 40]
+            max_epochs: [5000]
             fsard_max_iter: [20]
             fsard_A_prior_frac: [0.1]
-            rel_tol: [0.00001]
-            abs_tol: [0.0001]
-#    # Questions:
-#    # * How many iterations are necessary for a useful fit? 
-#    # * How does this change with the size and rank of the data? 
-#    early_stopping_cpu:
-#        n_reps: 5
-#        data_params:
-#            kept_ctypes: ["HNSC", "HNSC:CESC:ESCA:STAD:BRCA:LUSC"]
-#            heldout_ctypes: [""]
-#        pathways: ["hallmark"] 
-#        sim_params:
-#            configuration: ["ard"]
-#            use_batch: ["true"]
-#            var_filter: [0.02]
-#            K: [10, 40]
-#            S_add_corruption: [0.05]
-#            S_remove_corruption: [0.05]
-#            normal_noise: [0.1]
-#            missingness: [0.1]
-#            A_density: [0.1]
-#            between_batch_std: [0.1]
-#        fit_params:
-#            configuration: ["basic", "ard"]
-#            use_batch: ["true"]
-#            use_gpu: ["false"]
-#            var_filter: [1.0]
-#            K: [20]
-#            max_epochs: [50, 500, 5000]
-#            fsard_max_iter: [20]
-#            fsard_A_prior_frac: [0.1]
-#    # Questions:
-#    # * How sensitive are different model configurations to misspecified K?
-#    # * Do L2- or ARD-regularization "prune away" spurious factors?
-#    K_robustness_sims_cpu:
-#        n_reps: 5
-#        data_params:
-#            kept_ctypes: ["HNSC:CESC:ESCA:STAD"]
-#            heldout_ctypes: [""]
-#        pathways: ["hallmark"] 
-#        sim_params:
-#            configuration: ["fsard"]
-#            use_batch: ["true"]
-#            var_filter: [0.02]
-#            K: [10, 20, 40]
-#            S_add_corruption: [0.05]
-#            S_remove_corruption: [0.05]
-#            normal_noise: [0.1]
-#            missingness: [0.1]
-#            A_density: [0.1]
-#            between_batch_std: [0.1]
-#        fit_params:
-#            configuration: ["basic", "ard"]
-#            use_batch: ["true"]
-#            use_gpu: ["false"]
-#            var_filter: [1.0]
-#            K: [10, 20, 40]
-#            max_epochs: [5000]
-#            fsard_max_iter: [20]
-#            fsard_A_prior_frac: [0.1]
-#    # Questions:
-#    #     * How does runtime vary with problem size?
-#    #     * How does factor recovery vary with problem size?
-#    #     * How does K-sensitivity interact with problem size? 
-#    size_sims_cpu:
-#        n_reps: 5
-#        data_params:
-#            kept_ctypes: ["HNSC", "HNSC:CESC:ESCA:STAD", "HNSC:CESC:ESCA:STAD:BRCA:LUSC"]
-#            heldout_ctypes: [""]
-#        pathways: ["hallmark"] 
-#        sim_params:
-#            configuration: ["fsard"]
-#            use_batch: ["true"]
-#            var_filter: [0.01, 0.02, 0.04]
-#            K: [20]
-#            S_add_corruption: [0.05]
-#            S_remove_corruption: [0.05]
-#            normal_noise: [0.1]
-#            missingness: [0.1]
-#            A_density: [0.1]
-#            between_batch_std: [0.1]
-#        fit_params:
-#            configuration: ["basic", "ard"]
-#            use_batch: ["true"]
-#            use_gpu: ["false"]
-#            var_filter: [1.0]
-#            K: [10, 20, 40]
-#            max_epochs: [5000]
-#            fsard_max_iter: [20]
-#            fsard_A_prior_frac: [0.1]
-#    # Questions:
-#    #     * How robust is the model to noisy data? 
-#    noise_robustness_sims:
-#        n_reps: 5
-#        data_params:
-#            kept_ctypes: ["HNSC:CESC:ESCA:STAD"]
-#            heldout_ctypes: [""]
-#        pathways: ["hallmark"] 
-#        sim_params:
-#            configuration: ["fsard"]
-#            use_batch: ["true"]
-#            var_filter: [0.02]
-#            K: [40]
-#            S_add_corruption: [0.05]
-#            S_remove_corruption: [0.05]
-#            normal_noise: [0.1, 0.25, 0.5]
-#            missingness: [0.1]
-#            A_density: [0.1]
-#            between_batch_std: [0.1]
-#        fit_params:
-#            configuration: ["basic", "ard"]
-#            use_batch: ["true"]
-#            use_gpu: ["false"]
-#            var_filter: [1.0]
-#            K: [20]
-#            max_epochs: [5000]
-#            fsard_max_iter: [20]
-#            fsard_A_prior_frac: [0.1]
-#    # Questions:
-#    #     * How robust is the model to missing data? 
-#    noise_robustness_sims:
-#        n_reps: 5
-#        data_params:
-#            kept_ctypes: ["HNSC:CESC:ESCA:STAD"]
-#            heldout_ctypes: [""]
-#        pathways: ["hallmark"] 
-#        sim_params:
-#            configuration: ["fsard"]
-#            use_batch: ["true"]
-#            var_filter: [0.02]
-#            K: [40]
-#            S_add_corruption: [0.05]
-#            S_remove_corruption: [0.05]
-#            normal_noise: [0.1]
-#            missingness: [0.1, 0.25, 0.5]
-#            A_density: [0.1]
-#            between_batch_std: [0.1]
-#        fit_params:
-#            configuration: ["basic", "ard"]
-#            use_batch: ["true"]
-#            use_gpu: ["false"]
-#            var_filter: [1.0]
-#            K: [20]
-#            max_epochs: [5000]
-#            fsard_max_iter: [20]
-#            fsard_A_prior_frac: [0.1]
-#    # Questions:
-#    #     * Does modeling batch effect make a difference?
-#    #     * How well does the model estimate batch effects? 
-#    batch_effect_sims:
-#        n_reps: 5
-#        data_params:
-#            kept_ctypes: ["HNSC:CESC:ESCA:STAD"]
-#            heldout_ctypes: [""]
-#        pathways: ["hallmark"] 
-#        sim_params:
-#            configuration: ["fsard"]
-#            use_batch: ["true"]
-#            var_filter: [0.02]
-#            K: [40]
-#            S_add_corruption: [0.05]
-#            S_remove_corruption: [0.05]
-#            normal_noise: [0.1]
-#            missingness: [0.1]
-#            A_density: [0.1]
-#            between_batch_std: [0.1, 0.5, 1.0]
-#        fit_params:
-#            configuration: ["basic", "ard"]
-#            use_batch: ["true", "false"]
-#            use_gpu: ["false"]
-#            var_filter: [1.0]
-#            K: [20]
-#            max_epochs: [5000]
-#            fsard_max_iter: [20]
-#            fsard_A_prior_frac: [0.1]
+    # Questions:
+    #     * How robust is the model to noisy data? 
+    noise_robustness_sims:
+        n_reps: 5
+        data_params:
+            kept_ctypes: ["HNSC:CESC:ESCA:STAD"]
+            heldout_ctypes: [""]
+        pathways: ["hallmark"] 
+        sim_params:
+            configuration: ["fsard"]
+            use_batch: ["true"]
+            var_filter: [0.02]
+            K: [40]
+            S_add_corruption: [0.05]
+            S_remove_corruption: [0.05]
+            normal_noise: [0.1, 0.25, 0.5]
+            missingness: [0.1]
+            A_density: [0.1]
+            between_batch_std: [0.1]
+        fit_params:
+            configuration: ["basic", "ard"]
+            use_batch: ["true"]
+            use_gpu: ["false"]
+            var_filter: [1.0]
+            K: [20]
+            max_epochs: [5000]
+            fsard_max_iter: [20]
+            fsard_A_prior_frac: [0.1]
+    # Questions:
+    #     * How robust is the model to missing data? 
+    noise_robustness_sims:
+        n_reps: 5
+        data_params:
+            kept_ctypes: ["HNSC:CESC:ESCA:STAD"]
+            heldout_ctypes: [""]
+        pathways: ["hallmark"] 
+        sim_params:
+            configuration: ["fsard"]
+            use_batch: ["true"]
+            var_filter: [0.02]
+            K: [40]
+            S_add_corruption: [0.05]
+            S_remove_corruption: [0.05]
+            normal_noise: [0.1]
+            missingness: [0.1, 0.25, 0.5]
+            A_density: [0.1]
+            between_batch_std: [0.1]
+        fit_params:
+            configuration: ["basic", "ard"]
+            use_batch: ["true"]
+            use_gpu: ["false"]
+            var_filter: [1.0]
+            K: [20]
+            max_epochs: [5000]
+            fsard_max_iter: [20]
+            fsard_A_prior_frac: [0.1]
+    # Questions:
+    #     * Does modeling batch effect make a difference?
+    #     * How well does the model estimate batch effects? 
+    batch_effect_sims:
+        n_reps: 5
+        data_params:
+            kept_ctypes: ["HNSC:CESC:ESCA:STAD"]
+            heldout_ctypes: [""]
+        pathways: ["hallmark"] 
+        sim_params:
+            configuration: ["fsard"]
+            use_batch: ["true"]
+            var_filter: [0.02]
+            K: [40]
+            S_add_corruption: [0.05]
+            S_remove_corruption: [0.05]
+            normal_noise: [0.1]
+            missingness: [0.1]
+            A_density: [0.1]
+            between_batch_std: [0.1, 0.5, 1.0]
+        fit_params:
+            configuration: ["basic", "ard"]
+            use_batch: ["true", "false"]
+            use_gpu: ["false"]
+            var_filter: [1.0]
+            K: [20]
+            max_epochs: [5000]
+            fsard_max_iter: [20]
+            fsard_A_prior_frac: [0.1]
 #    config_comparison_sims:
 #        n_reps: 1
 #        sim_params:
