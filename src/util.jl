@@ -627,6 +627,21 @@ end
 # Other
 #########################################################
 
+# Compute alpha and beta from Gamma variates using the estimator of Ye and Chen (2017)
+# (https://doi.org/10.1080%2F00031305.2016.1209129) 
+function estimate_alpha_beta(gamm; kwargs...)
+
+    e_x = mean(gamm; kwargs...)
+    e_lx = mean(log.(gamm); kwargs...)
+    e_xlx = mean(gamm .* log.(gamm); kwargs...)
+
+    beta = e_xlx .- (e_x .* e_lx)
+    alpha = e_x ./ (beta .+ Float32(1e-12))
+
+    return alpha, beta
+end
+
+
 # Binary search on a "well-behaved" nondecreasing function, f.
 # I.e., given a target value z, search for  x satisfying 
 #      f(x) = z

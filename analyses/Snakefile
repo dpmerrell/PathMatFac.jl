@@ -87,35 +87,68 @@ TCGA_FOLDS = config["supervised_folds"]
 
 rule all:
     input:
-        #score_tsvs=expand(path.join(SIM_SCORE_TSV_DIR, "{experiment}.tsv"),
-        #                  experiment=SIM_ALL_EXPERIMENTS),
-        #score_jsons=expand(path.join(SIM_SCORE_JSON_DIR, "{sim_fit_comb}.json"),
-        #                   sim_fit_comb=SIM_ALL_FIT_COMBINATIONS),
-        #sim_batch_plots=expand(path.join(SIM_VIS_FITTED, "{sim_fit_comb}/batch_scatter.png"),
-        #                       sim_fit_comb=SIM_ALL_FIT_COMBINATIONS),
-        #sim_fit_x_plots=expand(path.join(SIM_VIS_FITTED, "{sim_fit_comb}/X.png"),
-        #               sim_fit_comb=SIM_ALL_FIT_COMBINATIONS),
-        #sim_fit_y_plots=expand(path.join(SIM_VIS_FITTED, "{sim_fit_comb}/Y.png"),
-        #               sim_fit_comb=SIM_ALL_FIT_COMBINATIONS),
-        #sim_fit_col_param_plots=expand(path.join(SIM_VIS_FITTED, "{sim_fit_comb}/col_params.png"),
-        #                       sim_fit_comb=SIM_ALL_FIT_COMBINATIONS),
-        #sim_x_plots=expand(path.join(SIM_VIS_TRUE, "{sim_comb}/X.png"),
-        #                   sim_comb=SIM_ALL_SIM_COMBINATIONS),
-        #sim_y_plots=expand(path.join(SIM_VIS_TRUE, "{sim_comb}/Y.png"),
-        #                   sim_comb=SIM_ALL_SIM_COMBINATIONS),
-        #sim_dataset_plots=expand(path.join(SIM_VIS_TRUE, "{sim_comb}/dataset.png"),
-        #                        sim_comb=SIM_ALL_SIM_COMBINATIONS),
+        # Simulation scoring
+        sim_score_tsvs=expand(path.join(SIM_SCORE_TSV_DIR, "{experiment}.tsv"),
+                              experiment=SIM_ALL_EXPERIMENTS),
+        sim_score_jsons=expand(path.join(SIM_SCORE_JSON_DIR, "{sim_fit_comb}.json"),
+                               sim_fit_comb=SIM_ALL_FIT_COMBINATIONS),
+
+        # Static visuals
+        sim_batch_plots=expand(path.join(SIM_VIS_FITTED, "{sim_fit_comb}/batch_scatter.png"),
+                               sim_fit_comb=SIM_ALL_FIT_COMBINATIONS),
+        sim_fit_x_plots=expand(path.join(SIM_VIS_FITTED, "{sim_fit_comb}/X.png"),
+                               sim_fit_comb=SIM_ALL_FIT_COMBINATIONS),
+        sim_fit_y_plots=expand(path.join(SIM_VIS_FITTED, "{sim_fit_comb}/Y.png"),
+                               sim_fit_comb=SIM_ALL_FIT_COMBINATIONS),
+        sim_fit_col_param_plots=expand(path.join(SIM_VIS_FITTED, "{sim_fit_comb}/col_params.png"),
+                                       sim_fit_comb=SIM_ALL_FIT_COMBINATIONS),
+        sim_x_plots=expand(path.join(SIM_VIS_TRUE, "{sim_comb}/X.png"),
+                           sim_comb=SIM_ALL_SIM_COMBINATIONS),
+        sim_y_plots=expand(path.join(SIM_VIS_TRUE, "{sim_comb}/Y.png"),
+                           sim_comb=SIM_ALL_SIM_COMBINATIONS),
+        sim_dataset_plots=expand(path.join(SIM_VIS_TRUE, "{sim_comb}/dataset.png"),
+                                 sim_comb=SIM_ALL_SIM_COMBINATIONS),
+        # Model fits
         sim_fit_hdfs=expand(path.join(SIM_FIT_PARAM_DIR, "{sim_fit_comb}.hdf"),
                               sim_fit_comb=SIM_ALL_FIT_COMBINATIONS),
         sim_fit_params=expand(path.join(SIM_FIT_PARAM_DIR, "{sim_fit_comb}.bson"),
                               sim_fit_comb=SIM_ALL_FIT_COMBINATIONS),
+        
+        # Interactive visuals
+        sim_fit_interactive_plots=expand(path.join(SIM_VIS_FITTED, "{sim_fit_comb}/model.html"),
+                                         sim_fit_comb=SIM_ALL_FIT_COMBINATIONS),
+        sim_true_interactive_plots=expand(path.join(SIM_VIS_TRUE, "{sim_comb}/model.html"),
+                                         sim_comb=SIM_ALL_SIM_COMBINATIONS),
+
+        # Simulated data, params
         sim_hdfs=expand(path.join(SIM_PARAM_DIR, "{sim_comb}.hdf"),
-                              sim_comb=SIM_ALL_SIM_COMBINATIONS),
+                        sim_comb=SIM_ALL_SIM_COMBINATIONS),
+        sim_params=expand(path.join(SIM_PARAM_DIR, "{sim_comb}.bson"),
+                          sim_comb=SIM_ALL_SIM_COMBINATIONS),
 
 
 #################################################################
 # Visualization
 #################################################################
+
+rule vis_sim_fit_interactive:
+    input:
+        src=path.join(JL_SCRIPT_DIR, "vis_model.jl"),
+        fitted_bson=path.join(SIM_FIT_PARAM_DIR, "{path}.bson"),
+    output:
+        param_html=path.join(SIM_VIS_FITTED, "{path}/model.html"),
+    shell:
+        "julia --project=. {input.src} {input.fitted_bson} {output.param_html}"
+
+rule vis_sim_interactive:
+    input:
+        src=path.join(JL_SCRIPT_DIR, "vis_model.jl"),
+        fitted_bson=path.join(SIM_PARAM_DIR, "{path}.bson"),
+    output:
+        param_html=path.join(SIM_VIS_TRUE, "{path}/model.html"),
+    shell:
+        "julia --project=. {input.src} {input.fitted_bson} {output.param_html}"
+
 
 rule vis_compare_batch:
     input:

@@ -17,28 +17,34 @@ end
 
 function write_model_to_hdf(out_hdf, model::PM.PathMatFacModel)
 
+    # We first write everything to an HDF file in memory using the 'core' driver.
+    # Then we'll write it to disk when we close().
+    prop = HDF5.FileAccessProperties()
+    HDF5.setproperties!(prop; driver=HDF5.Drivers.Core())
+    f = h5open(out_hdf, "w"; fapl=prop)
+
     ###################################
     # Attributes of the data
-    h5write(out_hdf, "feature_ids", safe_convert(model.feature_ids)) 
-    h5write(out_hdf, "feature_views", safe_convert(model.feature_views))
-    h5write(out_hdf, "sample_ids", safe_convert(model.sample_ids))
-    h5write(out_hdf, "sample_conditions", safe_convert(model.sample_conditions))
-    h5write(out_hdf, "data_idx", safe_convert(model.data_idx))
+    f["feature_ids"] = safe_convert(model.feature_ids)
+    f["feature_views"] = safe_convert(model.feature_views)
+    f["sample_ids"] = safe_convert(model.sample_ids)
+    f["sample_conditions"] = safe_convert(model.sample_conditions)
+    f["data_idx"] = safe_convert(model.data_idx)
 
     #################################
     # Matrix factorization: factors and column params
-    h5write(out_hdf, "X", model.matfac.X)
-    h5write(out_hdf, "Y", model.matfac.Y)
-    h5write(out_hdf, "logsigma", model.matfac.col_transform.layers[1].logsigma)
-    h5write(out_hdf, "mu", model.matfac.col_transform.layers[3].mu)
+    f["X"] = model.matfac.X
+    f["Y"] = model.matfac.Y
+    f["logsigma"] = model.matfac.col_transform.layers[1].logsigma
+    f["mu"] =  model.matfac.col_transform.layers[3].mu
 
     ###############################
     # Batch effect parameters
     if isa(model.matfac.col_transform.layers[2], PM.BatchScale)
         logdelta = model.matfac.col_transform.layers[2].logdelta
         for (i, (v, cr)) in enumerate(zip(logdelta.values, logdelta.col_ranges))
-            h5write(out_hdf, string("logdelta/values_", i), v)
-            h5write(out_hdf, string("logdelta/col_range_", i), collect(cr))
+            f[string("logdelta/values_", i)] = v
+            f[string("logdelta/col_range_", i)] = collect(cr)
         end
     end
 
@@ -46,18 +52,20 @@ function write_model_to_hdf(out_hdf, model::PM.PathMatFacModel)
         theta = model.matfac.col_transform.layers[4].theta
         for (i, (v, cr, rbids)) in enumerate(zip(theta.values, theta.col_ranges, theta.row_batch_ids))
          
-            h5write(out_hdf, string("theta/values_", i), v)
-            h5write(out_hdf, string("theta/col_range_", i), collect(cr))
-            h5write(out_hdf, string("theta/batch_ids_", i), convert(Vector{String}, rbids))
+            f[string("theta/values_", i)] = v
+            f[string("theta/col_range_", i)] = collect(cr)
+            f[string("theta/batch_ids_", i)] = convert(Vector{String}, rbids)
         end
     end
 
     ################################
     # Featureset ARD params
     if isa(model.matfac.Y_reg, PM.FeatureSetARDReg)
-        h5write(out_hdf, string("fsard/A"), model.matfac.Y_reg.A)
-        h5write(out_hdf, string("fsard/S"), convert(Matrix{Float32}, model.matfac.Y_reg.S))
+        f[string("fsard/A")] = model.matfac.Y_reg.A
+        f[string("fsard/S")] = convert(Matrix{Float32}, model.matfac.Y_reg.S)
     end
+
+    close(f) # Should write everything to disk at once
 end
 
 
