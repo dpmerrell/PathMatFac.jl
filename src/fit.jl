@@ -167,8 +167,6 @@ function reweight_col_losses!(model::PathMatFacModel; capacity=Int(10e8), histor
                                                 model.data; 
                                                 capacity=capacity)
                    )
-    #M_vec = MF.column_nonnan(model.data)
-    #rms_grads = sqrt.(ssq_grads ./ M_vec)
     rms_grads = sqrt.(ssq_grads ./ M) # NOTE: divide by M (rather than the number of non-NaN entries.)
                                       #       This increases the weight of columns containing
                                       #       many NaNs, compensating for their "lack of gradient."
@@ -307,9 +305,9 @@ function delta2_mom(delta2_values::Tuple)
     delta2_mean = map(v -> mean(v, dims=2), delta2_values)
     delta2_var = map(v -> var(v, dims=2), delta2_values)
 
-    alpha = map((m,v) -> Float32(2) .+ (m.*m)./v, delta2_mean, delta2_var)
+    alpha = map((m,v) -> Float32(2) .+ (m.*m)./(v .+ Float32(1e-9)), delta2_mean, delta2_var)
     beta = map((m,a) -> m .* (a .- Float32(1)), delta2_mean, alpha)
-    return alpha, beta 
+    return alpha, beta
 end
 
 function nans_to_val!(tup, val)
@@ -319,13 +317,18 @@ function nans_to_val!(tup, val)
     end
 end
 
+function assign_values!(tup1, tup2)
+    for (t1,t2) in zip(tup1, tup2)
+        t1 .= t2
+    end
+end
 
 function theta_delta_em(model::MF.MatFacModel, delta2::Tuple, sigma2::AbstractVector, data::AbstractMatrix; 
-                        capacity=10^8, batch_em_max_iter=3, batch_em_rtol=1e-8, verbosity=1, print_prefix="", history=nothing)
+                        capacity=10^8, batch_em_max_iter=100, batch_em_rtol=1e-6, verbosity=1, print_prefix="", history=nothing)
 
     theta = model.col_transform.layers[4].theta
     theta_lsq = deepcopy(theta.values)
-    delta2_new = deepcopy(delta2)
+    theta_old = deepcopy(theta.values)
     batch_sizes = ba_map(d->isfinite.(d), theta, data)
         
     diffs = MutableLinkedList() 
@@ -336,25 +339,25 @@ function theta_delta_em(model::MF.MatFacModel, delta2::Tuple, sigma2::AbstractVe
         alpha, beta = delta2_mom(delta2)
 
         # Update batch shift (theta)
+        assign_values!(theta_old, theta.values)
         theta.values = map((e_th, v_th, d2, th_lsq, bs, cr)-> (e_th.*d2.*transpose(view(sigma2, cr)) .+ th_lsq.*bs.*v_th)./(transpose(view(sigma2, cr)).*d2 .+ bs.*v_th), 
-                           theta_mean, theta_var, delta2_new, theta_lsq, batch_sizes, theta.col_ranges)
-        
+                           theta_mean, theta_var, delta2, theta_lsq, batch_sizes, theta.col_ranges)
+        nans_to_val!(theta.values, Float32(0))
+ 
         # Update batch scale (delta^2)
         batch_col_sqerr = ba_map((m, d) -> MF.sqerr_func(m,d),
                                  theta, model, data)
         nans_to_val!(batch_col_sqerr, Float32(0))
  
-        delta2_new = map((a, b, sq, bs, cr) -> (b .+ Float32(0.5).*(sq ./ transpose(view(sigma2, cr)))) ./ (a .+ (Float32(0.5).*bs) .- Float32(1)), 
-                         alpha, beta, batch_col_sqerr, batch_sizes, theta.col_ranges)
-        nans_to_val!(delta2_new, 1) 
+        delta2 = map((a, b, sq, bs, cr) -> (b .+ Float32(0.5).*(sq ./ transpose(view(sigma2, cr)))) ./ (a .+ (Float32(0.5).*bs) .- Float32(1)), 
+                     alpha, beta, batch_col_sqerr, batch_sizes, theta.col_ranges)
+        nans_to_val!(delta2, 1) 
 
-        delta2_diff = sum(map((d2,d2n)->sum((d2 .- d2n).^2), delta2, delta2_new))/sum(map(d2->sum(d2.*d2), delta2))
-        v_println("(",iter, ") ||δ - δ'||^2/||δ||^2 : ", delta2_diff; verbosity=verbosity, prefix=print_prefix)
-        push!(diffs, delta2_diff)
+        theta_diff = sum(map((th,th_old)->sum((th .- th_old).^2), theta.values, theta_old))/sum(map(th->sum(th.*th), theta.values))
+        v_println("(",iter, ") ||θ - θ'||^2/||θ||^2 : ", theta_diff; verbosity=verbosity, prefix=print_prefix)
+        push!(diffs, theta_diff)
 
-        delta2 = delta2_new
-
-        if delta2_diff < batch_em_rtol
+        if theta_diff < batch_em_rtol
             break
         end 
     end
@@ -370,8 +373,8 @@ function init_batch_effects!(model::PathMatFacModel; capacity=10^8,
                                                      lr_regress=0.25,
                                                      lr_mu=0.1,
                                                      batch_em=true,
-                                                     batch_em_rtol=0.01,
-                                                     batch_em_max_iter=3,
+                                                     batch_em_rtol=1e-6,
+                                                     batch_em_max_iter=100,
                                                      verbosity=1, print_prefix="",
                                                      history=nothing, kwargs...)
 
@@ -442,7 +445,7 @@ function init_batch_effects!(model::PathMatFacModel; capacity=10^8,
     v_println("Computing batch scales..."; verbosity=verbosity,
                                            prefix=print_prefix)
     ba_sqerr = ba_map((m, d) -> MF.sqerr_func(m,d),
-                     theta_ba, model.matfac, model.data)
+                      theta_ba, model.matfac, model.data)
     ba_M = ba_map(d -> isfinite.(d), theta_ba, model.data)
     ba_vars = map((sq, M) -> sq ./ M, ba_sqerr, ba_M)
     nans_to_val!(ba_vars, Float32(1)) # Set NaNs to 1
@@ -499,7 +502,6 @@ function whiten!(model::PathMatFacModel)
         model.matfac.col_transform.layers[1].logsigma[cr] .+= log(Y_std_max)
     end
 
-    #return model.matfac.col_transform.layers[1].logsigma
 end
 
 
@@ -560,13 +562,6 @@ function basic_fit!(model::PathMatFacModel; fit_batch=false,
     K,N = size(model.matfac.Y)
     keep_history = (history != nothing)
  
-    # Even if we set `fit_batch`=true, we can only fit 
-    # the batch parameters if they exist.
-    if fit_batch
-        fit_batch = (isa(model.matfac.col_transform.layers[2], BatchScale) & 
-                     isa(model.matfac.col_transform.layers[4], BatchShift))
-    end
-
     if init_ordinal
         init_ordinal_thresholds!(model; verbosity=verbosity,
                                         print_prefix=print_prefix)
@@ -745,7 +740,6 @@ function fit_ard!(model::PathMatFacModel; max_epochs=1000, capacity=10^8,
     K = size(model.matfac.Y, 1)
     v_println("Pre-fitting with minimal regularization..."; verbosity=verbosity,
                                                            prefix=print_prefix)
-    #model.matfac.X_reg = L2Regularizer(K, Float32(1.0))
     model.matfac.X_reg = X -> Float32(0.0) 
     model.matfac.Y_reg = construct_minimal_regularizer(model) 
     basic_fit!(model; fit_batch=true,
@@ -769,8 +763,6 @@ function fit_ard!(model::PathMatFacModel; max_epochs=1000, capacity=10^8,
     reweight_eb!(model.matfac.X_reg, model.matfac.X)
     model.matfac.Y_reg = orig_ard
     reweight_eb!(model.matfac.Y_reg, model.matfac.Y)
-    #fit_lbfgs!(model.matfac, model.data; capacity=capacity, max_iter=max_epochs,
-    #                                     verbosity=verbosity, print_prefix=print_prefix)
     v_println("Reweighting column losses..."; verbosity=verbosity,
                                             prefix=print_prefix)
     reweight_col_losses!(model; capacity=capacity)
@@ -843,8 +835,6 @@ function fit_feature_set_ard!(model::PathMatFacModel; lr=1.0,
                                                       history=history) 
 
         # Re-fit the factors X, Y
-        #fit_lbfgs!(model.matfac, model.data; capacity=capacity, max_iter=max_epochs,
-        #                                     verbosity=verbosity, print_prefix=n_pref)
         keep_history = (history != nothing)
         mf_fit_adapt_lr!(model; capacity=capacity, update_X=true, update_Y=true,
                                 lr=lr, min_lr=0.01,
