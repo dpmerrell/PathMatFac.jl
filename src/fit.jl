@@ -570,7 +570,6 @@ function basic_fit!(model::PathMatFacModel; fit_batch=false,
     # Things differ pretty radically if we're fitting batch parameters
     # vs. only column parameters
     if fit_batch
-
         @assert isa(model.matfac.col_transform.layers[2], BatchScale) "Model must have batch parameters whenever `fit_batch` is true"
         @assert isa(model.matfac.col_transform.layers[4], BatchShift) "Model must have batch parameters whenever `fit_batch` is true"
         # Fit the batch shift parameters.
@@ -659,7 +658,7 @@ function basic_fit_reg_weight_eb!(model::PathMatFacModel;
     orig_X_reg = model.matfac.X_reg
     orig_Y_reg = model.matfac.Y_reg
 
-    # model.matfac.X_reg = L2Regularizer(K, Float32(1.0))
+    #model.matfac.X_reg = L2Regularizer(K, Float32(1/K))
     model.matfac.X_reg = X -> Float32(0.0) 
     model.matfac.Y_reg = construct_minimal_regularizer(model)
 
@@ -667,12 +666,13 @@ function basic_fit_reg_weight_eb!(model::PathMatFacModel;
     # Whiten the embedding.
     v_println("Pre-fitting model with minimal regularization..."; prefix=print_prefix,
                                                                  verbosity=verbosity)
+    fit_batch = isa(model.matfac.col_transform.layers[2], BatchScale)
     basic_fit!(model; fit_mu=true, fit_logsigma=true,
                       reweight_losses=true,
-                      fit_batch=true, 
+                      fit_batch=fit_batch, 
                       init_factors=true,
                       #fit_factors=true,
-                      #svd_rotate=true,
+                      #vd_rotate=true,
                       whiten=true,
                       verbosity=verbosity, print_prefix=n_pref, 
                       capacity=capacity,
@@ -712,8 +712,9 @@ function fit_non_ard!(model::PathMatFacModel; fit_reg_weight="EB",
     if fit_reg_weight=="EB"
         basic_fit_reg_weight_eb!(model; kwargs...)
     else
+        fit_batch = isa(model.matfac.col_transform.layers[2], BatchScale)
         basic_fit!(model; fit_mu=true, fit_logsigma=true, reweight_losses=true,
-                          fit_batch=true, 
+                          fit_batch=fit_batch, 
                           #init_factors=true, 
                           fit_factors=true, 
                           #whiten=true, 
@@ -740,14 +741,17 @@ function fit_ard!(model::PathMatFacModel; max_epochs=1000, capacity=10^8,
     K = size(model.matfac.Y, 1)
     v_println("Pre-fitting with minimal regularization..."; verbosity=verbosity,
                                                            prefix=print_prefix)
+    #model.matfac.X_reg = L2Regularizer(K, Float32(1/K)) 
     model.matfac.X_reg = X -> Float32(0.0) 
-    model.matfac.Y_reg = construct_minimal_regularizer(model) 
-    basic_fit!(model; fit_batch=true,
+    model.matfac.Y_reg = construct_minimal_regularizer(model)
+ 
+    fit_batch = isa(model.matfac.col_transform.layers[2], BatchScale)
+    basic_fit!(model; fit_batch=fit_batch,
                       fit_mu=true,
                       fit_logsigma=true,
                       init_factors=true,
                       reweight_losses=true,
-                      #svd_rotate=true,
+                      svd_rotate=true,
                       whiten=true,
                       lr_regress=lr_regress, lr_theta=lr_theta,
                       verbosity=verbosity,

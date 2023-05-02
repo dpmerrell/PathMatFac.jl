@@ -761,7 +761,7 @@ end
 # sparse (and therefore admit many possible solutions).
 ##########################################################
 
-function construct_minimal_regularizer(model)
+function construct_minimal_regularizer(model; capacity=10^8)
 
     K,M = size(model.matfac.X)
     N = size(model.matfac.Y, 2)
@@ -772,14 +772,13 @@ function construct_minimal_regularizer(model)
     n_groups = length(group_idx)
     group_weights = [zeros_like(model.matfac.Y, K) for _=1:n_groups]
     
-    # L2-penalize factors for Bernoulli and ordinal data
-    # in a way that accounts for K, layer gradients, and the 
+    # L2-penalize factors in a way that accounts for K, layer gradients, and the 
     # density/sparseness of the data 
     sigma = exp.(model.matfac.col_transform.layers[1].logsigma)
     for (gidx, gl, gw) in zip(group_idx, group_labels, group_weights)
-        if any(map(n->occursin(n, gl), ("SquaredHingeNoise", "OrdinalSqHingeNoise")))
-            gw .= K*mean(sigma[gidx].^2)#/var(view(model.data, :, gidx))
-        end
+        col_vars = MF.batched_column_nanvar(view(model.data, :, gidx); capacity=capacity)
+        map!(v->max(v, Float32(1/M)), col_vars, col_vars)
+        gw .= K*mean((sigma[gidx].^2) ./ col_vars) 
     end
     reg = GroupRegularizer(group_labels,
                            group_idx,

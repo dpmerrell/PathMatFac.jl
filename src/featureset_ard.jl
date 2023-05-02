@@ -91,7 +91,8 @@ function Adapt.adapt_storage(::Flux.FluxCPUAdaptor, r::FeatureSetARDReg)
 end
 
 function construct_featureset_ard(K, feature_ids, feature_views, feature_sets;
-                                  featureset_names=nothing, beta0=2.0, lr=0.05)
+                                  featureset_names=nothing, beta0=Float32(1e-2), 
+                                  lr=Float32(0.05))
     L = length(feature_sets)
     N = length(feature_ids)
     f_to_j = value_to_idx(feature_ids)
@@ -146,12 +147,18 @@ end
 # (https://doi.org/10.1080%2F00031305.2016.1209129) 
 # **on the posterior means of tau**
 # TODO replace this with a more direct estimate from Y.
-function update_alpha!(reg::FeatureSetARDReg, Y::AbstractMatrix)
+function update_alpha!(reg::FeatureSetARDReg, Y::AbstractMatrix; tau_smoothing=Float32(1e-3))
 
-    tau = (reg.beta0 .+ Float32(0.5)) ./ (reg.beta0 .+ (Float32(0.5).*Y.*Y))
+    tau = (tau_smoothing .+ Float32(0.5)) ./ (tau_smoothing .+ (Float32(0.5).*Y.*Y))
 
     # Compute view-wise quantities from tau
     view_mean_t = map(r->mean(tau[:,r]), reg.feature_views)
+    println("MEAN TAU")
+    println(view_mean_t)
+    view_var_t = map(r->var(tau[:,r]), reg.feature_views)
+    println("VAR TAU")
+    println(view_var_t)
+
     view_mean_lt = map(r->mean(log.(tau[:,r] .+ Float32(1e-9))), reg.feature_views)
     view_mean_tlt = map(r->mean(tau[:,r].*log.(tau[:,r] .+ Float32(1e-9))), reg.feature_views)
 
@@ -160,15 +167,24 @@ function update_alpha!(reg::FeatureSetARDReg, Y::AbstractMatrix)
     for (i,r) in enumerate(reg.feature_views)
         reg.alpha[r] .= view_alpha[i]
     end
-    
+    println("FSARD: alpha")
+    println(reg.alpha)
+ 
     beta0 = reg.beta0
+    println("FSARD: beta0")
+    println(beta0)
 
     # Replace NaNs with beta0
     nan_idx = (!isfinite).(reg.alpha)
     reg.alpha[nan_idx] .= beta0
+    
+    println("FSARD: finite alpha")
+    println(reg.alpha)
  
     # Require alpha to be at least as large as beta0
     reg.alpha = map(x->max(x,beta0), reg.alpha)
+    println("FSARD: rounded alpha")
+    println(reg.alpha)
  
     # For features that do not appear in any feature sets,
     # set alpha = beta0 for an uninformative ARD prior on
@@ -177,6 +193,8 @@ function update_alpha!(reg::FeatureSetARDReg, Y::AbstractMatrix)
     feature_appearances = vec(ones_like(Y,1,L) * reg.S)
     noprior_features = (feature_appearances .== 0)
     reg.alpha[noprior_features] .= beta0
+    println("FSARD: noprior-corrected alpha")
+    println(reg.alpha)
 end
 
 

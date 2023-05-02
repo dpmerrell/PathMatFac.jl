@@ -10,17 +10,17 @@ function simulate_params!(X::AbstractMatrix, reg::Union{GroupRegularizer,L2Regul
     K, N = size(X)
     X .= randn_like(X)
 
-    if sample_conditions != nothing
-        cond_ranges = ids_to_ranges(sample_conditions)
-        rescaling = sqrt(1 - sample_condition_var)
-        X .*= rescaling
+    #if sample_conditions != nothing
+    #    cond_ranges = ids_to_ranges(sample_conditions)
+    #    rescaling = sqrt(1 - sample_condition_var)
+    #    X .*= rescaling
 
-        sample_condition_std = sqrt(sample_condition_var)
-        sample_effects = [randn(length(K)).*sample_condition_std for r in cond_ranges]
-        for (se, r) in zip(sample_effects, cond_ranges)
-            X[:,r] .+= se 
-        end
-    end
+    #    sample_condition_std = sqrt(sample_condition_var)
+    #    sample_effects = [randn(length(K)).*sample_condition_std for r in cond_ranges]
+    #    for (se, r) in zip(sample_effects, cond_ranges)
+    #        X[:,r] .+= se 
+    #    end
+    #end
 end
 
 
@@ -55,7 +55,8 @@ function corrupt_S(S::AbstractMatrix, S_add_corruption, S_rem_corruption)
 end
 
 
-function simulate_params!(Y::AbstractMatrix, reg::FeatureSetARDReg; ard_alpha=2.0,
+function simulate_params!(Y::AbstractMatrix, reg::FeatureSetARDReg; ard_alpha=1.0,
+                                                                    beta0=0.01,
                                                                     S_add_corruption=0.1,
                                                                     S_rem_corruption=0.1,
                                                                     A_density=0.05,
@@ -66,12 +67,12 @@ function simulate_params!(Y::AbstractMatrix, reg::FeatureSetARDReg; ard_alpha=2.
     reg.A = rand(L,N)
     reg.A = (reg.A .<= A_density)
     reg.A = convert(Matrix{Float32}, reg.A)
-    reg.A .*= abs.(randn_like(reg.A).*4) 
+    reg.A .*= abs.(randn_like(reg.A) ./ beta0) 
     # Corrupt the matrix of genesets
     reg.S = corrupt_S(reg.S, S_add_corruption, S_rem_corruption)
 
     # Compute the entry-specific betas; taus; and then Y
-    beta = ard_alpha .+ (transpose(reg.A) * reg.S)
+    beta = beta0 .* (1 .+ transpose(reg.A) * reg.S)
     tau = map(b->rand(Gamma(ard_alpha, 1/b)), beta)
     Y .= randn_like(Y) ./ sqrt.(tau) 
 
