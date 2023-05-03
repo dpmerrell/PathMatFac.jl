@@ -105,7 +105,7 @@ function main(args)
 
     update_opts!(script_opts, cli_opts)
 
-    model_kwargs = Dict{Symbol,Any}(:K=>20,
+    model_kwargs = Dict{Symbol,Any}(:K => 20,
                                     :sample_ids => nothing, 
                                     :sample_conditions => nothing,
                                     :feature_ids => nothing, 

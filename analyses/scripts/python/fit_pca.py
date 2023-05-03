@@ -6,16 +6,19 @@ import argparse
 import h5py
 import sys
 
-def load_data(data_hdf, modality="mrnaseq"):
+
+def load_data(data_hdf, modalities):
 
     X = None
+    modality_set = set(modalities)
 
     with h5py.File(data_hdf, "r") as f:
 
         data = f["omic_data"]["data"][:,:].transpose()
         assays = f["omic_data"]["feature_assays"][:].astype(str)
 
-        relevant_cols = (assays == modality)
+        #relevant_cols = (assays == modality)
+        relevant_cols = np.vectorize(lambda x: x in modality_set)(assays)
         X = data[:,relevant_cols]
 
         sample_ids = f["omic_data"]["instances"][:].astype(str)
@@ -43,15 +46,28 @@ def remove_missing(X, out_dim):
     return X_nomissing, row_key, col_key
 
 
-
-def variance_filter(X, filter_frac=0.5):
-
+def assay_variance_filter(X, filter_frac):
+    
     col_vars = np.nanvar(X, axis=0)
     qtile = np.nanquantile(col_vars, 1 - filter_frac)
     keep_idx = (col_vars >= qtile)
+    return keep_idx
 
-    return X[:,keep_idx], keep_idx
-   
+
+def variance_filter(X, feature_assays, filter_frac):
+
+    unq_a = np.unique(feature_assays)
+    all_kept_idx = []
+
+    for ua in unq_a:
+        rel_idx = np.where(feature_assays == ua)
+        rel_X = X[:,rel_idx]
+        kept_idx = assay_variance_filter(rel_X, filter_frac)
+
+    conc_kept_idx = np.concatenate(kept_idx)
+
+    return conc_kept_idx
+  
 
 def standardize_columns(X):
 
@@ -63,7 +79,7 @@ def standardize_columns(X):
     return X, col_means, col_std 
 
 
-def find_knee(rsquare):
+def find_elbow(rsquare):
 
     # Find maximum of discrete 2nd derivative
     d1 = rsquare[1:] - rsquare[:-1]
@@ -74,13 +90,13 @@ def find_knee(rsquare):
     return max_idx
 
 
-def transform_data(X, n_components=None):
+def transform_data(X, min_components=3, max_components=50):
 
     result = PCA(X, standardize=False,
                     method='nipals',
                     demean=False,
                     normalize=False,
-                    ncomp=n_components, 
+                    ncomp=max_components, 
                     missing="fill-em",
                     max_em_iter=500)
 
@@ -88,11 +104,57 @@ def transform_data(X, n_components=None):
     rsquare = result.rsquare
     pcs = result.loadings
 
-    if n_components is None:
-        knee_idx = find_knee(rsquare)
-        X_trans = X_trans[:,:knee_idx]
+    elbow_idx = find_elbow(rsquare)
+    elbow_idx = max(min_components, elbow_idx)
+
+    X_trans = X_trans[:,:elbow_idx]
 
     return X_trans, pcs
+
+
+# Construct a block-diagonal matrix containing the
+# concatenated principal vectors
+def concatenate_pcs(assay_Y):
+
+    K_ls = [y.shape[0] for y in assay_Y]
+    N_ls = [y.shape[1] for y in assay_Y]
+
+    acc_K = np.cumsum(K_ls)
+    acc_N = np.cumsum(N_ls)
+    conc_Y = np.zeros((acc_K[-1], acc_N[-1]))
+
+    for i, Y in enumerate(assay_Y):
+        prev_k = 0
+        prev_n = 0
+        if i > 0:
+            prev_k = acc_K[i-1]
+            prev_n = acc_N[i-1]
+
+        conc_Y[prev_k:acc_K[i], prev_n:acc_N[i]] = Y
+
+    return conc_Y
+
+
+def transform_all_data(X, feature_assays):
+
+    unq_assays = np.unique(feature_assays)
+    assay_X = []
+    assay_Y = []
+    assay_labels = []
+
+    for unq_a in unq_assays:
+        relevant_idx = (feature_assays == unq_a)
+        relevant_X = X[:, relevant_idx]
+        X_trans, pcs = transform_data(relevant_X)
+        assay_X.append(X_trans)
+        assay_Y.append(pcs)
+        assay_labels.append([unq_a]*transformed.shape[1])
+
+    conc_X = np.concatenate(assay_X, axis=1)
+    conc_Y = concatenate_pcs(assay_Y)
+    result_assays = np.concatenate(assay_labels)
+
+    return conc_results, result_assays
 
 
 if __name__=="__main__":
@@ -101,7 +163,8 @@ if __name__=="__main__":
     parser.add_argument("data_hdf", help="HDF5 containing tabular data")
     parser.add_argument("fitted_hdf")
     parser.add_argument("transformed_train_hdf")
-    parser.add_argument("--output_dim", help="Use the top-`output_dim` principal components.", type=int)
+    parser.add_argument("--omic_types", help="Use the specified omic assays.", default="mutation:methylation:mrnaseq:cna")
+    #parser.add_argument("--output_dim", help="Use the top-`output_dim` principal components.", type=int)
     parser.add_argument("--variance_filter", help="Discard the features with least variance, *keeping* this fraction of the features.", type=float, default=0.5)
     args = parser.parse_args()
 
@@ -110,9 +173,10 @@ if __name__=="__main__":
     trans_hdf = args.transformed_train_hdf
     output_dim = args.output_dim
     v_frac = args.variance_filter
+    omic_types = args.omic_types.split(":")
 
     # Load data
-    Z, sample_ids, sample_groups, feature_assays, feature_genes, target = load_data(data_hdf)
+    Z, sample_ids, sample_groups, feature_assays, feature_genes, target = load_data(data_hdf, omic_types)
 
     # Remove empty rows and columns
     Z_nomissing, row_key, col_key = remove_missing(Z, output_dim)
@@ -122,29 +186,32 @@ if __name__=="__main__":
     feature_genes = feature_genes[col_key]
 
     # Remove the columns with least variance
-    Z_filtered, col_key = variance_filter(Z_nomissing, v_frac)
+    col_key = variance_filter(Z_nomissing, feature_assays, v_frac)
+    Z_filtered = Z_nomissing[:,col_key]
     feature_assays = feature_assays[col_key]
     feature_genes = feature_genes[col_key]
     
     # Standardize the remaining columns
     Z_std, mu, sigma = standardize_columns(Z_filtered)
     
-    # Perform PCA
-    X, pcs = transform_data(Z_std, n_components=output_dim)
+    # Perform concatenated PCA
+    X, pcs, factor_assays = transform_all_data(Z_std) #, n_components=output_dim)
 
     # Output the transformed data and the 
     # fitted principal components and standardization parameters
-    with h5py.File(trans_hdf, "w") as f:
+    with h5py.File(trans_hdf, "w", driver="core") as f:
         su.write_hdf(f, "X", X.transpose())
         su.write_hdf(f, "instances", sample_ids, is_string=True) 
         su.write_hdf(f, "instance_groups", sample_groups, is_string=True)
         su.write_hdf(f, "target", target, is_string=True) 
+        su.write_hdf(f, "factor_assays", factor_assays, is_string=True) 
     
-    with h5py.File(fitted_hdf, "w") as f:
+    with h5py.File(fitted_hdf, "w", driver="core") as f:
         su.write_hdf(f, "Y", pcs)
         su.write_hdf(f, "mu", mu)
         su.write_hdf(f, "sigma", sigma)
         su.write_hdf(f, "feature_assays", feature_assays, is_string=True) 
         su.write_hdf(f, "feature_genes", feature_genes, is_string=True) 
+        su.write_hdf(f, "factor_assays", factor_assays, is_string=True) 
         
 

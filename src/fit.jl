@@ -324,7 +324,7 @@ function assign_values!(tup1, tup2)
 end
 
 function theta_delta_em(model::MF.MatFacModel, delta2::Tuple, sigma2::AbstractVector, data::AbstractMatrix; 
-                        capacity=10^8, batch_em_max_iter=100, batch_em_rtol=1e-6, verbosity=1, print_prefix="", history=nothing)
+                        capacity=10^8, batch_em_max_iter=100, batch_em_rtol=1e-8, verbosity=1, print_prefix="", history=nothing)
 
     theta = model.col_transform.layers[4].theta
     theta_lsq = deepcopy(theta.values)
@@ -373,7 +373,7 @@ function init_batch_effects!(model::PathMatFacModel; capacity=10^8,
                                                      lr_regress=0.25,
                                                      lr_mu=0.1,
                                                      batch_em=true,
-                                                     batch_em_rtol=1e-6,
+                                                     batch_em_rtol=1e-8,
                                                      batch_em_max_iter=100,
                                                      verbosity=1, print_prefix="",
                                                      history=nothing, kwargs...)
@@ -484,24 +484,29 @@ end
 # "Whiten" the embedding X, such that std(X_k) = 1 for each k;
 # Variance is reallocated to Y; and then reallocated to logsigma.
 function whiten!(model::PathMatFacModel)
-    X_std = std(model.matfac.X, dims=2)
-    model.matfac.X ./= X_std
-    model.matfac.Y .*= X_std
+    #X_std = std(model.matfac.X, dims=2)
+    X_rms = rms(model.matfac.X, dims=2)
+    #model.matfac.X ./= X_std
+    #model.matfac.Y .*= X_std
+    model.matfac.X ./= X_rms
+    model.matfac.Y .*= X_rms
 
     # For each view, reallocate variance in Y to sigma.
     view_crs = ids_to_ranges(cpu(model.feature_views))
     for cr in view_crs
         # Compute row-wise standard deviations in Y:
-        Y_view_std = std(view(model.matfac.Y, :, cr), dims=2)
+        #Y_view_std = std(view(model.matfac.Y, :, cr), dims=2)
+        Y_view_rms = rms(view(model.matfac.Y, :, cr), dims=2)
         
         # Select the largest one and use it to 
         # rescale both Y and sigma.
-        Y_std_max = maximum(Y_view_std)
-        model.matfac.Y[:,cr] ./= Y_std_max
+        #Y_std_max = maximum(Y_view_std)
+        Y_rms_max = maximum(Y_view_rms)
+        model.matfac.Y[:,cr] ./= Y_rms_max #Y_std_max
 
-        model.matfac.col_transform.layers[1].logsigma[cr] .+= log(Y_std_max)
+        #model.matfac.col_transform.layers[1].logsigma[cr] .+= log(Y_std_max)
+        model.matfac.col_transform.layers[1].logsigma[cr] .+= log(Y_rms_max)
     end
-
 end
 
 
@@ -658,13 +663,13 @@ function basic_fit_reg_weight_eb!(model::PathMatFacModel;
     orig_X_reg = model.matfac.X_reg
     orig_Y_reg = model.matfac.Y_reg
 
-    #model.matfac.X_reg = L2Regularizer(K, Float32(1/K))
+    #model.matfac.X_reg = L2Regularizer(K, Float32(0.5))
     model.matfac.X_reg = X -> Float32(0.0) 
     model.matfac.Y_reg = construct_minimal_regularizer(model)
 
     # Fit the model without regularization (except the Bernoulli factors).
     # Whiten the embedding.
-    v_println("Pre-fitting model with minimal regularization..."; prefix=print_prefix,
+    v_println("Pre-fitting model with simple regularization..."; prefix=print_prefix,
                                                                  verbosity=verbosity)
     fit_batch = isa(model.matfac.col_transform.layers[2], BatchScale)
     basic_fit!(model; fit_mu=true, fit_logsigma=true,
@@ -672,7 +677,7 @@ function basic_fit_reg_weight_eb!(model::PathMatFacModel;
                       fit_batch=fit_batch, 
                       init_factors=true,
                       #fit_factors=true,
-                      #vd_rotate=true,
+                      svd_rotate=true,
                       whiten=true,
                       verbosity=verbosity, print_prefix=n_pref, 
                       capacity=capacity,
@@ -739,9 +744,9 @@ function fit_ard!(model::PathMatFacModel; max_epochs=1000, capacity=10^8,
     orig_ard = model.matfac.Y_reg
 
     K = size(model.matfac.Y, 1)
-    v_println("Pre-fitting with minimal regularization..."; verbosity=verbosity,
+    v_println("Pre-fitting with simple regularization..."; verbosity=verbosity,
                                                            prefix=print_prefix)
-    #model.matfac.X_reg = L2Regularizer(K, Float32(1/K)) 
+    #model.matfac.X_reg = L2Regularizer(K, Float32(0.5)) 
     model.matfac.X_reg = X -> Float32(0.0) 
     model.matfac.Y_reg = construct_minimal_regularizer(model)
  

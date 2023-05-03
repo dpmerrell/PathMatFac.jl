@@ -15,7 +15,7 @@ option_list <- list(
     make_option("--minsize", default=10, help="Minimum gene set size. Default 10."),
     make_option("--maxsize", default=500, help="Maximum gene set size. Default 100."),
     make_option("--threads", default=1, help="number of CPU threads to use. Default 1."),
-    make_option("--output_dim", default=10, help="Dimension of the output. We use PCA to transform the GSVA output to this dimension")
+    #make_option("--output_dim", default=10, help="Dimension of the output. We use PCA to transform the GSVA output to this dimension")
     )
 
 parser <- OptionParser(usage="fit_gsva.R DATA_HDF PATHWAY_JSON TRANSFORMED_HDF FITTED_MODEL_RDS [OPTS]",
@@ -100,18 +100,17 @@ used_pwys <- colnames(gsva_results)
 fitted_model[["used_genes"]] <- colnames(omic_data)
 fitted_model[["used_pathways"]] <- used_pwys
 
-
-###########################################
-# RUN PCA
-
-pca_result <- nipals(gsva_results, ncomp=output_dim)
-
-X <- pca_result$scores
-
-fitted_model[["mu"]] <- pca_result$center
-fitted_model[["sigma"]] <- pca_result$scale
-fitted_model[["Y"]] <- t(pca_result$loadings)
-fitted_model[["R2"]] <- pca_result$R2
+############################################
+## RUN PCA
+#
+#pca_result <- nipals(gsva_results, ncomp=output_dim)
+#
+#X <- pca_result$scores
+#
+#fitted_model[["mu"]] <- pca_result$center
+#fitted_model[["sigma"]] <- pca_result$scale
+#fitted_model[["Y"]] <- t(pca_result$loadings)
+#fitted_model[["R2"]] <- pca_result$R2
 
 ###########################################
 # SAVE FITTED MODEL AND TRANSFORMED DATA
@@ -121,9 +120,10 @@ saveRDS(fitted_model, fitted_model_rds)
 # Need to get the target data
 target <- h5read(data_hdf, "target")
 
-h5write(X, transformed_hdf, "X")
+h5write(gsva_results, transformed_hdf, "X")
 h5write(rownames(gsva_results), transformed_hdf, "instances")
 h5write(instance_groups, transformed_hdf, "instance_groups")
+h5write(pwy_names, transformed_hdf, "feature_names")
 h5write(target, transformed_hdf, "target") 
 
 

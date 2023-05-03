@@ -31,6 +31,21 @@ PREP_TCGA_DIR = path.join(PREP_DATA_DIR, "tcga")
 PREP_PARADIGM_DIR = path.join(PREP_DATA_DIR, "paradigm")
 PREP_PWY_DIR = path.join(PREP_DATA_DIR, "pathways")
 
+# Unpack parameters for experiments
+def collect_params(param_dict):
+    factors = []
+    for k in sorted(list(param_dict.keys())):
+        v = param_dict[k]
+        if isinstance(v, list):
+            factors.append(["{}={}".format(k, vi) for vi in v])
+        elif isinstance(v, dict):
+            names = sorted(list(v.keys()))
+            value_lists = [v[i] for i in names]
+            unrolled = [["{}={}".format(name,value) for value in v_list] for (name, v_list) in zip(names, value_lists)]
+            factors.append(["__".join(t) for t in zip(*unrolled)])
+    combs = product(*factors)
+    return ["__".join(c) for c in combs]
+
 
 ####################################
 # MatFac simulation study
@@ -49,20 +64,6 @@ SIM_VIS_TRUE = path.join(SIM_VIS_DIR, "true")
 SIM_ALL_PARAMS = config["matfac_simulation_study"]
 SIM_ALL_EXPERIMENTS = list(SIM_ALL_PARAMS.keys())
 
-def collect_params(param_dict):
-    factors = []
-    for k in sorted(list(param_dict.keys())):
-        v = param_dict[k]
-        if isinstance(v, list):
-            factors.append(["{}={}".format(k, vi) for vi in v])
-        elif isinstance(v, dict):
-            names = sorted(list(v.keys()))
-            value_lists = [v[i] for i in names]
-            unrolled = [["{}={}".format(name,value) for value in v_list] for (name, v_list) in zip(names, value_lists)]
-            factors.append(["__".join(t) for t in zip(*unrolled)])
-    combs = product(*factors)
-    return ["__".join(c) for c in combs]
-
 SIM_REPS = [["rep={}".format(n) for n in range(SIM_ALL_PARAMS[k]["n_reps"])] for k in SIM_ALL_EXPERIMENTS]
 SIM_PWY_PARAMS = [SIM_ALL_PARAMS[k]["pathways"] for k in SIM_ALL_EXPERIMENTS]
 SIM_DATA_PARAMS = [collect_params(SIM_ALL_PARAMS[k]["data_params"]) for k in SIM_ALL_EXPERIMENTS]
@@ -72,13 +73,35 @@ SIM_FIT_PARAMS = [collect_params(SIM_ALL_PARAMS[k]["fit_params"]) for k in SIM_A
 SIM_ALL_SIM_COMBINATIONS = [path.join(*t) for tup in zip(SIM_DATA_PARAMS, SIM_PWY_PARAMS, SIM_PARAMS, SIM_REPS) for t in product(*tup)]
 
 SIM_EXP_FIT_COMBINATIONS = [[path.join(*t) for t in product(*tup) ] for tup in zip(SIM_DATA_PARAMS, SIM_PWY_PARAMS, SIM_PARAMS, SIM_FIT_PARAMS, SIM_REPS)]
-SIM_ALL_FIT_COMBINATIONS = sum(SIM_EXP_FIT_COMBINATIONS, []) #[path.join(*t) for tup in zip(SIM_DATA_PARAMS, SIM_PWY_PARAMS, SIM_PARAMS, SIM_FIT_PARAMS, SIM_REPS) for t in product(*tup)]
+SIM_ALL_FIT_COMBINATIONS = sum(SIM_EXP_FIT_COMBINATIONS, []) 
 SIM_EXP_FIT_COMBINATIONS = dict(zip(SIM_ALL_EXPERIMENTS, SIM_EXP_FIT_COMBINATIONS)) 
+
+
+########################################
+# TCGA runs
+EXP_DIR = path.join(OUT_DIR, "tcga_runs")
+EXP_FIT_PARAM_DIR = path.join(EXP_DIR, "fitted_params")
+EXP_FIT_TRANS_DIR = path.join(EXP_DIR, "transformed_data")
+EXP_FIT_HIST_DIR = path.join(EXP_DIR, "training_histories")
+EXP_VIS_DIR = path.join(EXP_DIR, "visuals")
+
+EXP_ALL_PARAMS = config["matfac_tcga_runs"]
+EXP_ALL_EXPERIMENTS = list(EXP_ALL_PARAMS.keys())
+
+EXP_REPS = [["rep={}".format(n) for n in range(EXP_ALL_PARAMS[k]["n_reps"])] for k in EXP_ALL_EXPERIMENTS]
+EXP_PWY_PARAMS = [EXP_ALL_PARAMS[k]["pathways"] for k in EXP_ALL_EXPERIMENTS]
+EXP_DATA_PARAMS = [collect_params(EXP_ALL_PARAMS[k]["data_params"]) for k in EXP_ALL_EXPERIMENTS]
+EXP_FIT_PARAMS = [collect_params(EXP_ALL_PARAMS[k]["fit_params"]) for k in EXP_ALL_EXPERIMENTS]
+EXP_ALL_EXP_COMBINATIONS = [path.join(*t) for tup in zip(EXP_DATA_PARAMS, EXP_PWY_PARAMS, EXP_REPS) for t in product(*tup)]
+
+EXP_EXP_FIT_COMBINATIONS = [[path.join(*t) for t in product(*tup) ] for tup in zip(EXP_DATA_PARAMS, EXP_PWY_PARAMS, EXP_FIT_PARAMS, EXP_REPS)]
+EXP_ALL_FIT_COMBINATIONS = sum(EXP_EXP_FIT_COMBINATIONS, []) 
+EXP_EXP_FIT_COMBINATIONS = dict(zip(EXP_ALL_EXPERIMENTS, EXP_EXP_FIT_COMBINATIONS)) 
 
 
 ####################################
 # Supervised learning tasks
-TCGA_FOLDS = config["supervised_folds"]
+SUP_FOLDS = config["supervised_folds"]
 
 
 #################################################################
@@ -87,51 +110,182 @@ TCGA_FOLDS = config["supervised_folds"]
 
 rule all:
     input:
-        # Simulation scoring
-        sim_score_tsvs=expand(path.join(SIM_SCORE_TSV_DIR, "{experiment}.tsv"),
-                              experiment=SIM_ALL_EXPERIMENTS),
-        sim_score_jsons=expand(path.join(SIM_SCORE_JSON_DIR, "{sim_fit_comb}.json"),
-                               sim_fit_comb=SIM_ALL_FIT_COMBINATIONS),
+        ###################################
+        ## Simulations
+        ###################################
+        ## Simulation scoring
+        #sim_score_tsvs=expand(path.join(SIM_SCORE_TSV_DIR, "{experiment}.tsv"),
+        #                      experiment=SIM_ALL_EXPERIMENTS),
+        #sim_score_jsons=expand(path.join(SIM_SCORE_JSON_DIR, "{sim_fit_comb}.json"),
+        #                       sim_fit_comb=SIM_ALL_FIT_COMBINATIONS),
+        ## Simulation static visuals
+        #sim_batch_plots=expand(path.join(SIM_VIS_FITTED, "{sim_fit_comb}/batch_scatter.png"),
+        #                       sim_fit_comb=SIM_ALL_FIT_COMBINATIONS),
+        #sim_fit_x_plots=expand(path.join(SIM_VIS_FITTED, "{sim_fit_comb}/X.png"),
+        #                       sim_fit_comb=SIM_ALL_FIT_COMBINATIONS),
+        #sim_fit_y_plots=expand(path.join(SIM_VIS_FITTED, "{sim_fit_comb}/Y.png"),
+        #                       sim_fit_comb=SIM_ALL_FIT_COMBINATIONS),
+        #sim_fit_col_param_plots=expand(path.join(SIM_VIS_FITTED, "{sim_fit_comb}/col_params.png"),
+        #                               sim_fit_comb=SIM_ALL_FIT_COMBINATIONS),
+        #sim_x_plots=expand(path.join(SIM_VIS_TRUE, "{sim_comb}/X.png"),
+        #                   sim_comb=SIM_ALL_SIM_COMBINATIONS),
+        #sim_y_plots=expand(path.join(SIM_VIS_TRUE, "{sim_comb}/Y.png"),
+        #                   sim_comb=SIM_ALL_SIM_COMBINATIONS),
+        #sim_dataset_plots=expand(path.join(SIM_VIS_TRUE, "{sim_comb}/dataset.png"),
+        #                         sim_comb=SIM_ALL_SIM_COMBINATIONS),
+        ## Simulation model fits
+        #sim_fit_hdfs=expand(path.join(SIM_FIT_PARAM_DIR, "{sim_fit_comb}.hdf"),
+        #                      sim_fit_comb=SIM_ALL_FIT_COMBINATIONS),
+        #sim_fit_params=expand(path.join(SIM_FIT_PARAM_DIR, "{sim_fit_comb}.bson"),
+        #                      sim_fit_comb=SIM_ALL_FIT_COMBINATIONS),
+        #
+        ## Simulation interactive visuals
+        #sim_fit_interactive_plots=expand(path.join(SIM_VIS_FITTED, "{sim_fit_comb}/model.html"),
+        #                                 sim_fit_comb=SIM_ALL_FIT_COMBINATIONS),
+        #sim_true_interactive_plots=expand(path.join(SIM_VIS_TRUE, "{sim_comb}/model.html"),
+        #                                 sim_comb=SIM_ALL_SIM_COMBINATIONS),
+        #
+        ## Simulated data & params
+        #sim_hdfs=expand(path.join(SIM_PARAM_DIR, "{sim_comb}.hdf"),
+        #                sim_comb=SIM_ALL_SIM_COMBINATIONS),
+        #sim_params=expand(path.join(SIM_PARAM_DIR, "{sim_comb}.bson"),
+        #                  sim_comb=SIM_ALL_SIM_COMBINATIONS),
+        #
+        #####################################
+        # TCGA runs
+        #####################################
+        # Visuals
+        exp_fit_interactive_plots=expand(path.join(EXP_VIS_DIR, "{exp_fit_comb}/model.html"),
+                                         exp_fit_comb=EXP_ALL_FIT_COMBINATIONS),
+        exp_fit_x_plots=expand(path.join(EXP_VIS_DIR, "{exp_fit_comb}/X.png"),
+                               exp_fit_comb=EXP_ALL_FIT_COMBINATIONS),
+        exp_fit_y_plots=expand(path.join(EXP_VIS_DIR, "{exp_fit_comb}/Y.png"),
+                               exp_fit_comb=EXP_ALL_FIT_COMBINATIONS),
+        exp_fit_batch_param_plots=expand(path.join(EXP_VIS_DIR, "{exp_fit_comb}/batch_params.png"),
+                                         exp_fit_comb=EXP_ALL_FIT_COMBINATIONS),
+        exp_fit_col_param_plots=expand(path.join(EXP_VIS_DIR, "{exp_fit_comb}/col_params.png"),
+                                       exp_fit_comb=EXP_ALL_FIT_COMBINATIONS),
+        #####################################
+        # Supervised tasks
+        #####################################
 
-        # Static visuals
-        sim_batch_plots=expand(path.join(SIM_VIS_FITTED, "{sim_fit_comb}/batch_scatter.png"),
-                               sim_fit_comb=SIM_ALL_FIT_COMBINATIONS),
-        sim_fit_x_plots=expand(path.join(SIM_VIS_FITTED, "{sim_fit_comb}/X.png"),
-                               sim_fit_comb=SIM_ALL_FIT_COMBINATIONS),
-        sim_fit_y_plots=expand(path.join(SIM_VIS_FITTED, "{sim_fit_comb}/Y.png"),
-                               sim_fit_comb=SIM_ALL_FIT_COMBINATIONS),
-        sim_fit_col_param_plots=expand(path.join(SIM_VIS_FITTED, "{sim_fit_comb}/col_params.png"),
-                                       sim_fit_comb=SIM_ALL_FIT_COMBINATIONS),
-        sim_x_plots=expand(path.join(SIM_VIS_TRUE, "{sim_comb}/X.png"),
-                           sim_comb=SIM_ALL_SIM_COMBINATIONS),
-        sim_y_plots=expand(path.join(SIM_VIS_TRUE, "{sim_comb}/Y.png"),
-                           sim_comb=SIM_ALL_SIM_COMBINATIONS),
-        sim_dataset_plots=expand(path.join(SIM_VIS_TRUE, "{sim_comb}/dataset.png"),
-                                 sim_comb=SIM_ALL_SIM_COMBINATIONS),
-        # Model fits
-        sim_fit_hdfs=expand(path.join(SIM_FIT_PARAM_DIR, "{sim_fit_comb}.hdf"),
-                              sim_fit_comb=SIM_ALL_FIT_COMBINATIONS),
-        sim_fit_params=expand(path.join(SIM_FIT_PARAM_DIR, "{sim_fit_comb}.bson"),
-                              sim_fit_comb=SIM_ALL_FIT_COMBINATIONS),
-        
-        # Interactive visuals
-        sim_fit_interactive_plots=expand(path.join(SIM_VIS_FITTED, "{sim_fit_comb}/model.html"),
-                                         sim_fit_comb=SIM_ALL_FIT_COMBINATIONS),
-        sim_true_interactive_plots=expand(path.join(SIM_VIS_TRUE, "{sim_comb}/model.html"),
-                                         sim_comb=SIM_ALL_SIM_COMBINATIONS),
 
-        # Simulated data, params
-        sim_hdfs=expand(path.join(SIM_PARAM_DIR, "{sim_comb}.hdf"),
-                        sim_comb=SIM_ALL_SIM_COMBINATIONS),
-        sim_params=expand(path.join(SIM_PARAM_DIR, "{sim_comb}.bson"),
-                          sim_comb=SIM_ALL_SIM_COMBINATIONS),
+#####################################################################
+# Supervised tasks
+#####################################################################
+
+rule sup_prep_splits:
+    input:
+        src="scripts/python/prep_tcga_splits.py",
+        data_hdf=path.join(PREP_TCGA_DIR, "{data}.hdf"),
+        clinical_hdf=path.join(RAW_TCGA_DIR, "tcga_clinical.hdf"),
+        paradigm_hdf=path.join(PREP_PARADIGM_DIR, "paradigm.hdf")
+    output:
+        train_sets=[path.join(PREP_TCGA_DIR, "{data,[_.=:0-9a-zA-Z]+}__"+"fold={}".format(i)+"__target={target,[_:a-z]*}__train.hdf") for i in range(SUP_FOLDS)],
+        test_sets=[path.join(PREP_TCGA_DIR, "{data,[_.=:0-9a-zA-Z]+}__"+"fold={}".format(i)+"__target={target,[_:a-z]*}__test.hdf") for i in range(SUP_FOLDS)]
+    params:
+        prefix=lambda wc: path.join(PREP_TCGA_DIR, wc["data"]),
+    shell:
+        "python {input.src} {input.data_hdf} {input.clinical_hdf} {input.paradigm_hdf} {params.prefix} --n_folds {SUP_FOLDS} --target {wildcards.target} --paradigm_filter"
+
 
 
 #################################################################
-# Visualization
+# TCGA RUNS: visuals
 #################################################################
 
-rule vis_sim_fit_interactive:
+rule exp_vis_fit_interactive:
+    input:
+        src=path.join(JL_SCRIPT_DIR, "vis_model.jl"),
+        fitted_bson=path.join(EXP_FIT_PARAM_DIR, "{path}.bson"),
+    output:
+        param_html=path.join(EXP_VIS_DIR, "{path}/model.html"),
+    shell:
+        "julia --project=. {input.src} {input.fitted_bson} {output.param_html}"
+
+rule exp_vis_fit_X:
+    input:
+        src=path.join(PY_SCRIPT_DIR, "vis_model_params.py"),
+        param_hdf=path.join(EXP_FIT_PARAM_DIR, "{path}.hdf")
+    output:
+        param_png=path.join(EXP_VIS_DIR, "{path}/X.png")
+    shell:
+        "python {input.src} {input.param_hdf} {output.param_png} --param X"
+
+rule exp_vis_fit_Y:
+    input:
+        src=path.join(PY_SCRIPT_DIR, "vis_model_params.py"),
+        param_hdf=path.join(EXP_FIT_PARAM_DIR, "{path}.hdf")
+    output:
+        param_png=path.join(EXP_VIS_DIR, "{path}/Y.png")
+    shell:
+        "python {input.src} {input.param_hdf} {output.param_png} --param Y"
+
+rule exp_vis_fit_batch_param:
+    input:
+        src=path.join(PY_SCRIPT_DIR, "vis_model_params.py"),
+        param_hdf=path.join(EXP_FIT_PARAM_DIR, "{path}.hdf")
+    output:
+        param_png=path.join(EXP_VIS_DIR, "{path}/batch_params.png")
+    shell:
+        "python {input.src} {input.param_hdf} {output.param_png} --param batch_params"
+
+rule exp_vis_fit_col_param:
+    input:
+        src=path.join(PY_SCRIPT_DIR, "vis_model_params.py"),
+        param_hdf=path.join(EXP_FIT_PARAM_DIR, "{path}.hdf")
+    output:
+        param_png=path.join(EXP_VIS_DIR, "{path}/col_params.png")
+    shell:
+        "python {input.src} {input.param_hdf} {output.param_png} --param col_params"
+
+rule exp_vis_dataset:
+    input:
+        src=path.join(PY_SCRIPT_DIR, "vis_dataset.py"),
+        param_hdf=path.join(PREP_TCGA_DIR, "{tcga_params}.hdf")
+    output:
+        param_png=path.join(EXP_VIS_DIR, "{tcga_params}/dataset.png")
+    shell:
+        "python {input.src} {input.param_hdf} {output.param_png} --title \"Simulated dataset\""
+
+
+#################################################################
+# TCGA RUNS
+#################################################################
+
+rule exp_param_bson_to_hdf:
+    input:
+        src=path.join(JL_SCRIPT_DIR, "bson_to_hdf.jl"),
+        fitted_bson=path.join(EXP_FIT_PARAM_DIR, "{path}.bson"),
+    output:
+        out_hdf=path.join(EXP_FIT_PARAM_DIR, "{path}.hdf"),
+    shell:
+        "julia --project=. {input.src} {input.fitted_bson} {output.out_hdf}"
+
+
+rule exp_fit_matfac:
+    input:
+        src=path.join(JL_SCRIPT_DIR, "fit_matfac.jl"),
+        data_hdf=path.join(PREP_TCGA_DIR, "{tcga_params}.hdf"),
+        pwy_json=path.join(PREP_PWY_DIR, "{pwy_params}.json")
+    output:
+        fitted_bson=path.join(EXP_FIT_PARAM_DIR, "{tcga_params,[^/]+}/{pwy_params,[^/]+}/{fit_params,[^/]+}/rep={rep,[0-9]+}.bson"),
+        transformed_hdf=path.join(EXP_FIT_TRANS_DIR, "{tcga_params}/{pwy_params}/{fit_params}/rep={rep}.hdf"),
+        history_json=path.join(EXP_FIT_HIST_DIR, "{tcga_params}/{pwy_params}/{fit_params}/rep={rep}.json")
+    params:
+        parsed_opts=lambda wc: wc["fit_params"].split("__")
+    resources:
+        mem_mb=8000,
+    threads: 4 #lambda wc: len(get_cancer_types(wc)) 
+    shell:
+        "julia --project=. {input.src} {input.data_hdf} {input.pwy_json} {output.fitted_bson} {output.transformed_hdf} {params.parsed_opts} history_json={output.history_json}"
+
+
+#################################################################
+# Sim visualizations
+#################################################################
+
+rule sim_vis_fit_interactive:
     input:
         src=path.join(JL_SCRIPT_DIR, "vis_model.jl"),
         fitted_bson=path.join(SIM_FIT_PARAM_DIR, "{path}.bson"),
@@ -140,7 +294,7 @@ rule vis_sim_fit_interactive:
     shell:
         "julia --project=. {input.src} {input.fitted_bson} {output.param_html}"
 
-rule vis_sim_interactive:
+rule sim_vis_true_interactive:
     input:
         src=path.join(JL_SCRIPT_DIR, "vis_model.jl"),
         fitted_bson=path.join(SIM_PARAM_DIR, "{path}.bson"),
@@ -150,7 +304,7 @@ rule vis_sim_interactive:
         "julia --project=. {input.src} {input.fitted_bson} {output.param_html}"
 
 
-rule vis_compare_batch:
+rule sim_vis_compare_batch:
     input:
         src=path.join(PY_SCRIPT_DIR, "vis_param_comparison.py"),
         true_hdf=path.join(SIM_PARAM_DIR, "{sim_param}/rep={rep}.hdf"),
@@ -160,7 +314,7 @@ rule vis_compare_batch:
     shell:
         "python {input.src} {input.true_hdf} {input.fitted_hdf} {output.batch_png}"
 
-rule vis_matfac_fit_X:
+rule sim_vis_fit_X:
     input:
         src=path.join(PY_SCRIPT_DIR, "vis_model_params.py"),
         param_hdf=path.join(SIM_FIT_PARAM_DIR, "{path}.hdf")
@@ -169,7 +323,7 @@ rule vis_matfac_fit_X:
     shell:
         "python {input.src} {input.param_hdf} {output.param_png} --param X"
 
-rule vis_matfac_fit_Y:
+rule sim_vis_fit_Y:
     input:
         src=path.join(PY_SCRIPT_DIR, "vis_model_params.py"),
         param_hdf=path.join(SIM_FIT_PARAM_DIR, "{path}.hdf")
@@ -178,7 +332,7 @@ rule vis_matfac_fit_Y:
     shell:
         "python {input.src} {input.param_hdf} {output.param_png} --param Y"
 
-rule vis_matfac_fit_col_param:
+rule sim_vis_fit_col_param:
     input:
         src=path.join(PY_SCRIPT_DIR, "vis_model_params.py"),
         param_hdf=path.join(SIM_FIT_PARAM_DIR, "{path}.hdf")
@@ -187,7 +341,7 @@ rule vis_matfac_fit_col_param:
     shell:
         "python {input.src} {input.param_hdf} {output.param_png} --param col_params"
 
-rule vis_matfac_sim_X:
+rule sim_vis_true_X:
     input:
         src=path.join(PY_SCRIPT_DIR, "vis_model_params.py"),
         param_hdf=path.join(SIM_PARAM_DIR, "{path}.hdf")
@@ -196,7 +350,7 @@ rule vis_matfac_sim_X:
     shell:
         "python {input.src} {input.param_hdf} {output.param_png} --param X"
 
-rule vis_matfac_sim_Y:
+rule sim_vis_true_Y:
     input:
         src=path.join(PY_SCRIPT_DIR, "vis_model_params.py"),
         param_hdf=path.join(SIM_PARAM_DIR, "{path}.hdf")
@@ -205,7 +359,7 @@ rule vis_matfac_sim_Y:
     shell:
         "python {input.src} {input.param_hdf} {output.param_png} --param Y"
 
-rule vis_matfac_sim_dataset:
+rule sim_vis_dataset:
     input:
         src=path.join(PY_SCRIPT_DIR, "vis_dataset.py"),
         param_hdf=path.join(SIM_DATA_DIR, "{path}.hdf")
@@ -215,15 +369,16 @@ rule vis_matfac_sim_dataset:
         "python {input.src} {input.param_hdf} {output.param_png} --title \"Simulated dataset\""
 
 
+
 #################################################################
-# Simulation study
+# Simulation runs
 #################################################################
 
 def sim_exp_to_paths(wc, prefix=SIM_SCORE_JSON_DIR, suffix=".json"):
     return [path.join(prefix, param_comb)+suffix for param_comb in SIM_EXP_FIT_COMBINATIONS[wc["experiment"]]]
 
 
-rule tabulate_sim_experiment_results:
+rule sim_tabulate_experiment_results:
     input:
         src=path.join(PY_SCRIPT_DIR, "tabulate_jsons.py"),
         score_jsons=lambda wc: sim_exp_to_paths(wc)
@@ -233,7 +388,7 @@ rule tabulate_sim_experiment_results:
         "python {input.src} {output.exp_tsv} {input.score_jsons}"
 
 
-rule score_matfac_sim:
+rule sim_score_matfac:
     input:
         src=path.join(PY_SCRIPT_DIR, "score_matfac.py"),
         true_hdf=path.join(SIM_PARAM_DIR, "{sim_path}/rep={rep}.hdf"),
@@ -269,7 +424,7 @@ def get_cancer_types(wc):
     ctypes = ctypes_str.split(":")
     return ctypes 
 
-rule fit_matfac:
+rule sim_fit_matfac:
     input:
         src=path.join(JL_SCRIPT_DIR, "fit_matfac.jl"),
         data_hdf=path.join(SIM_DATA_DIR, "{tcga_params}/{pwy_params}/{sim_params}/rep={rep}.hdf"),
@@ -282,7 +437,7 @@ rule fit_matfac:
         parsed_opts=lambda wc: wc["fit_params"].split("__")
     resources:
         mem_mb=8000,
-    threads: lambda wc: len(get_cancer_types(wc)) 
+    threads: 4 #lambda wc: len(get_cancer_types(wc)) 
     shell:
         "julia --project=. {input.src} {input.data_hdf} {input.pwy_json} {output.fitted_bson} {output.transformed_hdf} {params.parsed_opts} history_json={output.history_json}"
 
@@ -303,24 +458,6 @@ rule simulate_data:
         "julia --project=. {input.src} {input.template_data_hdf} {input.template_pwys_json} {output.true_param_bson} {output.simulated_hdf} {params.parsed_opts}"
 
 
-
-#####################################################################
-# Supervised tasks
-#####################################################################
-
-rule prep_tcga_splits:
-    input:
-        src="scripts/python/prep_tcga_splits.py",
-        data_hdf=path.join(PREP_TCGA_DIR, "{data}.hdf"),
-        clinical_hdf=path.join(RAW_TCGA_DIR, "tcga_clinical.hdf"),
-        paradigm_hdf=path.join(PREP_PARADIGM_DIR, "paradigm.hdf")
-    output:
-        train_sets=[path.join(PREP_TCGA_DIR, "{data,[_.=:0-9a-zA-Z]+}__"+"fold={}".format(i)+"__target={target,[_:a-z]*}__train.hdf") for i in range(TCGA_FOLDS)],
-        test_sets=[path.join(PREP_TCGA_DIR, "{data,[_.=:0-9a-zA-Z]+}__"+"fold={}".format(i)+"__target={target,[_:a-z]*}__test.hdf") for i in range(TCGA_FOLDS)]
-    params:
-        prefix=lambda wc: path.join(PREP_TCGA_DIR, wc["data"]),
-    shell:
-        "python {input.src} {input.data_hdf} {input.clinical_hdf} {input.paradigm_hdf} {params.prefix} --n_folds {TCGA_FOLDS} --target {wildcards.target} --paradigm_filter"
 
 
 #####################################################################

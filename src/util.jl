@@ -21,6 +21,9 @@ function bernoulli_var_init(m::T, v::T) where T <: Number
     end
 end
 
+function rms(X; kwargs...)
+    return sqrt.(mean(X.*X; kwargs...))
+end
 
 ###################################################
 # Dealing with NaNs

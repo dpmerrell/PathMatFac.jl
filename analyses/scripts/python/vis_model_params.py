@@ -51,9 +51,9 @@ def matrix_heatmap(mat, x_groups=None, dpi=300, w=6, h=3, cmap="bwr_r", vmin=Non
                         title="Matrix Y", group_label_rotation=0.0, group_label_size=6):
 
     if vmax is None:
-        vmax = np.nanquantile(mat, 0.9)
+        vmax = np.nanquantile(mat, 0.99)
     if vmin is None:
-        vmin = np.nanquantile(mat, 0.1)
+        vmin = np.nanquantile(mat, 0.01)
     if symmetrize:
         bound = max(abs(vmin), abs(vmax))
         vmax = bound
