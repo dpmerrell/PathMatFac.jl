@@ -231,7 +231,7 @@ matfac_tcga_runs:
     tcga_test:
         n_reps: 1
         data_params:
-            kept_ctypes: ["HNSC"]
+            kept_ctypes: ["HNSC:CESC:ESCA:STAD"]
             heldout_ctypes: [""]
         pathways: ["hallmark"] 
         fit_params:
@@ -240,7 +240,7 @@ matfac_tcga_runs:
             omic_types: ["mutation:methylation:mrnaseq:cna"]
             use_gpu: ["false"]
             var_filter: [0.025]
-            K: [20, 50]
+            K: [20]
             max_epochs: [1000]
             fsard_max_iter: [20]
             fsard_A_prior_frac: [0.1]

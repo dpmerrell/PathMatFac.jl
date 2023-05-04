@@ -776,9 +776,10 @@ function construct_minimal_regularizer(model; capacity=10^8)
     # density/sparseness of the data 
     sigma = exp.(model.matfac.col_transform.layers[1].logsigma)
     for (gidx, gl, gw) in zip(group_idx, group_labels, group_weights)
+        M_vec = MF.column_nonnan(view(model.data, :, gidx))
         col_vars = MF.batched_column_nanvar(view(model.data, :, gidx); capacity=capacity)
         map!(v->max(v, Float32(1/M)), col_vars, col_vars)
-        gw .= K*mean((sigma[gidx].^2) ./ col_vars) 
+        gw .= K*mean(sigma[gidx].^2) / (sum(col_vars .* M_vec) / M) 
     end
     reg = GroupRegularizer(group_labels,
                            group_idx,
