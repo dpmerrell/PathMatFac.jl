@@ -274,6 +274,7 @@ function prep_pathway_featuresets(pwy_sifs::Vector, feature_genes::Vector;
     # Check whether feature ids were provided
     if feature_ids == nothing
         feature_ids = collect(1:length(feature_genes))
+        feature_ids = map(t->join(t, "_"), collect(zip(feature_genes, feature_ids)))
     end 
 
     # Create a map from genes to indices 
@@ -284,7 +285,6 @@ function prep_pathway_featuresets(pwy_sifs::Vector, feature_genes::Vector;
     end
 
     # Create new feature ids 
-    new_feature_ids = map(t->join(t, "_"), collect(zip(feature_genes, feature_ids)))
     n_pwy = length(pwy_sifs)
 
     # Convert the SIFs to node sets
@@ -297,12 +297,36 @@ function prep_pathway_featuresets(pwy_sifs::Vector, feature_genes::Vector;
         fs = Set()
         for node in ns
             node_idx = collect(get!(gene_to_idxs, node, []))
-            union!(fs, new_feature_ids[node_idx])
+            union!(fs, feature_ids[node_idx])
         end 
         feature_sets[i] = fs
     end
 
-    return feature_sets, new_feature_ids
+    return feature_sets, feature_ids
+end
+
+
+# Construct featuresets for each unique feature view.
+function prep_pathway_featuresets(pwy_sifs::Vector, feature_genes::Vector, feature_views::Vector;
+                                  feature_ids::Union{Nothing,Vector}=nothing)
+    
+    # Check whether feature ids were provided
+    if feature_ids == nothing
+        feature_ids = collect(1:length(feature_genes))
+        feature_ids = map(t->join(t, "_"), collect(zip(feature_genes, feature_ids)))
+    end 
+
+    unq_views = unique(feature_views)
+    view_feature_sets = Dict()
+    
+    for uv in unq_views
+        v_idx = (feature_views .== uv)
+        fs, _ = prep_pathway_featuresets(pwy_sifs, feature_genes[v_idx]; 
+                                         feature_ids=feature_ids[v_idx])
+        view_feature_sets[uv] = fs
+    end
+    
+    return view_feature_sets, feature_ids 
 end
 
 

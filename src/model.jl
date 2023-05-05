@@ -40,7 +40,7 @@ function assemble_model(D, K, sample_ids, sample_conditions,
                               feature_sets, featureset_names, feature_graphs, sample_graphs,
                               lambda_X_l2, lambda_X_condition, lambda_X_graph, 
                               lambda_Y_l2, lambda_Y_selective_l1, lambda_Y_graph,
-                              Y_ard, Y_feature_set_ard,
+                              Y_ard, Y_feature_set_ard, alpha0,
                               lambda_layer)
 
     M, N = size(D)
@@ -63,7 +63,7 @@ function assemble_model(D, K, sample_ids, sample_conditions,
                             Y_ard, Y_feature_set_ard)
     Y_reg = construct_Y_reg(K, N, feature_ids, feature_views, feature_sets, feature_graphs,
                             lambda_Y_l2, lambda_Y_selective_l1, lambda_Y_graph,
-                            Y_ard, Y_feature_set_ard, featureset_names)
+                            Y_ard, Y_feature_set_ard, featureset_names, alpha0)
 
     # Construct MatFacModel
     matfac = MatFacModel(M, N, K, feature_distributions;
@@ -109,7 +109,8 @@ function PathMatFacModel(D::AbstractMatrix{<:Real};
                          lambda_Y_graph::Union{Real,Nothing}=nothing,
                          lambda_layer::Union{Real,Nothing}=1.0,
                          Y_ard::Bool=false,
-                         Y_fsard::Bool=false) 
+                         Y_fsard::Bool=false,
+                         alpha0::Float32=Float32(1e-4)) 
       
     ################################################
     # Validate input
@@ -188,7 +189,7 @@ function PathMatFacModel(D::AbstractMatrix{<:Real};
                           batch_dict, feature_sets, featureset_names, feature_graphs, sample_graphs,
                           lambda_X_l2, lambda_X_condition, lambda_X_graph,
                           lambda_Y_l2, lambda_Y_selective_l1, lambda_Y_graph,
-                          Y_ard, Y_fsard, 
+                          Y_ard, Y_fsard, alpha0, 
                           lambda_layer) 
 end
 

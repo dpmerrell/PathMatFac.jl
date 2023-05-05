@@ -449,6 +449,32 @@ end
 ################################################
 # Sparse matrix utils
 ################################################
+    
+function featuresets_to_csc(feature_ids, feature_sets)
+
+    L = length(feature_sets)
+    N = length(feature_ids)
+    f_to_j = value_to_idx(feature_ids)
+
+    # Construct the sparse feature set matrix
+    nnz = sum(map(length, feature_sets))
+    I = Vector{Int}(undef, nnz)
+    J = Vector{Int}(undef, nnz)
+    V = Vector{Float32}(undef, nnz)
+    idx = 1
+    for (i, fs) in enumerate(feature_sets)
+        fs_scale = 1/sqrt(length(fs))
+        for f in fs
+            I[idx] = i
+            J[idx] = f_to_j[f]
+            V[idx] = fs_scale
+            idx += 1
+        end
+    end
+    S = sparse(I, J, V, L, N)
+
+    return S
+end
 
 function csc_to_coo(A)
     I = zero(A.rowval)

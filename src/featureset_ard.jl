@@ -12,122 +12,122 @@
 # procedure that alternates between (1) regularizing Y and
 # (2) fitting the matrix A on the matrix Y.
 # 
-# We also allow `alpha` to be updated by 
-# Method of Moments estimates (from tau).
-# We allow the `alpha` to vary between columns
-# of tau, but our updates assume they're constant
-# within feature views. 
- 
+
 mutable struct FeatureSetARDReg
-    featureset_ids::AbstractVector
-    feature_view_ids::AbstractVector
-    feature_views::Tuple
-    alpha::AbstractVector
-    beta0::Float32
-    beta::AbstractMatrix
-    S::AbstractMatrix
-    A::AbstractMatrix
-    A_opt::ISTAOptimiser
+    col_ranges::Tuple  # Tuple of UnitRanges -- encodes views
+    A::Tuple           # Tuple of L_v x K matrices
+    S::Tuple           # Tuple of L_v x N_v sparse matrices
+    alpha0::Float32    # Default 1.01
+    featureset_ids::Tuple # Tuple of L_v-dim vectors containing the names of feature sets
+    alpha::AbstractVector  # Holds intermediate result for fast computation
+    beta::AbstractMatrix   # Holds intermediate result for fast computation
+    A_opts::Tuple          # Tuple of ISTAOptimisers
 end
 
-#@functor FeatureSetARDReg
 Flux.trainable(r::FeatureSetARDReg) = ()
 
-function FeatureSetARDReg(K::Integer, S::AbstractMatrix,
-                          feature_views::AbstractVector,
-                          featureset_ids::AbstractVector; 
-                          beta0=1e-2, lr=0.05)
+function FeatureSetARDReg(K::Integer, feature_views::AbstractVector, S_vec, featureset_ids_vec; 
+                          alpha0=1.01, lr=0.05)
 
-    n_sets, N = size(S)
-    feature_view_ids = unique(feature_views)
-    feature_views = Tuple(ids_to_ranges(feature_views))
-    alpha = fill(beta0, N)
-    beta = fill(beta0, K,N) 
-    A = zeros(n_sets, K)
-    l1_lambda = ones(n_sets)  #TODO: revisit lambda
-    A_opt = ISTAOptimiser(A, lr, l1_lambda)
- 
-    return FeatureSetARDReg(featureset_ids, 
-                            feature_view_ids,
-                            feature_views,
-                            alpha, 
-                            beta0, beta,
-                            S, A, A_opt) 
+    N = length(feature_views)
+    col_ranges = Tuple(ids_to_ranges(feature_views))
+    for (cr, S, fid) in zip(col_ranges, S_vec, featureset_ids_vec)
+        @assert length(cr) == size(S, 2) "The number of columns in each `feature_view` must match size(S, 2) for corresponding S in `S_vec`"
+        @assert length(fid) == size(S, 1) "Number of featureset_ids incompatible with size(S, 2). Check `featureset_ids_vec` and `S_vec` for compatibility."
+    end
+
+    A = []
+    lambda = []
+    for S in S_vec
+        L_v = size(S, 1)
+        push!(A, zeros(Float32, L_v, K))
+        push!(lambda, ones(Float32, K))
+    end
+    A = Tuple(A)
+    lambda = Tuple(lambda)
+
+    alpha = fill(alpha0, N)
+    beta = fill(alpha0-1, K, N)
+
+    A_opts = [ISTAOptimiser(A_mat, lr, lambda_vec) for (A_mat, lambda_vec) in zip(A, lambda)]
+
+    return FeatureSetARDReg(col_ranges,
+                            A, 
+                            Tuple(S_vec),
+                            alpha0, 
+                            Tuple(featureset_ids_vec),
+                            alpha, beta,
+                            Tuple(A_opts)) 
 end
 
 
 function reorder_reg!(reg::FeatureSetARDReg, p)
     reg.beta .= reg.beta[p,:]
-    reg.A .= reg.A[:,p]
-    reg.A_opt.ssq_grad .= reg.A_opt.ssq_grad[:,p]
+    
+    for A_mat in reg.A
+        reg.A .= reg.A[:,p]
+    end
+    
+    for A_opt in reg.A_opts
+        A_opt.ssq_grad .= A_opt.ssq_grad[:,p]
+        A_opt.lambda .= A_opt.lambda[p]
+    end
+
+    for lambda_vec in reg.lambda
+        lambda_vec .= lambda_vec[p]
+    end
+
     return
 end
 
 
 function Adapt.adapt_storage(::Flux.FluxCUDAAdaptor, r::FeatureSetARDReg)
-    return FeatureSetARDReg(r.featureset_ids, 
-                            r.feature_view_ids, 
-                            r.feature_views,
+    return FeatureSetARDReg(r.col_ranges,
+                            map(gpu, r.A),
+                            map(S_mat -> gpu(SparseMatrixCSC{Float32,Int32}(S_mat)), r.S),
+                            r.alpha0,
+                            r.featureset_ids, 
                             gpu(r.alpha),
-                            r.beta0,
                             gpu(r.beta),
-                            gpu(SparseMatrixCSC{Float32,Int32}(r.S)),
-                            gpu(r.A),
-                            gpu(r.A_opt)
+                            gpu(r.A_opts)
                             )
 end
 
 function Adapt.adapt_storage(::Flux.FluxCPUAdaptor, r::FeatureSetARDReg)
-    return FeatureSetARDReg(r.featureset_ids,
-                            r.feature_view_ids, 
-                            r.feature_views,
+    return FeatureSetARDReg(r.col_ranges,
+                            map(cpu, r.A),
+                            map(S_mat -> SparseMatrixCSC{Float32,Int32}(cpu(S_mat)), r.S),
+                            r.alpha0,
+                            r.featureset_ids, 
                             cpu(r.alpha),
-                            r.beta0,
                             cpu(r.beta),
-                            SparseMatrixCSC{Float32,Int}(cpu(r.S)),
-                            cpu(r.A),
-                            cpu(r.A_opt)
+                            cpu(r.A_opts)
                             )
 end
 
-function construct_featureset_ard(K, feature_ids, feature_views, feature_sets;
-                                  featureset_names=nothing, beta0=Float32(1e-2), 
+
+
+function construct_featureset_ard(K, feature_ids, feature_views, feature_sets_vec;
+                                  featureset_ids=nothing, alpha0=Float32(1.01), 
                                   lr=Float32(0.05))
-    L = length(feature_sets)
-    N = length(feature_ids)
-    f_to_j = value_to_idx(feature_ids)
-
-    # Construct the sparse feature set matrix
-    nnz = sum(map(length, feature_sets))
-    I = Vector{Int}(undef, nnz)
-    J = Vector{Int}(undef, nnz)
-    V = Vector{Float32}(undef, nnz)
-    idx = 1
-    for (i, fs) in enumerate(feature_sets)
-        fs_scale = 1/sqrt(length(fs))
-        for f in fs
-            I[idx] = i
-            J[idx] = f_to_j[f]
-            V[idx] = fs_scale
-            idx += 1
-        end
+    col_ranges = ids_to_ranges(feature_views)    
+    S_vec = []
+    for (cr, feature_sets) in zip(col_ranges, feature_sets_vec) 
+        push!(S_vec, featuresets_to_csc(feature_ids[cr], feature_sets))
     end
-    S = sparse(I, J, V, L, N)
-
-    if featureset_names == nothing
-        featureset_names = collect(1:L)
+    if featureset_ids == nothing
+        featureset_ids = [collect(1:length(fs)) for fs in feature_sets_vec]
     end
-
-    return FeatureSetARDReg(K, S, feature_views, 
-                            featureset_names; 
-                            beta0=beta0, lr=lr)
+  
+    return FeatureSetARDReg(K, feature_views, S_vec, featureset_ids; 
+                            alpha0=alpha0, lr=lr)
 end 
 
 
 # Apply the regularizer to a matrix
 function (reg::FeatureSetARDReg)(Y::AbstractMatrix)
     b = 1 .+ (Float32(0.5) ./ reg.beta).*(Y.*Y)
-    return sum(transpose(0.5 .+ reg.alpha) .* sum(log.(b), dims=1))
+    return sum(transpose(Float32(0.5) .+ reg.alpha) .* sum(log.(b), dims=1))
 end
 
 
@@ -143,62 +143,47 @@ function ChainRulesCore.rrule(reg::FeatureSetARDReg, Y::AbstractMatrix)
 end
 
 
-# Update `alpha` via the closed form estimator of Ye and Chen (2017)
-# (https://doi.org/10.1080%2F00031305.2016.1209129) 
-# **on the posterior means of tau**
-# TODO replace this with a more direct estimate from Y.
-function update_alpha!(reg::FeatureSetARDReg, Y::AbstractMatrix; tau_smoothing=Float32(1e-3))
-
-    tau = (tau_smoothing .+ Float32(0.5)) ./ (tau_smoothing .+ (Float32(0.5).*Y.*Y))
-
-    # Compute view-wise quantities from tau
-    view_mean_t = map(r->mean(tau[:,r]), reg.feature_views)
-    println("MEAN TAU")
-    println(view_mean_t)
-    view_var_t = map(r->var(tau[:,r]), reg.feature_views)
-    println("VAR TAU")
-    println(view_var_t)
-
-    view_mean_lt = map(r->mean(log.(tau[:,r] .+ Float32(1e-9))), reg.feature_views)
-    view_mean_tlt = map(r->mean(tau[:,r].*log.(tau[:,r] .+ Float32(1e-9))), reg.feature_views)
-
-    # Compute new view-wise alphas; assign to model
-    view_alpha = view_mean_t ./(view_mean_tlt .- view_mean_t .* view_mean_lt)
-    for (i,r) in enumerate(reg.feature_views)
-        reg.alpha[r] .= view_alpha[i]
-    end
-    println("FSARD: alpha")
-    println(reg.alpha)
- 
-    beta0 = reg.beta0
-    println("FSARD: beta0")
-    println(beta0)
-
-    # Replace NaNs with beta0
-    nan_idx = (!isfinite).(reg.alpha)
-    reg.alpha[nan_idx] .= beta0
-    
-    println("FSARD: finite alpha")
-    println(reg.alpha)
- 
-    # Require alpha to be at least as large as beta0
-    reg.alpha = map(x->max(x,beta0), reg.alpha)
-    println("FSARD: rounded alpha")
-    println(reg.alpha)
- 
-    # For features that do not appear in any feature sets,
-    # set alpha = beta0 for an uninformative ARD prior on
-    # that column of Y.
-    L = size(reg.S, 1)
-    feature_appearances = vec(ones_like(Y,1,L) * reg.S)
-    noprior_features = (feature_appearances .== 0)
-    reg.alpha[noprior_features] .= beta0
-    println("FSARD: noprior-corrected alpha")
-    println(reg.alpha)
-end
+#function update_alpha!(reg::FeatureSetARDReg, Y::AbstractMatrix; tau_smoothing=Float32(1e-3))
+#
+#    tau = (tau_smoothing .+ Float32(0.5)) ./ (tau_smoothing .+ (Float32(0.5).*Y.*Y))
+#
+#    # Compute view-wise quantities from tau
+#    view_mean_t = map(r->mean(tau[:,r]), reg.feature_views)
+#    println(view_mean_t)
+#    view_var_t = map(r->var(tau[:,r]), reg.feature_views)
+#    println(view_var_t)
+#
+#    view_mean_lt = map(r->mean(log.(tau[:,r] .+ Float32(1e-9))), reg.feature_views)
+#    view_mean_tlt = map(r->mean(tau[:,r].*log.(tau[:,r] .+ Float32(1e-9))), reg.feature_views)
+#
+#    # Compute new view-wise alphas; assign to model
+#    view_alpha = view_mean_t ./(view_mean_tlt .- view_mean_t .* view_mean_lt)
+#    for (i,r) in enumerate(reg.feature_views)
+#        reg.alpha[r] .= view_alpha[i]
+#    end
+#    println(reg.alpha)
+# 
+#    beta0 = reg.beta0
+#
+#    # Replace NaNs with beta0
+#    nan_idx = (!isfinite).(reg.alpha)
+#    reg.alpha[nan_idx] .= beta0
+#    
+#    # Require alpha to be at least as large as beta0
+#    reg.alpha = map(x->max(x,beta0), reg.alpha)
+# 
+#    # For features that do not appear in any feature sets,
+#    # set alpha = beta0 for an uninformative ARD prior on
+#    # that column of Y.
+#    L = size(reg.S, 1)
+#    feature_appearances = vec(ones_like(Y,1,L) * reg.S)
+#    noprior_features = (feature_appearances .== 0)
+#    reg.alpha[noprior_features] .= beta0
+#end
 
 
-function gamma_normal_loss(A, S, alpha, beta0, Y)
+function gamma_normal_loss(A, S, alpha, alpha0, Y)
+    beta0 = alpha0 - 1
     beta = beta0 .* (1 .+ transpose(A)*S)
     alpha_p_5 = alpha .+ Float32(0.5)
     lss = -sum(transpose(alpha).*sum(log.(beta), dims=1)) .+ sum(transpose(alpha_p_5).*sum(log.(beta .+ Float32(0.5).*(Y.*Y)), dims=1))
@@ -207,8 +192,9 @@ function gamma_normal_loss(A, S, alpha, beta0, Y)
     return lss
 end
 
-function ChainRulesCore.rrule(::typeof(gamma_normal_loss), A, S, alpha, beta0, Y)
+function ChainRulesCore.rrule(::typeof(gamma_normal_loss), A, S, alpha, alpha0, Y)
 
+    beta0 = alpha0 - 1
     beta = beta0.*(1 .+ transpose(A)*S)
     Y2 = Y.*Y
     alpha_p_5 = alpha .+ Float32(0.5)
@@ -231,26 +217,46 @@ function ChainRulesCore.rrule(::typeof(gamma_normal_loss), A, S, alpha, beta0, Y
 end 
 
 
-# Update the matrix of "activations" via 
+function update_lambda!(reg::FeatureSetARDReg, Y::AbstractMatrix)
+
+    # For each view
+    for (cr, S, A, opt) in zip(reg.col_ranges, reg.S, reg.A, reg.A_opts)
+
+        # Compute row-wise mean-squared of Y
+        Y_view = view(Y, :, cr)
+        Y_ms = vec(mean(Y_view .* Y_view, dims=2))
+
+        den = map(yv -> max(yv, Float32(1e-2)), Y_ms)
+        # Compute mean of S for this view
+        S_mean = mean(S)
+
+        opt.lambda .= S_mean ./ den 
+    end
+
+end
+
+
+# Update a matrix of "assignments" via 
 # nonnegative projected ISTA
-function update_A_inner!(reg::FeatureSetARDReg, Y::AbstractMatrix; 
-                         max_epochs=1000, term_iter=50, atol=1e-5,
+function update_A_inner!(A::AbstractMatrix, S::AbstractMatrix, Y::AbstractMatrix,
+                         alpha::AbstractVector, alpha0, A_opt; 
+                         max_epochs=1000, term_iter=20, atol=1e-5,
                          verbosity=1, print_prefix="", print_iter=100)
 
-    A_loss = A -> gamma_normal_loss(A, reg.S, reg.alpha, reg.beta0, Y)
-    reg_loss = A -> sum(reg.A_opt.lambda .* abs.(A))
+    A_loss = A -> gamma_normal_loss(A, S, alpha, alpha0, Y)
+    reg_loss = A -> sum(transpose(A_opt.lambda) .* abs.(A))
     term_count = 0
 
-    best_loss = A_loss(reg.A) + reg_loss(reg.A)
-    A_best = deepcopy(reg.A)
+    best_loss = A_loss(A) + reg_loss(A)
+    A_best = deepcopy(A)
     v_println("Iteration 0:\t Loss=", best_loss; verbosity=verbosity,
                                                  prefix=print_prefix)
 
     for epoch=1:max_epochs
 
-        A_grads = Zygote.gradient(A_loss, reg.A)
-        update!(reg.A_opt, reg.A, A_grads[1]) 
-        new_loss = A_loss(reg.A) + reg_loss(reg.A)
+        A_grads = Zygote.gradient(A_loss, A)
+        update!(A_opt, A, A_grads[1]) 
+        new_loss = A_loss(A) + reg_loss(A)
 
         # Track the best we've seen thus far.
         # If we don't make any progress, then increment
@@ -259,7 +265,7 @@ function update_A_inner!(reg::FeatureSetARDReg, Y::AbstractMatrix;
             loss_diff = best_loss - new_loss
 
             best_loss = new_loss
-            A_best .= reg.A
+            A_best .= A
             if loss_diff > atol 
                 term_count = 0
             else
@@ -290,76 +296,93 @@ function update_A_inner!(reg::FeatureSetARDReg, Y::AbstractMatrix;
 
     end
 
-    reg.A .= A_best
+    A .= A_best
     v_println("Final loss: ", best_loss; verbosity=verbosity, prefix=print_prefix)
 
     return best_loss
 end
 
+function update_A!(reg::FeatureSetARDReg, Y::AbstractMatrix;
+                   max_epochs=1000, term_iter=20, atol=1e-5,
+                   verbosity=1, print_prefix="", print_iter=100)
 
-function set_lambda_max(reg::FeatureSetARDReg, Y::AbstractMatrix)
-    
-    A_loss = Z -> gamma_normal_loss(Z, reg.S, reg.alpha, reg.beta0, Y)
+    for (cr, A, S, opt) in zip(reg.col_ranges, reg.A, reg.S, reg.A_opts)
+        Y_view = view(Y, :, cr)
+        A .= 0
+        update_A_inner!(A, S, Y_view, reg.alpha[cr], reg.alpha0, opt;
+                        max_epochs=max_epochs, term_iter=term_iter, atol=atol,
+                        verbosity=verbosity, print_prefix=print_prefix, print_iter=print_iter)
 
-    A = zero(reg.A)
-    origin_grad = Zygote.gradient(A_loss, A)[1]
-    lambda_max = maximum((abs.(origin_grad)))
-
-    return lambda_max
-end
-
-
-# Score A by the fraction of its columns 
-# containing a nonzero entry.
-function score_A(A; threshold=1e-3)
-    L,K = size(A)
-    #return sum(sum(A .> threshold, dims=1) .> 0)/K
-    return sum(A .> threshold)/(L*K)
-end
-
-
-function update_A!(reg::FeatureSetARDReg, Y::AbstractMatrix; 
-                   max_epochs=500, term_iter=50,
-                   target_frac=0.7,
-                   print_iter=100,
-                   bin_search_max_iter=20,
-                   bin_search_frac_atol=0.1,
-                   bin_search_lambda_atol=1e-2,
-                   verbosity=1, print_prefix="",
-                   history=nothing)
-
-    n_pref = string(print_prefix, "    ")
-
-    v_println("Updating A and λ_A..."; verbosity=verbosity, prefix=print_prefix)
-    
-    i = 1
-    function eval_func(lambda)
-        v_println("(", i,") Updating A with λ_A=", lambda; verbosity=verbosity-1, prefix=print_prefix)
-        reg.A_opt.lambda .= lambda
-        reg.A .= 0 # Ditch the warm-start -- it seems to get stuck! 
-        update_A_inner!(reg, Y; max_epochs=max_epochs,
-                                term_iter=term_iter,
-                                verbosity=verbosity-1,
-                                print_iter=print_iter, 
-                                print_prefix=n_pref)
-        score = -score_A(reg.A)
-        v_println("Fraction=", -score; verbosity=verbosity-1, prefix=print_prefix)
-        i += 1 # Some statefulness... `reg`, and the number of iterations 
-        return score 
+        reg.beta[:,cr] .= (reg.alpha0 - 1).*(1 .+ transpose(A)*S)
     end
-
-    # Search for lambda that yields the desired score.
-    # This updates `reg` along the way.
-    lambda_start = mean(reg.A_opt.lambda)
-    lambda, score = func_binary_search(lambda_start, -target_frac, eval_func; max_iter=bin_search_max_iter,
-                                                                              z_atol=bin_search_frac_atol,
-                                                                              x_atol=bin_search_lambda_atol)
-    score *= -1
-    history!(history; name="update_A", lambda_A=lambda, A_frac=score)
-
-    v_println("Finished updating A; selected λ_A=", lambda, "; A_fraction=", score; verbosity=verbosity, prefix=print_prefix)
- 
-    reg.beta =  reg.beta0 .* (1 .+ transpose(reg.A)*reg.S)
 end
 
+
+#function set_lambda_max(reg::FeatureSetARDReg, Y::AbstractMatrix)
+#    
+#    A_loss = Z -> gamma_normal_loss(Z, reg.S, reg.alpha, reg.beta0, Y)
+#
+#    A = zero(reg.A)
+#    origin_grad = Zygote.gradient(A_loss, A)[1]
+#    lambda_max = maximum((abs.(origin_grad)))
+#
+#    return lambda_max
+#end
+
+
+## Score A by the fraction of its columns 
+## containing a nonzero entry.
+#function score_A(A; threshold=1e-3)
+#    L,K = size(A)
+#    #return sum(sum(A .> threshold, dims=1) .> 0)/K
+#    return sum(A .> threshold)/(L*K)
+#end
+
+
+#function update_A!(reg::FeatureSetARDReg, Y::AbstractMatrix; 
+#                   max_epochs=500, term_iter=50,
+#                   target_frac=0.7,
+#                   print_iter=100,
+#                   bin_search_max_iter=20,
+#                   bin_search_frac_atol=0.1,
+#                   bin_search_lambda_atol=1e-2,
+#                   verbosity=1, print_prefix="",
+#                   history=nothing)
+#
+#    n_pref = string(print_prefix, "    ")
+#
+#    v_println("Updating A and λ_A..."; verbosity=verbosity, prefix=print_prefix)
+#    
+#    i = 1
+#    function eval_func(lambda)
+#        v_println("(", i,") Updating A with λ_A=", lambda; verbosity=verbosity-1, prefix=print_prefix)
+#        reg.A_opt.lambda .= lambda
+#        reg.A .= 0 # Ditch the warm-start -- it seems to get stuck! 
+#        update_A_inner!(reg, Y; max_epochs=max_epochs,
+#                                term_iter=term_iter,
+#                                verbosity=verbosity-1,
+#                                print_iter=print_iter, 
+#                                print_prefix=n_pref)
+#        score = -score_A(reg.A)
+#        v_println("Fraction=", -score; verbosity=verbosity-1, prefix=print_prefix)
+#        i += 1 # Some statefulness... `reg`, and the number of iterations 
+#        return score 
+#    end
+#
+#    # Search for lambda that yields the desired score.
+#    # This updates `reg` along the way.
+#    lambda_start = mean(reg.A_opt.lambda)
+#    lambda, score = func_binary_search(lambda_start, -target_frac, eval_func; max_iter=bin_search_max_iter,
+#                                                                              z_atol=bin_search_frac_atol,
+#                                                                              x_atol=bin_search_lambda_atol)
+#    score *= -1
+#    history!(history; name="update_A", lambda_A=lambda, A_frac=score)
+#
+#    v_println("Finished updating A; selected λ_A=", lambda, "; A_fraction=", score; verbosity=verbosity, prefix=print_prefix)
+# 
+#    reg.beta =  reg.beta0 .* (1 .+ transpose(reg.A)*reg.S)
+#end
+
+
+ 
 

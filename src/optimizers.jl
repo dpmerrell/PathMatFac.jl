@@ -58,7 +58,7 @@ function update!(ist::ISTAOptimiser, p::AbstractMatrix, g::AbstractMatrix)
     # Apply the ISTA projection.
     # The threshold for each parameter
     # is the product (L1 lambda)*(step size)
-    ist_proj!(p, ist.lambda .* eta)
+    ist_proj!(p, transpose(ist.lambda) .* eta)
 end
 
 
