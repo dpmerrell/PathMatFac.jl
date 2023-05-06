@@ -61,8 +61,10 @@ function write_model_to_hdf(out_hdf, model::PM.PathMatFacModel)
     ################################
     # Featureset ARD params
     if isa(model.matfac.Y_reg, PM.FeatureSetARDReg)
-        f[string("fsard/A")] = model.matfac.Y_reg.A
-        f[string("fsard/S")] = convert(Matrix{Float32}, model.matfac.Y_reg.S)
+        for (i, (A_mat, S_mat)) in enumerate(zip(model.matfac.Y_reg.A, model.matfac.Y_reg.S))
+            f[string("fsard/A/",i)] = A_mat 
+            f[string("fsard/S/",i)] = convert(Matrix{Float32}, S_mat)
+        end
     end
 
     close(f) # Should write everything to disk at once

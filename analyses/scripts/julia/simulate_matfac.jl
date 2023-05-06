@@ -144,7 +144,7 @@ function main(args)
                                     :feature_distributions => nothing,
                                     :batch_dict => nothing,
                                     :sample_graphs => nothing,
-                                    :feature_sets => nothing,
+                                    :feature_sets_dict => nothing,
                                     :featureset_names => nothing,
                                     :feature_graphs => nothing,
                                     :lambda_X_l2 => nothing,
@@ -220,11 +220,13 @@ function main(args)
     model_kwargs[:feature_ids] = feature_ids
 
     if script_opts[:configuration] == "fsard"
-        feature_sets, new_feature_ids = prep_pathway_featuresets(pwy_edgelists, 
-                                                                 deepcopy(feature_genes);
-                                                                 feature_ids=feature_ids)
-        model_kwargs[:feature_sets] = feature_sets
-        model_kwargs[:featureset_names] = pwy_names 
+        feature_sets, new_feature_ids, featureset_ids = prep_pathway_featuresets(pwy_edgelists, 
+                                                                                 deepcopy(feature_genes),
+                                                                                 feature_assays;
+                                                                                 feature_ids=feature_ids,
+                                                                                 featureset_ids=pwy_names)
+        model_kwargs[:feature_sets_dict] = feature_sets
+        model_kwargs[:featureset_names] = featureset_ids
         model_kwargs[:feature_ids] = new_feature_ids
         model_kwargs[:Y_fsard] = true
     end

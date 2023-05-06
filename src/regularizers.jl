@@ -537,8 +537,8 @@ end
 
 @functor ARDRegularizer
 
-function ARDRegularizer(column_groups::AbstractVector; alpha=Float32(0.01), 
-                                                       beta=Float32(0.01),
+function ARDRegularizer(column_groups::AbstractVector; alpha=Float32(1.001), 
+                                                       beta=Float32(0.001),
                                                        weight=1.0)
     col_ranges = ids_to_ranges(cpu(column_groups))
     n_ranges = length(col_ranges)
@@ -587,15 +587,6 @@ function ChainRulesCore.rrule(ard::ARDRegularizer, X::AbstractMatrix)
     end
 
     return result, ard_pullback
-    #return sum(result)
-    #b = 1 .+ (0.5/ard.beta).*(X.*X)
-    #function ard_pullback(loss_bar)
-    #    X_bar = similar(X)
-    #    X_bar .= (loss_bar/ard.beta)*(0.5 + ard.alpha) .* X ./ b 
-    #    return NoTangent(), X_bar
-    #end
-
-    #return (0.5 .+ ard.alpha)*sum(log.(b)), ard_pullback
 end
 
 
@@ -707,15 +698,15 @@ end
 # Construct regularizer for Y matrix
 #########################################################
 
-function construct_Y_reg(K, N, feature_ids, feature_views, feature_sets, feature_graphs,
+function construct_Y_reg(K, N, feature_ids, feature_views, feature_sets_dict, feature_graphs,
                          lambda_Y_l2, lambda_Y_selective_l1, lambda_Y_graph,
-                         Y_ard, Y_geneset_ard, featureset_names, alpha0)
+                         Y_ard, Y_geneset_ard, featureset_names, alpha0, coupling)
 
     # If either of the ARD flags are set `true`, then
     # they take priority over the other regularizers.
     if Y_geneset_ard
-        return construct_featureset_ard(K, feature_ids, feature_views, feature_sets; 
-                                        featureset_ids=featureset_names, alpha0=alpha0) 
+        return construct_featureset_ard(K, feature_ids, feature_views, feature_sets_dict; 
+                                        featureset_ids=featureset_names, alpha0=alpha0, coupling=coupling) 
     end
     if Y_ard
         return ARDRegularizer(feature_views) 

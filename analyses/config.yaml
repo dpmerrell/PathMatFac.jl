@@ -9,9 +9,9 @@ matfac_simulation_study:
         data_params:
             kept_ctypes: ["ACC:CESC"] 
             heldout_ctypes: [""]
-        pathways: ["hallmark"] 
+        pathways: ["hallmark:oncogenic:positional"] 
         sim_params:
-            configuration: ["ard"]
+            configuration: ["fsard"]
             use_batch: ["true"]
             var_filter: [0.0125] 
             K: [10]
@@ -23,16 +23,14 @@ matfac_simulation_study:
             b_scale_std: [1.0]
             b_shift_std: [1.0]
         fit_params:
-            configuration: ["ard"]
+            configuration: ["fsard"]
             use_batch: ["true"]
             use_gpu: ["false"]
             omic_types: ["mutation:methylation:mrnaseq:cna"]
             var_filter: [1.0]
             K: [15]
             max_epochs: [1000]
-            fsard_max_iter: [5]
-            fsard_A_prior_frac: [0.1]
-            fsard_frac_atol: [0.02]
+            fsard_max_iter: [10]
             rel_tol: [0.00001]
             abs_tol: [0.0001]
 #    # Questions:
@@ -231,19 +229,19 @@ matfac_tcga_runs:
     tcga_test:
         n_reps: 1
         data_params:
-            kept_ctypes: ["HNSC:CESC:ESCA:STAD"]
+            kept_ctypes: ["HNSC"] #:CESC:ESCA:STAD"]
             heldout_ctypes: [""]
-        pathways: ["hallmark"] 
+        pathways: ["hallmark:oncogenic:positional"] 
         fit_params:
-            configuration: ["ard"] # TODO change to `fsard`
+            configuration: ["fsard"] # TODO change to `fsard`
             use_batch: ["true"]
             omic_types: ["mutation:methylation:mrnaseq:cna"]
             use_gpu: ["false"]
             var_filter: [0.025]
-            K: [20]
+            K: [25]
             max_epochs: [1000]
             fsard_max_iter: [20]
-            fsard_A_prior_frac: [0.1]
+            fsard_coupling: [2.0]
 #    config_comparison_hpv:
 #        n_reps: 1
 #        data_params:

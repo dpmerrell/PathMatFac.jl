@@ -158,16 +158,17 @@ end
 function vis_assignments!(traces, labels, model::PathMatFacModel)
     if isa(model.matfac.Y_reg, PM.FeatureSetARDReg)
         reg = model.matfac.Y_reg
-        L,K = size(reg.A)
-        push!(labels, "Pathway-factor assignments (A)")
-        push!(traces, 
-              heatmap(z=transpose(reg.A),
-                      x=reg.featureset_ids,
-                      y=collect(1:K),
-                      #y=collect(1:L),
-                      type="heatmap", colorscale="Greys", reversescale=true
-                     )
-             )
+        for (i, (A_mat, fids)) in enumerate(zip(reg.A, reg.featureset_ids))
+            L,K = size(A_mat)
+            push!(labels, string("Pathway-factor assignments (A): ", i))
+            push!(traces, 
+                  heatmap(z=transpose(A_mat),
+                          x=fids,
+                          y=collect(1:K),
+                          type="heatmap", colorscale="Greys", reversescale=true
+                         )
+                 )
+        end
     end
 end
 

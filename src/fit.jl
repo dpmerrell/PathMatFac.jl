@@ -796,11 +796,6 @@ function fit_feature_set_ard!(model::PathMatFacModel; lr=1.0,
                                                       max_epochs=1000,
                                                       fsard_max_iter=10,
                                                       fsard_max_A_iter=1000,
-                                                      fsard_n_lambda=20,
-                                                      fsard_lambda_atol=1e-3,
-                                                      fsard_frac_atol=1e-2,
-                                                      fsard_A_prior_frac=0.5,
-                                                      fsard_term_iter=5,
                                                       fsard_term_rtol=1e-5,
                                                       verbosity=1, print_prefix="",
                                                       history=nothing,
@@ -819,56 +814,49 @@ function fit_feature_set_ard!(model::PathMatFacModel; lr=1.0,
     # Next, put the FeatureSetARDReg back in place and
     # continue fitting the model.
     model.matfac.Y_reg = orig_reg
-    model.matfac.Y_reg.A_opt.lambda .= set_lambda_max(model.matfac.Y_reg, 
-                                                      model.matfac.Y)
 
-    # Set alpha
-    update_alpha!(model.matfac.Y_reg, model.matfac.Y)
-
-    # For now we assess "convergence" via change in X
-    X_old = deepcopy(model.matfac.X)
+    # For now we assess "convergence" via change in beta 
+    beta_old = deepcopy(model.matfac.Y_reg.beta)
 
     for iter=1:fsard_max_iter
 
         # Fit A
         v_println("##### Featureset ARD outer iteration (", iter, ") #####"; verbosity=verbosity,
                                                                              prefix=print_prefix)
-        update_A!(model.matfac.Y_reg, model.matfac.Y; target_frac=fsard_A_prior_frac,
-                                                      max_epochs=fsard_max_A_iter, term_iter=50,
-                                                      bin_search_max_iter=fsard_n_lambda,
-                                                      bin_search_frac_atol=fsard_frac_atol,
-                                                      bin_search_lambda_atol=fsard_lambda_atol,
+
+        v_println("Updating A."; verbosity=verbosity, prefix=n_pref)
+        update_A!(model.matfac.Y_reg, model.matfac.Y; max_epochs=fsard_max_A_iter, term_iter=50,
                                                       print_prefix=n_pref,
                                                       print_iter=100,
-                                                      verbosity=verbosity,
-                                                      history=history) 
+                                                      verbosity=verbosity)
 
         # Re-fit the factors X, Y
         keep_history = (history != nothing)
+        v_println("Updating factors (X,Y)."; verbosity=verbosity, prefix=n_pref)
         mf_fit_adapt_lr!(model; capacity=capacity, update_X=true, update_Y=true,
                                 lr=lr, min_lr=0.01,
                                 max_epochs=max_epochs,
                                 verbosity=verbosity,
-                                print_prefix=n_pref,
+                                print_prefix=string(n_pref, "    "),
                                 history=history)
             
-        # Compute the relative change in X
-        X_old .-= model.matfac.X
-        X_old .= X_old.*X_old
-        X_diff = sum(X_old)/sum(model.matfac.X.*model.matfac.X)
+        # Compute the relative change in beta 
+        beta_old .-= model.matfac.Y_reg.beta
+        beta_old .= beta_old.*beta_old
+        beta_diff = sum(beta_old)/sum(model.matfac.Y_reg.beta.*model.matfac.Y_reg.beta)
 
-        v_println("##### (ΔX)^2/(X)^2 = ", X_diff, " #####"; verbosity=verbosity,
+        v_println("##### (ΔB)^2/(B)^2 = ", beta_diff, " #####"; verbosity=verbosity,
                                                          prefix=print_prefix)
 
-        if X_diff < fsard_term_rtol
-            v_println("##### (ΔX)^2/(X)^2 < ", fsard_term_rtol," #####"; verbosity=verbosity,
+        if beta_diff < fsard_term_rtol
+            v_println("##### (ΔB)^2/(B)^2 < ", fsard_term_rtol," #####"; verbosity=verbosity,
                                                                          prefix=print_prefix)
             v_println("##### Terminating."; verbosity=verbosity,
                                             prefix=print_prefix)
             break 
         end
         
-        X_old .= model.matfac.X
+        beta_old .= model.matfac.Y_reg.beta
 
         if iter == fsard_max_iter 
             v_println("##### Reached max iteration (", fsard_max_iter,"); #####"; verbosity=verbosity,
@@ -918,11 +906,6 @@ function fit!(model::PathMatFacModel; lr=1.0,
                                       fit_joint=false,
                                       fsard_max_iter=10,
                                       fsard_max_A_iter=1000,
-                                      fsard_n_lambda=20,
-                                      fsard_lambda_atol=1e-3,
-                                      fsard_frac_atol=1e-2,
-                                      fsard_A_prior_frac=0.5,
-                                      fsard_term_iter=5,
                                       fsard_term_rtol=1e-5,
                                       rel_tol=1e-5,
                                       abs_tol=1e-5,
@@ -952,11 +935,6 @@ function fit!(model::PathMatFacModel; lr=1.0,
                                     history=hist, 
                                     fsard_max_iter=fsard_max_iter,
                                     fsard_max_A_iter=fsard_max_A_iter,
-                                    fsard_n_lambda=fsard_n_lambda,
-                                    fsard_lambda_atol=fsard_lambda_atol,
-                                    fsard_frac_atol=fsard_frac_atol,
-                                    fsard_A_prior_frac=fsard_A_prior_frac,
-                                    fsard_term_iter=fsard_term_iter,
                                     fsard_term_rtol=fsard_term_rtol,
                                     verbosity=verbosity,
                                     print_prefix=print_prefix,

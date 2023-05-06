@@ -18,6 +18,7 @@ mutable struct FeatureSetARDReg
     A::Tuple           # Tuple of L_v x K matrices
     S::Tuple           # Tuple of L_v x N_v sparse matrices
     alpha0::Float32    # Default 1.01
+    coupling::Float32  # Default 1.
     featureset_ids::Tuple # Tuple of L_v-dim vectors containing the names of feature sets
     alpha::AbstractVector  # Holds intermediate result for fast computation
     beta::AbstractMatrix   # Holds intermediate result for fast computation
@@ -27,13 +28,13 @@ end
 Flux.trainable(r::FeatureSetARDReg) = ()
 
 function FeatureSetARDReg(K::Integer, feature_views::AbstractVector, S_vec, featureset_ids_vec; 
-                          alpha0=1.01, lr=0.05)
+                          alpha0=1.01, coupling=1.0, lr=0.05)
 
     N = length(feature_views)
     col_ranges = Tuple(ids_to_ranges(feature_views))
     for (cr, S, fid) in zip(col_ranges, S_vec, featureset_ids_vec)
         @assert length(cr) == size(S, 2) "The number of columns in each `feature_view` must match size(S, 2) for corresponding S in `S_vec`"
-        @assert length(fid) == size(S, 1) "Number of featureset_ids incompatible with size(S, 2). Check `featureset_ids_vec` and `S_vec` for compatibility."
+        @assert length(fid) == size(S, 1) "Number of featureset_ids incompatible with size(S, 1). Check `featureset_ids_vec` and `S_vec` for compatibility."
     end
 
     A = []
@@ -54,7 +55,7 @@ function FeatureSetARDReg(K::Integer, feature_views::AbstractVector, S_vec, feat
     return FeatureSetARDReg(col_ranges,
                             A, 
                             Tuple(S_vec),
-                            alpha0, 
+                            alpha0, coupling, 
                             Tuple(featureset_ids_vec),
                             alpha, beta,
                             Tuple(A_opts)) 
@@ -65,16 +66,12 @@ function reorder_reg!(reg::FeatureSetARDReg, p)
     reg.beta .= reg.beta[p,:]
     
     for A_mat in reg.A
-        reg.A .= reg.A[:,p]
+        A_mat .= A_mat[:,p]
     end
     
     for A_opt in reg.A_opts
         A_opt.ssq_grad .= A_opt.ssq_grad[:,p]
         A_opt.lambda .= A_opt.lambda[p]
-    end
-
-    for lambda_vec in reg.lambda
-        lambda_vec .= lambda_vec[p]
     end
 
     return
@@ -86,6 +83,7 @@ function Adapt.adapt_storage(::Flux.FluxCUDAAdaptor, r::FeatureSetARDReg)
                             map(gpu, r.A),
                             map(S_mat -> gpu(SparseMatrixCSC{Float32,Int32}(S_mat)), r.S),
                             r.alpha0,
+                            r.coupling,
                             r.featureset_ids, 
                             gpu(r.alpha),
                             gpu(r.beta),
@@ -98,6 +96,7 @@ function Adapt.adapt_storage(::Flux.FluxCPUAdaptor, r::FeatureSetARDReg)
                             map(cpu, r.A),
                             map(S_mat -> SparseMatrixCSC{Float32,Int32}(cpu(S_mat)), r.S),
                             r.alpha0,
+                            r.coupling,
                             r.featureset_ids, 
                             cpu(r.alpha),
                             cpu(r.beta),
@@ -107,21 +106,42 @@ end
 
 
 
-function construct_featureset_ard(K, feature_ids, feature_views, feature_sets_vec;
-                                  featureset_ids=nothing, alpha0=Float32(1.01), 
+function construct_featureset_ard(K, feature_ids, feature_views, feature_sets_dict;
+                                  featureset_ids=nothing, alpha0=Float32(1.001), coupling=Float32(1.0), 
                                   lr=Float32(0.05))
-    col_ranges = ids_to_ranges(feature_views)    
-    S_vec = []
-    for (cr, feature_sets) in zip(col_ranges, feature_sets_vec) 
-        push!(S_vec, featuresets_to_csc(feature_ids[cr], feature_sets))
-    end
+    col_ranges = ids_to_ranges(feature_views)
+    unq_views = unique(feature_views) 
+    
     if featureset_ids == nothing
-        featureset_ids = [collect(1:length(fs)) for fs in feature_sets_vec]
+        featureset_ids = Dict(uv => collect(1:length(feature_sets_dict[uv])) for uv in unq_views)
+    end
+
+    S_vec = []
+    fs_vec = []
+    for (cr, uv) in zip(col_ranges, unq_views)
+        feature_sets = feature_sets_dict[uv]
+        push!(S_vec, featuresets_to_csc(feature_ids[cr], feature_sets))
+        push!(fs_vec, featureset_ids[uv])
     end
   
-    return FeatureSetARDReg(K, feature_views, S_vec, featureset_ids; 
-                            alpha0=alpha0, lr=lr)
+    return FeatureSetARDReg(K, feature_views, S_vec, fs_vec; 
+                            alpha0=alpha0, coupling=coupling, lr=lr)
 end 
+
+function (ard::ARDRegularizer)(X::AbstractMatrix)
+    buffer = zero(X)
+    result = 0 
+    for (a,b,cr) in zip(ard.alpha, ard.beta, ard.col_ranges)
+        X_v = view(X, :, cr)
+        buffer[:,cr] .= 1 .+ (0.5/b).*(X_v.*X_v)
+        buffer[:,cr] .= log.(buffer[:,cr])
+        result += (0.5 + a)*sum(view(buffer,:,cr))
+    end
+    return sum(result)
+    #b = 1 .+ (0.5/ard.beta).*(X.*X)
+    #return (0.5 + ard.alpha)*sum(log.(b))
+end
+
 
 
 # Apply the regularizer to a matrix
@@ -130,6 +150,31 @@ function (reg::FeatureSetARDReg)(Y::AbstractMatrix)
     return sum(transpose(Float32(0.5) .+ reg.alpha) .* sum(log.(b), dims=1))
 end
 
+function ChainRulesCore.rrule(ard::ARDRegularizer, X::AbstractMatrix)
+    
+    buffer = zero(X)
+    result = 0 
+    for (b,cr) in zip(ard.beta, ard.col_ranges)
+        X_v = view(X, :, cr)
+        buffer[:,cr] .= 1 .+ (0.5/b).*(X_v.*X_v)
+    end
+
+    function ard_pullback(loss_bar)
+        X_bar = similar(X)
+        for (a, b, cr) in zip(ard.alpha, ard.beta, ard.col_ranges)
+            Xb_v = view(X_bar, :, cr)
+            Xb_v .= (loss_bar/b)*(0.5 + a) .* view(X,:,cr) ./ view(buffer,:,cr)
+            #buffer[:,cr] .= 1 .+ (0.5/b).*(Xb_v.*Xb_v)
+        end
+        return NoTangent(), X_bar 
+    end
+
+    for (a, cr) in zip(ard.alpha, ard.col_ranges)
+        result += (0.5 + a)*sum(log.(view(buffer,:,cr)))
+    end
+
+    return result, ard_pullback
+end
 
 function ChainRulesCore.rrule(reg::FeatureSetARDReg, Y::AbstractMatrix)
 
@@ -182,9 +227,9 @@ end
 #end
 
 
-function gamma_normal_loss(A, S, alpha, alpha0, Y)
+function gamma_normal_loss(A, S, alpha, alpha0, coupling, Y)
     beta0 = alpha0 - 1
-    beta = beta0 .* (1 .+ transpose(A)*S)
+    beta = beta0 .* (1 .+ coupling.*transpose(A)*S)
     alpha_p_5 = alpha .+ Float32(0.5)
     lss = -sum(transpose(alpha).*sum(log.(beta), dims=1)) .+ sum(transpose(alpha_p_5).*sum(log.(beta .+ Float32(0.5).*(Y.*Y)), dims=1))
     # Calibration term
@@ -192,20 +237,20 @@ function gamma_normal_loss(A, S, alpha, alpha0, Y)
     return lss
 end
 
-function ChainRulesCore.rrule(::typeof(gamma_normal_loss), A, S, alpha, alpha0, Y)
+function ChainRulesCore.rrule(::typeof(gamma_normal_loss), A, S, alpha, alpha0, coupling, Y)
 
     beta0 = alpha0 - 1
-    beta = beta0.*(1 .+ transpose(A)*S)
+    beta = beta0.*(1 .+ coupling.*transpose(A)*S)
     Y2 = Y.*Y
     alpha_p_5 = alpha .+ Float32(0.5)
 
     function gamma_normal_loss_pullback(loss_bar)
 
         grad_AtS = beta0.*((-transpose(alpha) ./ beta) .+ transpose(alpha_p_5)./(beta .+ Float32(0.5).*Y2))
-        grad_A = S*transpose(grad_AtS)
+        grad_A = (coupling.*S)*transpose(grad_AtS)
         return NoTangent(), loss_bar.*grad_A,
                             NoTangent(), NoTangent(),
-                            NoTangent(), NoTangent()
+                            NoTangent(), NoTangent(), NoTangent()
     end
 
     lss = -sum(transpose(alpha).*sum(beta, dims=1)) .+ sum(transpose(alpha_p_5).*sum(log.(beta .+ Float32(0.5).*Y2), dims=1))
@@ -225,12 +270,16 @@ function update_lambda!(reg::FeatureSetARDReg, Y::AbstractMatrix)
         # Compute row-wise mean-squared of Y
         Y_view = view(Y, :, cr)
         Y_ms = vec(mean(Y_view .* Y_view, dims=2))
+        min_ms = min(minimum(Y_ms), Float32(1))
 
-        den = map(yv -> max(yv, Float32(1e-2)), Y_ms)
+        den = Y_ms .- min_ms .+ Float32(1e-3)
+        #den = map(yv -> yv, Float32(1e-2)), Y_ms)
         # Compute mean of S for this view
         S_mean = mean(S)
 
-        opt.lambda .= S_mean ./ den 
+        L = size(A, 1)
+
+        opt.lambda .= (L .* S_mean) ./ (reg.coupling .* den) 
     end
 
 end
@@ -239,11 +288,11 @@ end
 # Update a matrix of "assignments" via 
 # nonnegative projected ISTA
 function update_A_inner!(A::AbstractMatrix, S::AbstractMatrix, Y::AbstractMatrix,
-                         alpha::AbstractVector, alpha0, A_opt; 
+                         alpha::AbstractVector, alpha0, coupling, A_opt; 
                          max_epochs=1000, term_iter=20, atol=1e-5,
                          verbosity=1, print_prefix="", print_iter=100)
 
-    A_loss = A -> gamma_normal_loss(A, S, alpha, alpha0, Y)
+    A_loss = A -> gamma_normal_loss(A, S, alpha, alpha0, coupling, Y)
     reg_loss = A -> sum(transpose(A_opt.lambda) .* abs.(A))
     term_count = 0
 
@@ -273,7 +322,7 @@ function update_A_inner!(A::AbstractMatrix, S::AbstractMatrix, Y::AbstractMatrix
             end
         else
             term_count += 1
-            v_println("Δ_loss: ", (new_loss - best_loss), ". termination counter=", term_count; verbosity=verbosity-1,
+            v_println("Δ_loss: ", (new_loss - best_loss), ". termination counter=", term_count; verbosity=verbosity-2,
                                                                                                  prefix=print_prefix)
         end
 
@@ -305,15 +354,18 @@ end
 function update_A!(reg::FeatureSetARDReg, Y::AbstractMatrix;
                    max_epochs=1000, term_iter=20, atol=1e-5,
                    verbosity=1, print_prefix="", print_iter=100)
-
-    for (cr, A, S, opt) in zip(reg.col_ranges, reg.A, reg.S, reg.A_opts)
+    
+    n_pref = string(print_prefix, "    ")
+    beta0 = reg.alpha0 - 1
+    for (i, (cr, A, S, opt)) in enumerate(zip(reg.col_ranges, reg.A, reg.S, reg.A_opts))
         Y_view = view(Y, :, cr)
         A .= 0
-        update_A_inner!(A, S, Y_view, reg.alpha[cr], reg.alpha0, opt;
+        v_println("View ", i, ":" ; verbosity=verbosity, prefix=n_pref)
+        update_A_inner!(A, S, Y_view, reg.alpha[cr], reg.alpha0, reg.coupling, opt;
                         max_epochs=max_epochs, term_iter=term_iter, atol=atol,
-                        verbosity=verbosity, print_prefix=print_prefix, print_iter=print_iter)
+                        verbosity=verbosity, print_prefix=n_pref, print_iter=print_iter)
 
-        reg.beta[:,cr] .= (reg.alpha0 - 1).*(1 .+ transpose(A)*S)
+        reg.beta[:,cr] .= beta0.*(1 .+ reg.coupling.*transpose(A)*S)
     end
 end
 

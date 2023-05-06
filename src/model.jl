@@ -37,10 +37,10 @@ end
 function assemble_model(D, K, sample_ids, sample_conditions,
                               feature_ids, feature_views, feature_distributions,
                               batch_dict,
-                              feature_sets, featureset_names, feature_graphs, sample_graphs,
+                              feature_sets_dict, featureset_names, feature_graphs, sample_graphs,
                               lambda_X_l2, lambda_X_condition, lambda_X_graph, 
                               lambda_Y_l2, lambda_Y_selective_l1, lambda_Y_graph,
-                              Y_ard, Y_feature_set_ard, alpha0,
+                              Y_ard, Y_feature_set_ard, alpha0, coupling,
                               lambda_layer)
 
     M, N = size(D)
@@ -61,9 +61,9 @@ function assemble_model(D, K, sample_ids, sample_conditions,
     X_reg = construct_X_reg(K, M, sample_ids, sample_conditions, sample_graphs, 
                             lambda_X_l2, lambda_X_condition, lambda_X_graph,
                             Y_ard, Y_feature_set_ard)
-    Y_reg = construct_Y_reg(K, N, feature_ids, feature_views, feature_sets, feature_graphs,
+    Y_reg = construct_Y_reg(K, N, feature_ids, feature_views, feature_sets_dict, feature_graphs,
                             lambda_Y_l2, lambda_Y_selective_l1, lambda_Y_graph,
-                            Y_ard, Y_feature_set_ard, featureset_names, alpha0)
+                            Y_ard, Y_feature_set_ard, featureset_names, alpha0, coupling)
 
     # Construct MatFacModel
     matfac = MatFacModel(M, N, K, feature_distributions;
@@ -98,8 +98,8 @@ function PathMatFacModel(D::AbstractMatrix{<:Real};
                          feature_distributions::Union{<:AbstractVector,Nothing}=nothing,
                          batch_dict::Union{<:AbstractDict,Nothing}=nothing,
                          sample_graphs::Union{<:AbstractVector,Nothing}=nothing,
-                         feature_sets::Union{<:AbstractVector,Nothing}=nothing,
-                         featureset_names::Union{<:AbstractVector,Nothing}=nothing,
+                         feature_sets_dict::Union{<:AbstractDict,Nothing}=nothing,
+                         featureset_names::Union{<:AbstractDict,Nothing}=nothing,
                          feature_graphs::Union{<:AbstractVector,Nothing}=nothing,
                          lambda_X_l2::Union{Real,Nothing}=nothing,
                          lambda_X_condition::Union{Real,Nothing}=1.0,
@@ -110,7 +110,8 @@ function PathMatFacModel(D::AbstractMatrix{<:Real};
                          lambda_layer::Union{Real,Nothing}=1.0,
                          Y_ard::Bool=false,
                          Y_fsard::Bool=false,
-                         alpha0::Float32=Float32(1e-4)) 
+                         fsard_alpha0::Number=Float32(1.001),
+                         fsard_coupling::Number=Float32(1)) 
       
     ################################################
     # Validate input
@@ -178,7 +179,7 @@ function PathMatFacModel(D::AbstractMatrix{<:Real};
 
     # Check whether we're running feature set ARD
     if Y_fsard
-        @assert feature_sets != nothing "`feature_sets` must be provided whenever `Y_fsard` is true."
+        @assert feature_sets_dict != nothing "`feature_sets_dict` must be provided whenever `Y_fsard` is true."
     end 
     
 
@@ -186,10 +187,10 @@ function PathMatFacModel(D::AbstractMatrix{<:Real};
     # Assemble the model
     return assemble_model(D, K, sample_ids, sample_conditions, 
                           feature_ids, feature_views, feature_distributions,
-                          batch_dict, feature_sets, featureset_names, feature_graphs, sample_graphs,
+                          batch_dict, feature_sets_dict, featureset_names, feature_graphs, sample_graphs,
                           lambda_X_l2, lambda_X_condition, lambda_X_graph,
                           lambda_Y_l2, lambda_Y_selective_l1, lambda_Y_graph,
-                          Y_ard, Y_fsard, alpha0, 
+                          Y_ard, Y_fsard, fsard_alpha0, fsard_coupling, 
                           lambda_layer) 
 end
 

@@ -5,27 +5,14 @@
 ###############################################################
 
 function simulate_params!(X::AbstractMatrix, reg::Union{GroupRegularizer,L2Regularizer}; sample_conditions=nothing,
-                                                                                         sample_condition_var=0.1,
                                                                                          kwargs...)
     K, N = size(X)
     X .= randn_like(X)
-
-    #if sample_conditions != nothing
-    #    cond_ranges = ids_to_ranges(sample_conditions)
-    #    rescaling = sqrt(1 - sample_condition_var)
-    #    X .*= rescaling
-
-    #    sample_condition_std = sqrt(sample_condition_var)
-    #    sample_effects = [randn(length(K)).*sample_condition_std for r in cond_ranges]
-    #    for (se, r) in zip(sample_effects, cond_ranges)
-    #        X[:,r] .+= se 
-    #    end
-    #end
 end
 
 
-function simulate_params!(X::AbstractMatrix, reg::ARDRegularizer; ard_alpha=2.0,
-                                                                  ard_beta=2.0,
+function simulate_params!(X::AbstractMatrix, reg::ARDRegularizer; ard_alpha=1.05,
+                                                                  ard_beta=0.05,
                                                                   kwargs...)
     K, N = size(X)
     gamma_dist = Gamma(ard_alpha, 1/ard_beta)
@@ -55,27 +42,28 @@ function corrupt_S(S::AbstractMatrix, S_add_corruption, S_rem_corruption)
 end
 
 
-function simulate_params!(Y::AbstractMatrix, reg::FeatureSetARDReg; ard_alpha=1.0,
-                                                                    beta0=0.01,
+function simulate_params!(Y::AbstractMatrix, reg::FeatureSetARDReg; ard_alpha=1.05,
+                                                                    beta0=0.05,
                                                                     S_add_corruption=0.1,
                                                                     S_rem_corruption=0.1,
-                                                                    A_density=0.05,
+                                                                    A_density=0.01,
                                                                     kwargs...)
-    # Generate a matrix of geneset->factor assignments
-    K, N = size(Y)
-    L, N = size(reg.A)
-    reg.A = rand(L,N)
-    reg.A = (reg.A .<= A_density)
-    reg.A = convert(Matrix{Float32}, reg.A)
-    reg.A .*= abs.(randn_like(reg.A) ./ beta0) 
-    # Corrupt the matrix of genesets
-    reg.S = corrupt_S(reg.S, S_add_corruption, S_rem_corruption)
+    # Generate geneset->factor assignments for each view
+    for (cr, A_mat, S_mat) in zip(reg.col_ranges, reg.A, reg.S)
+        Y_view = view(Y, :, cr)
+        K, N = size(Y_view)
+        L, N = size(S_mat)
+        A_mat .= rand(L,K)
+        A_mat .= convert(Matrix{Float32}, (A_mat .<= A_density))
+        A_mat .*= abs.(randn_like(A_mat)) 
+        # Corrupt the matrix of genesets
+        S_mat .= corrupt_S(S_mat, S_add_corruption, S_rem_corruption)
 
-    # Compute the entry-specific betas; taus; and then Y
-    beta = beta0 .* (1 .+ transpose(reg.A) * reg.S)
-    tau = map(b->rand(Gamma(ard_alpha, 1/b)), beta)
-    Y .= randn_like(Y) ./ sqrt.(tau) 
-
+        # Compute the entry-specific betas; taus; and then Y
+        beta = beta0 .* (1 .+ transpose(A_mat) * S_mat)
+        tau = map(b->rand(Gamma(ard_alpha, 1/b)), beta)
+        Y_view .= randn_like(Y_view) ./ sqrt.(tau) 
+    end
 end
 
 

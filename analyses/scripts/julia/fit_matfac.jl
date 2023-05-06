@@ -113,7 +113,7 @@ function main(args)
                                     :feature_distributions => nothing,
                                     :batch_dict => nothing,
                                     :sample_graphs => nothing,
-                                    :feature_sets => nothing,
+                                    :feature_sets_dict => nothing,
                                     :featureset_names => nothing,
                                     :feature_graphs => nothing,
                                     :lambda_X_l2 => nothing,
@@ -124,7 +124,8 @@ function main(args)
                                     :lambda_Y_graph => nothing,
                                     :lambda_layer => 1.0,
                                     :Y_ard => false,
-                                    :Y_fsard => false
+                                    :Y_fsard => false,
+                                    :fsard_coupling => 1.0
                                     )
     update_opts!(model_kwargs, cli_opts)
  
@@ -137,13 +138,8 @@ function main(args)
                                   :fit_reg_weight => "EB",
                                   :fit_joint => false,
                                   :fsard_max_iter => 10,
-                                  :fsard_max_A_iter => 10000,
-                                  :fsard_n_lambda => 20,
-                                  :fsard_lambda_atol => 1e-2,
-                                  :fsard_frac_atol => 0.2,
-                                  :fsard_A_prior_frac => 0.5,
-                                  :fsard_term_iter => 10,
-                                  :fsard_term_rtol => 1e-5,
+                                  :fsard_max_A_iter => 1000,
+                                  :fsard_term_rtol => 1e-3,
                                   :keep_history => false,
                                   )
     update_opts!(fit_kwargs, cli_opts)
@@ -197,11 +193,13 @@ function main(args)
     model_kwargs[:feature_ids] = feature_ids
 
     if script_opts[:configuration] == "fsard"
-        feature_sets, new_feature_ids = prep_pathway_featuresets(pwy_edgelists, 
-                                                                 feature_genes;
-                                                                 feature_ids=feature_ids)
-        model_kwargs[:feature_sets] = feature_sets
-        model_kwargs[:featureset_names] = pwy_names 
+        feature_sets, new_feature_ids, featureset_ids = prep_pathway_featuresets(pwy_edgelists, 
+                                                                                 feature_genes,
+                                                                                 feature_assays;
+                                                                                 feature_ids=feature_ids,
+                                                                                 featureset_ids=pwy_names)
+        model_kwargs[:feature_sets_dict] = feature_sets
+        model_kwargs[:featureset_names] = featureset_ids 
         model_kwargs[:feature_ids] = new_feature_ids
         model_kwargs[:Y_fsard] = true
     end

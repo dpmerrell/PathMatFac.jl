@@ -270,12 +270,20 @@ end
     `feature_genes`: a vector of gene ID strings.
 """
 function prep_pathway_featuresets(pwy_sifs::Vector, feature_genes::Vector;
-                                  feature_ids::Union{Nothing,Vector}=nothing)
+                                  feature_ids::Union{Nothing,Vector}=nothing,
+                                  featureset_ids::Union{Nothing,Vector}=nothing)
+
     # Check whether feature ids were provided
     if feature_ids == nothing
         feature_ids = collect(1:length(feature_genes))
         feature_ids = map(t->join(t, "_"), collect(zip(feature_genes, feature_ids)))
     end 
+    # Check whether featureset ids were provided
+    if featureset_ids == nothing
+        featureset_ids = collect(1:length(pwy_sifs))
+    end
+
+    all_genes = Set(feature_genes)
 
     # Create a map from genes to indices 
     gene_to_idxs = Dict()
@@ -292,23 +300,29 @@ function prep_pathway_featuresets(pwy_sifs::Vector, feature_genes::Vector;
 
     # For each pathway, find all of the features
     # associated with it
-    feature_sets = Vector{Set}(undef, n_pwy)
-    for (i,ns) in enumerate(nodesets)
-        fs = Set()
-        for node in ns
-            node_idx = collect(get!(gene_to_idxs, node, []))
-            union!(fs, feature_ids[node_idx])
-        end 
-        feature_sets[i] = fs
+    feature_sets = []
+    kept_featureset_ids = []
+    for (id, ns) in zip(featureset_ids, nodesets)
+        intersect!(ns, all_genes)
+        if length(ns) > 0
+            fs = Set()
+            for node in ns
+                node_idx = collect(get!(gene_to_idxs, node, []))
+                union!(fs, feature_ids[node_idx])
+            end
+            push!(kept_featureset_ids, id) 
+            push!(feature_sets, fs)
+        end
     end
 
-    return feature_sets, feature_ids
+    return feature_sets, feature_ids, kept_featureset_ids
 end
 
 
 # Construct featuresets for each unique feature view.
 function prep_pathway_featuresets(pwy_sifs::Vector, feature_genes::Vector, feature_views::Vector;
-                                  feature_ids::Union{Nothing,Vector}=nothing)
+                                  feature_ids::Union{Nothing,Vector}=nothing, 
+                                  featureset_ids::Union{Nothing,Vector}=nothing)
     
     # Check whether feature ids were provided
     if feature_ids == nothing
@@ -316,17 +330,25 @@ function prep_pathway_featuresets(pwy_sifs::Vector, feature_genes::Vector, featu
         feature_ids = map(t->join(t, "_"), collect(zip(feature_genes, feature_ids)))
     end 
 
+    # Check whether featureset ids were provided
+    if featureset_ids == nothing
+        featureset_ids = collect(1:length(pwy_sifs))
+    end
+
     unq_views = unique(feature_views)
-    view_feature_sets = Dict()
-    
+    view_feature_sets = Dict() 
+    view_featureset_ids = Dict()
+ 
     for uv in unq_views
         v_idx = (feature_views .== uv)
-        fs, _ = prep_pathway_featuresets(pwy_sifs, feature_genes[v_idx]; 
-                                         feature_ids=feature_ids[v_idx])
+        fs, _, kept_featureset_ids = prep_pathway_featuresets(pwy_sifs, feature_genes[v_idx]; 
+                                                              feature_ids=feature_ids[v_idx],
+                                                              featureset_ids=featureset_ids)
         view_feature_sets[uv] = fs
+        view_featureset_ids[uv] = kept_featureset_ids
     end
     
-    return view_feature_sets, feature_ids 
+    return view_feature_sets, feature_ids, view_featureset_ids 
 end
 
 
