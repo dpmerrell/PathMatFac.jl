@@ -9,9 +9,9 @@ import argparse
 import h5py
 import json
 
+
 def score_col_param(v_true, v_fitted, score_fn):
     return score_fn(v_true, v_fitted)    
-
 
 def score_batch_param(true_values, fitted_values, score_fn):
     #scores = [r2_score(v_true, v_fitted, multioutput="uniform_average") for (v_true, v_fitted) in zip(true_values, fitted_values)]
@@ -61,6 +61,36 @@ def generalized_cossim_pvalue(Y_true, Y_fitted, test_score, n_samples=10000):
 ##########################################################
 # Scores for the assignment matrix (A)
 ##########################################################
+
+def rowwise_cossim(Y_true, Y_fitted):
+    
+    K_true = Y_true.shape[0]
+    Y_true_norm = Y_true / np.sqrt(np.sum(Y_true*Y_true, axis=1)).reshape(K_true,1)
+    
+    K_fitted = Y_fitted.shape[0]
+    Y_fitted_norm = Y_fitted / np.sqrt(np.sum(Y_fitted*Y_fitted, axis=1)).reshape(K_fitted,1)
+    cossim_matrix = Y_true_norm @ np.transpose(Y_fitted_norm)
+    return cossim_matrix*cossim_matrix 
+
+
+def choose_best_match(Y_true, Y_fitted):
+    
+    score_matrix = rowwise_cossim(Y_true, Y_fitted) 
+    
+    true_idx, fitted_idx = linear_sum_assignment(score_matrix, maximize=True)
+    score_ls = [score_matrix[i,j] for (i,j) in zip(true_idx, fitted_idx)]
+
+    return true_idx, fitted_idx 
+
+
+def colwise_score(A_true, A_fitted, score_fn):
+    K = A_true.shape[1]
+    score_vec = np.zeros(K)
+    for k in range(K):
+        score_vec[k] = score_fn(A_true[:,k], A_fitted[:,k])
+    return np.mean(score_vec)
+
+
 def maximal_pairwise_score(A_true, A_fitted, score_fn, verbose=False):
 
     K_true = A_true.shape[1]
@@ -110,6 +140,13 @@ def safe_aucroc(y_true, y_pred):
         return roc_auc_score(y_true, y_pred)
 
 
+def load_A_matrices(hfile):
+    k_ls = sorted(list(hfile["fsard/A"].keys()))
+    print("K LIST")
+    print(k_ls)
+    return [hfile["fsard/A/"+k][:,:].transpose() for k in k_ls]
+
+
 def compute_scores(true_hdf, fitted_hdf):
 
     scores = dict()
@@ -135,32 +172,44 @@ def compute_scores(true_hdf, fitted_hdf):
 
             if ("fsard" in f_true.keys()) and ("fsard" in f_fitted.keys()): 
                 print("Scoring A...")
-                A_true = f_true["fsard/A"][:,:].transpose()
-                A_fitted = f_fitted["fsard/A"][:,:].transpose()
+                
+                print("Matching true and fitted factors:")
+                true_idx, fitted_idx = choose_best_match(Y_true, Y_fitted)
+                print("True idx:", true_idx)
+                print("Fitted idx:", fitted_idx)
+
+                A_true_ls = load_A_matrices(f_true) 
+                A_fitted_ls = load_A_matrices(f_fitted)
+
+                A_true_ls = [At[:,true_idx] for At in A_true_ls]
+                A_fitted_ls = [Af[:,fitted_idx] for Af in A_fitted_ls]
 
                 aucroc_fn = lambda at, af: safe_aucroc((at>0).astype(int), af)
-                scores["A_aucroc"] = maximal_pairwise_score(A_true, A_fitted, aucroc_fn, verbose=True)
-                A_aucroc_null, A_aucroc_pvalue = mps_pvalue(A_true, A_fitted, aucroc_fn, scores["A_aucroc"])
-                scores["A_aucroc_null"] = A_aucroc_null
-                scores["A_aucroc_pvalue"] = A_aucroc_pvalue
-                
+                scores["A_aucroc"] = np.mean([colwise_score(At, Af, aucroc_fn) for (At,Af) in zip(A_true_ls, A_fitted_ls)])
+                #scores["A_aucroc"] = maximal_pairwise_score(A_true, A_fitted, aucroc_fn, verbose=True)
+                #A_aucroc_null, A_aucroc_pvalue = mps_pvalue(A_true, A_fitted, aucroc_fn, scores["A_aucroc"])
+                #scores["A_aucroc_null"] = A_aucroc_null
+                #scores["A_aucroc_pvalue"] = A_aucroc_pvalue
+                #
                 aucpr_fn = lambda at, af: average_precision_score((at>0).astype(int), af)
-                scores["A_aucpr"] = maximal_pairwise_score(A_true, A_fitted, aucpr_fn, verbose=True)
-                A_aucpr_null, A_aucpr_pvalue = mps_pvalue(A_true, A_fitted, aucpr_fn, scores["A_aucpr"])
-                scores["A_aucpr_null"] = A_aucpr_null
-                scores["A_aucpr_pvalue"] = A_aucpr_pvalue
-                scores["A_aucpr_baserate"] = np.mean([np.mean(A_true[:,j] > 0) for j in range(A_true.shape[1])])
+                scores["A_aucpr"] = np.mean([colwise_score(At, Af, aucpr_fn) for (At,Af) in zip(A_true_ls, A_fitted_ls)])
 
-                print("Scoring beta...")
-                S_true = f_true["fsard/S"][:,:].transpose()
-                beta_true = np.matmul(A_true.transpose(), S_true)
+                #scores["A_aucpr"] = maximal_pairwise_score(A_true, A_fitted, aucpr_fn, verbose=True)
+                #A_aucpr_null, A_aucpr_pvalue = mps_pvalue(A_true, A_fitted, aucpr_fn, scores["A_aucpr"])
+                #scores["A_aucpr_null"] = A_aucpr_null
+                #scores["A_aucpr_pvalue"] = A_aucpr_pvalue
+                scores["A_aucpr_baserate"] = np.mean([np.mean(A_true[:,j] > 0) for A_true in A_true_ls for j in range(A_true.shape[1])])
 
-                S_fitted = f_fitted["fsard/S"][:,:].transpose()
-                beta_fitted = np.matmul(A_fitted.transpose(), S_fitted)
-                scores["beta_aucroc"] = maximal_pairwise_score(beta_true.transpose(), 
-                                                               beta_fitted.transpose(), 
-                                                               lambda bt, bf: safe_aucroc((bt>0).astype(int), bf),
-                                                               verbose=True)
+                #print("Scoring beta...")
+                #S_true = f_true["fsard/S"][:,:].transpose()
+                #beta_true = np.matmul(A_true.transpose(), S_true)
+
+                #S_fitted = f_fitted["fsard/S"][:,:].transpose()
+                #beta_fitted = np.matmul(A_fitted.transpose(), S_fitted)
+                #scores["beta_aucroc"] = maximal_pairwise_score(beta_true.transpose(), 
+                #                                               beta_fitted.transpose(), 
+                #                                               lambda bt, bf: safe_aucroc((bt>0).astype(int), bf),
+                #                                               verbose=True)
 
             
             print("Scoring mu...")

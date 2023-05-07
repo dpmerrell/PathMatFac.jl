@@ -125,7 +125,7 @@ function main(args)
                                     :lambda_layer => 1.0,
                                     :Y_ard => false,
                                     :Y_fsard => false,
-                                    :fsard_coupling => 1.0
+                                    :fsard_v0 => 0.8
                                     )
     update_opts!(model_kwargs, cli_opts)
  

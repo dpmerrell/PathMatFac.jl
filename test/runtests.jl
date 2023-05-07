@@ -822,10 +822,10 @@ function featureset_ard_tests()
                     [collect(21:25), collect(25:30),collect(31:35), collect(36:40)]
                    ]
     true_alpha0 = 1.001
-    coupling = 3.0
+    v0 = 0.8
     reg = PM.construct_featureset_ard(K, feature_ids, feature_views, feature_sets;
                                       featureset_ids=nothing, alpha0=true_alpha0,  
-                                      lr=0.1, coupling=coupling)
+                                      lr=0.1, v0=v0)
  
     n_sets = [length(fs) for fs in feature_sets]
     test_A = (rand(Bool, 4, 10) .* abs.(randn(4,10)), 
@@ -849,7 +849,7 @@ function featureset_ard_tests()
         @test length(reg.col_ranges) == 2
         @test reg.featureset_ids == (collect(1:4), collect(1:4))
         @test reg.alpha0 == Float32(true_alpha0)
-        @test reg.coupling == Float32(coupling)
+        @test reg.v0 == Float32(v0)
         @test isapprox(reg.beta, fill(Float32(true_alpha0 - 1), K,N))
 
         @test size(reg.A[1]) == (length(feature_sets[1]), K)
@@ -911,7 +911,7 @@ function featureset_ard_tests()
         #println(reg.A[1])
         #println("ALPHA[2] OLD")
         #println(reg.A[2])
-        PM.update_A_inner!(reg.A[1], reg.S[1], Y[:,1:20], reg.alpha[1:20], reg.alpha0, reg.coupling, reg.A_opts[1]; 
+        PM.update_A_inner!(reg.A[1], reg.S[1], Y[:,1:20], reg.alpha[1:20], reg.alpha0, reg.v0, reg.A_opts[1]; 
                            max_epochs=5000, term_iter=100, verbosity=1, print_iter=10, print_prefix="   ")
         @test true 
 
@@ -1318,7 +1318,7 @@ function fit_tests()
 #    # Fitting model with Feature Set ARD on Y
 #    ####################################################
 
-    coupling = 100.0
+    v0 = 0.5
     @testset "Featureset ARD fit CPU" begin
 
         model = PathMatFacModel(Z; K=4,
@@ -1327,7 +1327,7 @@ function fit_tests()
                                    feature_ids=feature_ids,  
                                    batch_dict=batch_dict, 
                                    feature_sets_dict=feature_sets, 
-                                   Y_fsard=true, fsard_coupling=coupling)
+                                   Y_fsard=true, fsard_v0=v0)
 
         X_start = deepcopy(model.matfac.X)
         Y_start = deepcopy(model.matfac.Y)

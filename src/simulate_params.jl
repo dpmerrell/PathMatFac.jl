@@ -11,8 +11,8 @@ function simulate_params!(X::AbstractMatrix, reg::Union{GroupRegularizer,L2Regul
 end
 
 
-function simulate_params!(X::AbstractMatrix, reg::ARDRegularizer; ard_alpha=1.05,
-                                                                  ard_beta=0.05,
+function simulate_params!(X::AbstractMatrix, reg::ARDRegularizer; ard_alpha=1.01,
+                                                                  ard_beta=0.01,
                                                                   kwargs...)
     K, N = size(X)
     gamma_dist = Gamma(ard_alpha, 1/ard_beta)
@@ -42,27 +42,39 @@ function corrupt_S(S::AbstractMatrix, S_add_corruption, S_rem_corruption)
 end
 
 
-function simulate_params!(Y::AbstractMatrix, reg::FeatureSetARDReg; ard_alpha=1.05,
-                                                                    beta0=0.05,
+function simulate_params!(Y::AbstractMatrix, reg::FeatureSetARDReg; ard_alpha=1.01,
+                                                                    beta0=0.001,
                                                                     S_add_corruption=0.1,
                                                                     S_rem_corruption=0.1,
-                                                                    A_density=0.01,
+                                                                    A_nnz=1,
                                                                     kwargs...)
+
     # Generate geneset->factor assignments for each view
     for (cr, A_mat, S_mat) in zip(reg.col_ranges, reg.A, reg.S)
         Y_view = view(Y, :, cr)
         K, N = size(Y_view)
         L, N = size(S_mat)
-        A_mat .= rand(L,K)
-        A_mat .= convert(Matrix{Float32}, (A_mat .<= A_density))
-        A_mat .*= abs.(randn_like(A_mat)) 
+        target_density = A_nnz / L
+
+        # Populate A with random assignments
+        A_mat .= 0
+        for k=1:K
+            rand_idx = sample(1:L)
+            A_mat[rand_idx,k] = abs(randn().*5) 
+        end 
+ 
         # Corrupt the matrix of genesets
         S_mat .= corrupt_S(S_mat, S_add_corruption, S_rem_corruption)
 
-        # Compute the entry-specific betas; taus; and then Y
-        beta = beta0 .* (1 .+ transpose(A_mat) * S_mat)
-        tau = map(b->rand(Gamma(ard_alpha, 1/b)), beta)
-        Y_view .= randn_like(Y_view) ./ sqrt.(tau) 
+        ## Compute the entry-specific betas; taus; and then Y
+        #beta = beta0 .* (0.1 .+ transpose(A_mat) * S_mat)
+        #tau = map(b->rand(Gamma(ard_alpha, 1/b)), beta)
+        #Y_view .= randn_like(Y_view) ./ sqrt.(tau)
+        tau = rand(Gamma(ard_alpha, 1/beta0), K,N)
+        beta = transpose(A_mat)*S_mat
+        Y_view .= randn_like(Y_view) ./ sqrt.(tau)
+        Y_view .*= (beta .== 0)
+        Y_view .+= (transpose(A_mat)*S_mat .> 0).*rand([-1,1], K,N)
     end
 end
 

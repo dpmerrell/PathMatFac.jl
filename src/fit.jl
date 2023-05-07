@@ -817,36 +817,27 @@ function fit_feature_set_ard!(model::PathMatFacModel; lr=1.0,
 
     # For now we assess "convergence" via change in beta 
     beta_old = deepcopy(model.matfac.Y_reg.beta)
+    beta_diff = nothing
 
     for iter=1:fsard_max_iter
 
-        # Fit A
         v_println("##### Featureset ARD outer iteration (", iter, ") #####"; verbosity=verbosity,
                                                                              prefix=print_prefix)
 
+        # Fit A
         v_println("Updating A."; verbosity=verbosity, prefix=n_pref)
         update_A!(model.matfac.Y_reg, model.matfac.Y; max_epochs=fsard_max_A_iter, term_iter=50,
                                                       print_prefix=n_pref,
                                                       print_iter=100,
                                                       verbosity=verbosity)
-
-        # Re-fit the factors X, Y
-        keep_history = (history != nothing)
-        v_println("Updating factors (X,Y)."; verbosity=verbosity, prefix=n_pref)
-        mf_fit_adapt_lr!(model; capacity=capacity, update_X=true, update_Y=true,
-                                lr=lr, min_lr=0.01,
-                                max_epochs=max_epochs,
-                                verbosity=verbosity,
-                                print_prefix=string(n_pref, "    "),
-                                history=history)
-            
+        
         # Compute the relative change in beta 
         beta_old .-= model.matfac.Y_reg.beta
         beta_old .= beta_old.*beta_old
         beta_diff = sum(beta_old)/sum(model.matfac.Y_reg.beta.*model.matfac.Y_reg.beta)
 
-        v_println("##### (ΔB)^2/(B)^2 = ", beta_diff, " #####"; verbosity=verbosity,
-                                                         prefix=print_prefix)
+        v_println("### (ΔB)^2/(B)^2 = ", beta_diff, " ###"; verbosity=verbosity,
+                                                prefix=n_pref)
 
         if beta_diff < fsard_term_rtol
             v_println("##### (ΔB)^2/(B)^2 < ", fsard_term_rtol," #####"; verbosity=verbosity,
@@ -858,6 +849,17 @@ function fit_feature_set_ard!(model::PathMatFacModel; lr=1.0,
         
         beta_old .= model.matfac.Y_reg.beta
 
+
+        # Re-fit the factors X, Y
+        keep_history = (history != nothing)
+        v_println("Updating factors (X,Y)."; verbosity=verbosity, prefix=n_pref)
+        mf_fit_adapt_lr!(model; capacity=capacity, update_X=true, update_Y=true,
+                                lr=lr, min_lr=0.01,
+                                max_epochs=max_epochs,
+                                verbosity=verbosity,
+                                print_prefix=string(n_pref, "    "),
+                                history=history)
+            
         if iter == fsard_max_iter 
             v_println("##### Reached max iteration (", fsard_max_iter,"); #####"; verbosity=verbosity,
                                                                     prefix=print_prefix)

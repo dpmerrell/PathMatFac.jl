@@ -18,7 +18,7 @@ mutable struct FeatureSetARDReg
     A::Tuple           # Tuple of L_v x K matrices
     S::Tuple           # Tuple of L_v x N_v sparse matrices
     alpha0::Float32    # Default 1.01
-    coupling::Float32  # Default 1.
+    v0::Float32        # Default 0.8
     featureset_ids::Tuple # Tuple of L_v-dim vectors containing the names of feature sets
     alpha::AbstractVector  # Holds intermediate result for fast computation
     beta::AbstractMatrix   # Holds intermediate result for fast computation
@@ -28,7 +28,7 @@ end
 Flux.trainable(r::FeatureSetARDReg) = ()
 
 function FeatureSetARDReg(K::Integer, feature_views::AbstractVector, S_vec, featureset_ids_vec; 
-                          alpha0=1.01, coupling=1.0, lr=0.05)
+                          alpha0=1.01, v0=0.8, lr=0.05)
 
     N = length(feature_views)
     col_ranges = Tuple(ids_to_ranges(feature_views))
@@ -55,7 +55,7 @@ function FeatureSetARDReg(K::Integer, feature_views::AbstractVector, S_vec, feat
     return FeatureSetARDReg(col_ranges,
                             A, 
                             Tuple(S_vec),
-                            alpha0, coupling, 
+                            alpha0, v0, 
                             Tuple(featureset_ids_vec),
                             alpha, beta,
                             Tuple(A_opts)) 
@@ -83,7 +83,7 @@ function Adapt.adapt_storage(::Flux.FluxCUDAAdaptor, r::FeatureSetARDReg)
                             map(gpu, r.A),
                             map(S_mat -> gpu(SparseMatrixCSC{Float32,Int32}(S_mat)), r.S),
                             r.alpha0,
-                            r.coupling,
+                            r.v0,
                             r.featureset_ids, 
                             gpu(r.alpha),
                             gpu(r.beta),
@@ -96,7 +96,7 @@ function Adapt.adapt_storage(::Flux.FluxCPUAdaptor, r::FeatureSetARDReg)
                             map(cpu, r.A),
                             map(S_mat -> SparseMatrixCSC{Float32,Int32}(cpu(S_mat)), r.S),
                             r.alpha0,
-                            r.coupling,
+                            r.v0,
                             r.featureset_ids, 
                             cpu(r.alpha),
                             cpu(r.beta),
@@ -107,7 +107,7 @@ end
 
 
 function construct_featureset_ard(K, feature_ids, feature_views, feature_sets_dict;
-                                  featureset_ids=nothing, alpha0=Float32(1.001), coupling=Float32(1.0), 
+                                  featureset_ids=nothing, alpha0=Float32(1.001), v0=Float32(0.8), 
                                   lr=Float32(0.05))
     col_ranges = ids_to_ranges(feature_views)
     unq_views = unique(feature_views) 
@@ -125,24 +125,8 @@ function construct_featureset_ard(K, feature_ids, feature_views, feature_sets_di
     end
   
     return FeatureSetARDReg(K, feature_views, S_vec, fs_vec; 
-                            alpha0=alpha0, coupling=coupling, lr=lr)
+                            alpha0=alpha0, v0=v0, lr=lr)
 end 
-
-function (ard::ARDRegularizer)(X::AbstractMatrix)
-    buffer = zero(X)
-    result = 0 
-    for (a,b,cr) in zip(ard.alpha, ard.beta, ard.col_ranges)
-        X_v = view(X, :, cr)
-        buffer[:,cr] .= 1 .+ (0.5/b).*(X_v.*X_v)
-        buffer[:,cr] .= log.(buffer[:,cr])
-        result += (0.5 + a)*sum(view(buffer,:,cr))
-    end
-    return sum(result)
-    #b = 1 .+ (0.5/ard.beta).*(X.*X)
-    #return (0.5 + ard.alpha)*sum(log.(b))
-end
-
-
 
 # Apply the regularizer to a matrix
 function (reg::FeatureSetARDReg)(Y::AbstractMatrix)
@@ -150,31 +134,6 @@ function (reg::FeatureSetARDReg)(Y::AbstractMatrix)
     return sum(transpose(Float32(0.5) .+ reg.alpha) .* sum(log.(b), dims=1))
 end
 
-function ChainRulesCore.rrule(ard::ARDRegularizer, X::AbstractMatrix)
-    
-    buffer = zero(X)
-    result = 0 
-    for (b,cr) in zip(ard.beta, ard.col_ranges)
-        X_v = view(X, :, cr)
-        buffer[:,cr] .= 1 .+ (0.5/b).*(X_v.*X_v)
-    end
-
-    function ard_pullback(loss_bar)
-        X_bar = similar(X)
-        for (a, b, cr) in zip(ard.alpha, ard.beta, ard.col_ranges)
-            Xb_v = view(X_bar, :, cr)
-            Xb_v .= (loss_bar/b)*(0.5 + a) .* view(X,:,cr) ./ view(buffer,:,cr)
-            #buffer[:,cr] .= 1 .+ (0.5/b).*(Xb_v.*Xb_v)
-        end
-        return NoTangent(), X_bar 
-    end
-
-    for (a, cr) in zip(ard.alpha, ard.col_ranges)
-        result += (0.5 + a)*sum(log.(view(buffer,:,cr)))
-    end
-
-    return result, ard_pullback
-end
 
 function ChainRulesCore.rrule(reg::FeatureSetARDReg, Y::AbstractMatrix)
 
@@ -188,48 +147,10 @@ function ChainRulesCore.rrule(reg::FeatureSetARDReg, Y::AbstractMatrix)
 end
 
 
-#function update_alpha!(reg::FeatureSetARDReg, Y::AbstractMatrix; tau_smoothing=Float32(1e-3))
-#
-#    tau = (tau_smoothing .+ Float32(0.5)) ./ (tau_smoothing .+ (Float32(0.5).*Y.*Y))
-#
-#    # Compute view-wise quantities from tau
-#    view_mean_t = map(r->mean(tau[:,r]), reg.feature_views)
-#    println(view_mean_t)
-#    view_var_t = map(r->var(tau[:,r]), reg.feature_views)
-#    println(view_var_t)
-#
-#    view_mean_lt = map(r->mean(log.(tau[:,r] .+ Float32(1e-9))), reg.feature_views)
-#    view_mean_tlt = map(r->mean(tau[:,r].*log.(tau[:,r] .+ Float32(1e-9))), reg.feature_views)
-#
-#    # Compute new view-wise alphas; assign to model
-#    view_alpha = view_mean_t ./(view_mean_tlt .- view_mean_t .* view_mean_lt)
-#    for (i,r) in enumerate(reg.feature_views)
-#        reg.alpha[r] .= view_alpha[i]
-#    end
-#    println(reg.alpha)
-# 
-#    beta0 = reg.beta0
-#
-#    # Replace NaNs with beta0
-#    nan_idx = (!isfinite).(reg.alpha)
-#    reg.alpha[nan_idx] .= beta0
-#    
-#    # Require alpha to be at least as large as beta0
-#    reg.alpha = map(x->max(x,beta0), reg.alpha)
-# 
-#    # For features that do not appear in any feature sets,
-#    # set alpha = beta0 for an uninformative ARD prior on
-#    # that column of Y.
-#    L = size(reg.S, 1)
-#    feature_appearances = vec(ones_like(Y,1,L) * reg.S)
-#    noprior_features = (feature_appearances .== 0)
-#    reg.alpha[noprior_features] .= beta0
-#end
 
-
-function gamma_normal_loss(A, S, alpha, alpha0, coupling, Y)
+function gamma_normal_loss(A, S, alpha, alpha0, v0, Y)
     beta0 = alpha0 - 1
-    beta = beta0 .* (1 .+ coupling.*transpose(A)*S)
+    beta = beta0 .* (v0 .+ transpose(A)*S)
     alpha_p_5 = alpha .+ Float32(0.5)
     lss = -sum(transpose(alpha).*sum(log.(beta), dims=1)) .+ sum(transpose(alpha_p_5).*sum(log.(beta .+ Float32(0.5).*(Y.*Y)), dims=1))
     # Calibration term
@@ -237,17 +158,17 @@ function gamma_normal_loss(A, S, alpha, alpha0, coupling, Y)
     return lss
 end
 
-function ChainRulesCore.rrule(::typeof(gamma_normal_loss), A, S, alpha, alpha0, coupling, Y)
+function ChainRulesCore.rrule(::typeof(gamma_normal_loss), A, S, alpha, alpha0, v0, Y)
 
     beta0 = alpha0 - 1
-    beta = beta0.*(1 .+ coupling.*transpose(A)*S)
+    beta = beta0.*(v0 .+ transpose(A)*S)
     Y2 = Y.*Y
     alpha_p_5 = alpha .+ Float32(0.5)
 
     function gamma_normal_loss_pullback(loss_bar)
 
         grad_AtS = beta0.*((-transpose(alpha) ./ beta) .+ transpose(alpha_p_5)./(beta .+ Float32(0.5).*Y2))
-        grad_A = (coupling.*S)*transpose(grad_AtS)
+        grad_A = S*transpose(grad_AtS)
         return NoTangent(), loss_bar.*grad_A,
                             NoTangent(), NoTangent(),
                             NoTangent(), NoTangent(), NoTangent()
@@ -270,7 +191,7 @@ function update_lambda!(reg::FeatureSetARDReg, Y::AbstractMatrix)
         # Compute row-wise mean-squared of Y
         Y_view = view(Y, :, cr)
         Y_ms = vec(mean(Y_view .* Y_view, dims=2))
-        min_ms = min(minimum(Y_ms), Float32(1))
+        min_ms = min(minimum(Y_ms), reg.v0)
 
         den = Y_ms .- min_ms .+ Float32(1e-3)
         #den = map(yv -> yv, Float32(1e-2)), Y_ms)
@@ -279,7 +200,7 @@ function update_lambda!(reg::FeatureSetARDReg, Y::AbstractMatrix)
 
         L = size(A, 1)
 
-        opt.lambda .= (L .* S_mean) ./ (reg.coupling .* den) 
+        opt.lambda .= (L .* S_mean) ./  den 
     end
 
 end
@@ -288,11 +209,11 @@ end
 # Update a matrix of "assignments" via 
 # nonnegative projected ISTA
 function update_A_inner!(A::AbstractMatrix, S::AbstractMatrix, Y::AbstractMatrix,
-                         alpha::AbstractVector, alpha0, coupling, A_opt; 
+                         alpha::AbstractVector, alpha0, v0, A_opt; 
                          max_epochs=1000, term_iter=20, atol=1e-5,
                          verbosity=1, print_prefix="", print_iter=100)
 
-    A_loss = A -> gamma_normal_loss(A, S, alpha, alpha0, coupling, Y)
+    A_loss = A -> gamma_normal_loss(A, S, alpha, alpha0, v0, Y)
     reg_loss = A -> sum(transpose(A_opt.lambda) .* abs.(A))
     term_count = 0
 
@@ -361,11 +282,11 @@ function update_A!(reg::FeatureSetARDReg, Y::AbstractMatrix;
         Y_view = view(Y, :, cr)
         A .= 0
         v_println("View ", i, ":" ; verbosity=verbosity, prefix=n_pref)
-        update_A_inner!(A, S, Y_view, reg.alpha[cr], reg.alpha0, reg.coupling, opt;
+        update_A_inner!(A, S, Y_view, reg.alpha[cr], reg.alpha0, reg.v0, opt;
                         max_epochs=max_epochs, term_iter=term_iter, atol=atol,
                         verbosity=verbosity, print_prefix=n_pref, print_iter=print_iter)
 
-        reg.beta[:,cr] .= beta0.*(1 .+ reg.coupling.*transpose(A)*S)
+        reg.beta[:,cr] .= beta0.*(reg.v0 .+ transpose(A)*S)
     end
 end
 
