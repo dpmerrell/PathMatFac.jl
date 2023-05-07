@@ -9,17 +9,17 @@ matfac_simulation_study:
         data_params:
             kept_ctypes: ["ACC:CESC"] 
             heldout_ctypes: [""]
-        pathways: ["hallmark:oncogenic:positional"] 
+        pathways: ["positional"] 
         sim_params:
             configuration: ["fsard"]
             use_batch: ["true"]
             var_filter: [0.0125] 
             K: [10]
-            S_add_corruption: [0.05]
-            S_remove_corruption: [0.05]
+            S_add_corruption: [0.00]
+            S_remove_corruption: [0.00]
             normal_noise: [0.1]
             missingness: [0.1]
-            A_density: [0.1]
+            A_density: [1]
             b_scale_std: [1.0]
             b_shift_std: [1.0]
         fit_params:
@@ -31,6 +31,7 @@ matfac_simulation_study:
             K: [15]
             max_epochs: [1000]
             fsard_max_iter: [10]
+            fsard_v0: [0.8]
             rel_tol: [0.00001]
             abs_tol: [0.0001]
 #    # Questions:
@@ -231,7 +232,7 @@ matfac_tcga_runs:
         data_params:
             kept_ctypes: ["HNSC"] #:CESC:ESCA:STAD"]
             heldout_ctypes: [""]
-        pathways: ["hallmark:oncogenic:positional"] 
+        pathways: ["positional"] 
         fit_params:
             configuration: ["fsard"] # TODO change to `fsard`
             use_batch: ["true"]
@@ -241,7 +242,7 @@ matfac_tcga_runs:
             K: [25]
             max_epochs: [1000]
             fsard_max_iter: [20]
-            fsard_coupling: [2.0]
+            fsard_v0: [0.8]
 #    config_comparison_hpv:
 #        n_reps: 1
 #        data_params:
