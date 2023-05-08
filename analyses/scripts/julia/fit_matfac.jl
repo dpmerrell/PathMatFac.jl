@@ -5,11 +5,44 @@ using PathwayMultiomics
 using CUDA
 using JSON
 using Flux
-#using Profile, ProfileSVG
 
 include("script_util.jl")
 
 PM = PathwayMultiomics
+
+
+function prepare_featuresets(all_feature_ids, all_feature_genes, all_feature_assays,
+                             view_names, view_jsons)
+
+    all_featuresets = Dict()
+    all_featureset_ids = Dict()
+
+    for (view_name, view_json) in zip(view_names, view_jsons)
+        if view_json != nothing
+            rel_idx = findall(all_feature_assays .== view_name)
+            rel_feature_ids = all_feature_ids[rel_idx]
+            rel_feature_genes = all_feature_genes[rel_idx]
+            rel_feature_assays = all_feature_assays[rel_idx]
+            
+            view_js_d = JSON.parsefile(view_json)
+            edgelists = view_js_d["pathways"]
+            pwy_names = view_js_d["names"]
+            
+            fs_dict, _,
+            fs_id_dict = prep_pathway_featuresets(edgelists, 
+                                                  rel_feature_genes,
+                                                  rel_feature_assays;
+                                                  feature_ids=rel_feature_ids,
+                                                  featureset_ids=pwy_names)
+
+            all_featuresets[view_name] = fs_dict[view_name]
+            all_featureset_ids[view_name] = fs_id_dict[view_name]
+        end
+    end
+
+    return all_featuresets, all_feature_ids, all_featureset_ids
+end
+
 
 function print_nan_fractions(omic_data, feature_assays)
 
@@ -22,6 +55,7 @@ function print_nan_fractions(omic_data, feature_assays)
     end
 
 end
+
 
 function load_omic_data(omic_hdf, omic_types)
 
@@ -84,23 +118,26 @@ function main(args)
     #################################################   
 
     omic_hdf = args[1]
-    pathway_json = args[2]
-    fitted_bson = args[3]
-    transformed_hdf = args[4] 
+    fitted_bson = args[2]
+    transformed_hdf = args[3] 
 
     cli_opts = Dict()
-    if length(args) > 4
-        cli_opts = parse_opts(args[5:end])
+    if length(args) > 3
+        cli_opts = parse_opts(args[4:end])
     end
 
     script_opts = Dict{Symbol,Any}(:configuration => "fsard", # {fsard, ard, graph, basic}
                                    :use_batch => true,
                                    :use_conditions => true,
                                    :history_json => nothing,
+                                   :mutation_pwy_json => nothing,
+                                   :methylation_pwy_json => nothing,
+                                   :mrnaseq_pwy_json => nothing,
+                                   :cna_pwy_json => nothing,
                                    :omic_types => "mrnaseq:methylation:cna:mutation",
                                    :gpu_status_file => nothing,
                                    :use_gpu => true,
-                                   :var_filter => 0.05
+                                   :var_filter => 0.05,
                                    )
 
     update_opts!(script_opts, cli_opts)
@@ -177,10 +214,6 @@ function main(args)
         model_kwargs[:batch_dict] = batch_dict 
     end
 
-    pwy_sif_data = JSON.parsefile(pathway_json)
-    pwy_edgelists = pwy_sif_data["pathways"]
-    pwy_names = pwy_sif_data["names"]
-
     #################################################
     # PREP INPUTS
     #################################################
@@ -193,13 +226,28 @@ function main(args)
     model_kwargs[:feature_ids] = feature_ids
 
     if script_opts[:configuration] == "fsard"
-        feature_sets, new_feature_ids, featureset_ids = prep_pathway_featuresets(pwy_edgelists, 
-                                                                                 feature_genes,
-                                                                                 feature_assays;
-                                                                                 feature_ids=feature_ids,
-                                                                                 featureset_ids=pwy_names)
-        model_kwargs[:feature_sets_dict] = feature_sets
-        model_kwargs[:featureset_names] = featureset_ids 
+
+        # Get all of the pathway JSON files
+        pwy_jsons = Dict("mutation" => script_opts[:mutation_pwy_json],
+                         "methylation" => script_opts[:methylation_pwy_json],
+                         "mrnaseq" => script_opts[:mrnaseq_pwy_json],
+                         "cna" => script_opts[:cna_pwy_json],
+                         )
+        used_pwy_jsons = [pwy_jsons[ot] for ot in omic_types]
+ 
+        # Load them into a dictionary
+        feature_sets_dict, 
+        new_feature_ids, 
+        featureset_ids_dict = prepare_featuresets(feature_ids, feature_genes, feature_assays,
+                                                  omic_types, used_pwy_jsons) 
+        println("featuresets_dict")
+        println(feature_sets_dict)
+        
+        println("featureset_ids_dict")
+        println(featureset_ids_dict)
+
+        model_kwargs[:feature_sets_dict] = feature_sets_dict
+        model_kwargs[:featureset_names] = featureset_ids_dict
         model_kwargs[:feature_ids] = new_feature_ids
         model_kwargs[:Y_fsard] = true
     end
