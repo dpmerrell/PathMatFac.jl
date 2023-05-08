@@ -846,9 +846,15 @@ function fit_feature_set_ard!(model::PathMatFacModel; lr=1.0,
                                             prefix=print_prefix)
             break 
         end
-        
         beta_old .= model.matfac.Y_reg.beta
-
+        
+        if iter == fsard_max_iter 
+            v_println("##### Reached max iteration (", fsard_max_iter,"); #####"; verbosity=verbosity,
+                                                                    prefix=print_prefix)
+            v_println("##### Terminating."; verbosity=verbosity,
+                                            prefix=print_prefix)
+            break
+        end
 
         # Re-fit the factors X, Y
         keep_history = (history != nothing)
@@ -860,12 +866,6 @@ function fit_feature_set_ard!(model::PathMatFacModel; lr=1.0,
                                 print_prefix=string(n_pref, "    "),
                                 history=history)
             
-        if iter == fsard_max_iter 
-            v_println("##### Reached max iteration (", fsard_max_iter,"); #####"; verbosity=verbosity,
-                                                                    prefix=print_prefix)
-            v_println("##### Terminating."; verbosity=verbosity,
-                                            prefix=print_prefix)
-        end
     end
 
 end
