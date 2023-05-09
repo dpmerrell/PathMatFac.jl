@@ -481,13 +481,10 @@ end
 # POSTPROCESSING FUNCTIONS
 #######################################################################
 
-# "Whiten" the embedding X, such that std(X_k) = 1 for each k;
-# Variance is reallocated to Y; and then reallocated to logsigma.
+# "Whiten" the embedding X, such that ||X_k|| = 1 for each k;
+# Magnitude is reallocated to Y; and then reallocated to logsigma.
 function whiten!(model::PathMatFacModel)
-    #X_std = std(model.matfac.X, dims=2)
     X_rms = rms(model.matfac.X, dims=2)
-    #model.matfac.X ./= X_std
-    #model.matfac.Y .*= X_std
     model.matfac.X ./= X_rms
     model.matfac.Y .*= X_rms
 
@@ -495,16 +492,17 @@ function whiten!(model::PathMatFacModel)
     view_crs = ids_to_ranges(cpu(model.feature_views))
     for cr in view_crs
         # Compute row-wise standard deviations in Y:
-        #Y_view_std = std(view(model.matfac.Y, :, cr), dims=2)
         Y_view_rms = rms(view(model.matfac.Y, :, cr), dims=2)
         
         # Select the largest one and use it to 
         # rescale both Y and sigma.
-        #Y_std_max = maximum(Y_view_std)
         Y_rms_max = maximum(Y_view_rms)
-        model.matfac.Y[:,cr] ./= Y_rms_max #Y_std_max
+        if Y_rms_max > 0
+            model.matfac.Y[:,cr] ./= Y_rms_max 
+        else # Handle the zero-magnitude case
+            model.matfac.Y[:,cr] .= 0
+        end
 
-        #model.matfac.col_transform.layers[1].logsigma[cr] .+= log(Y_std_max)
         model.matfac.col_transform.layers[1].logsigma[cr] .+= log(Y_rms_max)
     end
 end

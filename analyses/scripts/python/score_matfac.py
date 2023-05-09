@@ -23,18 +23,31 @@ def score_batch_param(true_values, fitted_values, score_fn):
 ##########################################################
 # Scores for the factors X,Y 
 ##########################################################
-def generalized_cosine_similarity(Y_true, Y_fitted):
-    ip_tf = np.dot(Y_true, Y_fitted.transpose())
-    ip_tt = np.dot(Y_true, Y_true.transpose())
-    ip_ff = np.dot(Y_fitted, Y_fitted.transpose())
-    return np.sum(ip_tf*ip_tf) / np.sqrt(np.sum(ip_tt*ip_tt)*np.sum(ip_ff*ip_ff))
+def span_similarity(Y_true, Y_fitted):
+    YtYf = np.dot(Y_true, Y_fitted.transpose())
+    YfYf = np.dot(Y_fitted, Y_fitted.transpose())
+
+    # Subtle point: We don't want to artificially penalize Y_fitted
+    # for having fewer rows than Y_true. So we only use
+    # Y_true's first K_fitted singular values in that case.
+    K_true = Y_true.shape[0]
+    K_fitted = Y_fitted.shape[0]
+    YtYt_sqfrobenius = None
+    if K_true > K_fitted:
+        u, s, vh = np.linalg.svd(Y_true)
+        YtYt_sqfrobenius = np.sum(s[:K_fitted]*s[:K_fitted])
+    else:
+        YtYt = np.dot(Y_true, Y_true.transpose())
+        YtYt_sqfrobenius = np.sum(YtYt*YtYt)
+
+    return np.sum(YtYf*YtYf) / np.sqrt(YtYt_sqfrobenius*np.sum(YfYf*YfYf))
 
 
 # Compute a simple p-value for this cosine similarity
 # by repeatedly shuffling each row of Y_fitted.
 # Return the average value under the null, and the p-value for 
 # the given test_score. 
-def generalized_cossim_pvalue(Y_true, Y_fitted, test_score, n_samples=10000):
+def spansim_pvalue(Y_true, Y_fitted, test_score, n_samples=10000):
     # Generate random matrices similar to Y_fitted 
     K, N = Y_fitted.shape
     #means = np.mean(Y_fitted, axis=1).reshape(K,1)
@@ -50,9 +63,9 @@ def generalized_cossim_pvalue(Y_true, Y_fitted, test_score, n_samples=10000):
     for i in range(n_samples):
         perm[:] = np.random.permutation(N)
         Y_random[:,:] = Y_fitted[:,perm]
-        cossim = generalized_cosine_similarity(Y_true, Y_random)
-        total_score += cossim
-        if cossim >= test_score:
+        spansim = span_similarity(Y_true, Y_random)
+        total_score += spansim
+        if spansim >= test_score:
             count += 1
 
     return total_score/n_samples, count/n_samples
@@ -62,7 +75,7 @@ def generalized_cossim_pvalue(Y_true, Y_fitted, test_score, n_samples=10000):
 # Scores for the assignment matrix (A)
 ##########################################################
 
-def rowwise_cossim(Y_true, Y_fitted):
+def rowwise_sq_cossim(Y_true, Y_fitted):
     
     K_true = Y_true.shape[0]
     Y_true_norm = Y_true / np.sqrt(np.sum(Y_true*Y_true, axis=1)).reshape(K_true,1)
@@ -75,12 +88,13 @@ def rowwise_cossim(Y_true, Y_fitted):
 
 def choose_best_match(Y_true, Y_fitted):
     
-    score_matrix = rowwise_cossim(Y_true, Y_fitted) 
+    score_matrix = rowwise_sq_cossim(Y_true, Y_fitted) 
     
     true_idx, fitted_idx = linear_sum_assignment(score_matrix, maximize=True)
     score_ls = [score_matrix[i,j] for (i,j) in zip(true_idx, fitted_idx)]
+    mean_sq_cossim = np.mean(score_ls)
 
-    return true_idx, fitted_idx 
+    return true_idx, fitted_idx, mean_sq_cossim
 
 
 def colwise_score(A_true, A_fitted, score_fn):
@@ -157,26 +171,28 @@ def compute_scores(true_hdf, fitted_hdf):
             print("Scoring Y...")
             Y_true = f_true["Y"][:,:].transpose()
             Y_fitted = f_fitted["Y"][:,:].transpose()
-            scores["Y_cossim"] = generalized_cosine_similarity(Y_true, Y_fitted)
-            cossim_null, cossim_p_value = generalized_cossim_pvalue(Y_true, Y_fitted, scores["Y_cossim"])
-            scores["Y_cossim_null"] = cossim_null
-            scores["Y_cossim_pvalue"] = cossim_p_value
+            scores["Y_spansim"] = span_similarity(Y_true, Y_fitted)
+            spansim_null, spansim_p_value = spansim_pvalue(Y_true, Y_fitted, scores["Y_spansim"])
+            scores["Y_spansim_null"] = spansim_null
+            scores["Y_spansim_pvalue"] = spansim_p_value
 
             print("Scoring X...")
             X_true = f_true["X"][:,:].transpose()
             X_fitted = f_fitted["X"][:,:].transpose()
-            scores["X_cossim"] = generalized_cosine_similarity(X_true, X_fitted)
-            cossim_null, cossim_p_value = generalized_cossim_pvalue(X_true, X_fitted, scores["X_cossim"])
-            scores["X_cossim_null"] = cossim_null
-            scores["X_cossim_pvalue"] = cossim_p_value
+            scores["X_spansim"] = span_similarity(X_true, X_fitted)
+            spansim_null, spansim_p_value = spansim_pvalue(X_true, X_fitted, scores["X_spansim"])
+            scores["X_spansim_null"] = spansim_null
+            scores["X_spansim_pvalue"] = spansim_p_value
 
             if ("fsard" in f_true.keys()) and ("fsard" in f_fitted.keys()): 
                 print("Scoring A...")
                 
                 print("Matching true and fitted factors:")
-                true_idx, fitted_idx = choose_best_match(Y_true, Y_fitted)
+                true_idx, fitted_idx, sq_cossim = choose_best_match(Y_true, Y_fitted)
                 print("True idx:", true_idx)
                 print("Fitted idx:", fitted_idx)
+                print("RMS cosine similarity:", np.sqrt(sq_cossim))
+                scores["Y_best_rms_cossim"] = np.sqrt(sq_cossim)
 
                 A_true_ls = load_A_matrices(f_true) 
                 A_fitted_ls = load_A_matrices(f_fitted)
@@ -186,30 +202,12 @@ def compute_scores(true_hdf, fitted_hdf):
 
                 aucroc_fn = lambda at, af: safe_aucroc((at>0).astype(int), af)
                 scores["A_aucroc"] = np.mean([colwise_score(At, Af, aucroc_fn) for (At,Af) in zip(A_true_ls, A_fitted_ls)])
-                #scores["A_aucroc"] = maximal_pairwise_score(A_true, A_fitted, aucroc_fn, verbose=True)
-                #A_aucroc_null, A_aucroc_pvalue = mps_pvalue(A_true, A_fitted, aucroc_fn, scores["A_aucroc"])
-                #scores["A_aucroc_null"] = A_aucroc_null
-                #scores["A_aucroc_pvalue"] = A_aucroc_pvalue
-                #
+                
                 aucpr_fn = lambda at, af: average_precision_score((at>0).astype(int), af)
                 scores["A_aucpr"] = np.mean([colwise_score(At, Af, aucpr_fn) for (At,Af) in zip(A_true_ls, A_fitted_ls)])
 
-                #scores["A_aucpr"] = maximal_pairwise_score(A_true, A_fitted, aucpr_fn, verbose=True)
-                #A_aucpr_null, A_aucpr_pvalue = mps_pvalue(A_true, A_fitted, aucpr_fn, scores["A_aucpr"])
-                #scores["A_aucpr_null"] = A_aucpr_null
-                #scores["A_aucpr_pvalue"] = A_aucpr_pvalue
                 scores["A_aucpr_baserate"] = np.mean([np.mean(A_true[:,j] > 0) for A_true in A_true_ls for j in range(A_true.shape[1])])
 
-                #print("Scoring beta...")
-                #S_true = f_true["fsard/S"][:,:].transpose()
-                #beta_true = np.matmul(A_true.transpose(), S_true)
-
-                #S_fitted = f_fitted["fsard/S"][:,:].transpose()
-                #beta_fitted = np.matmul(A_fitted.transpose(), S_fitted)
-                #scores["beta_aucroc"] = maximal_pairwise_score(beta_true.transpose(), 
-                #                                               beta_fitted.transpose(), 
-                #                                               lambda bt, bf: safe_aucroc((bt>0).astype(int), bf),
-                #                                               verbose=True)
 
             
             print("Scoring mu...")

@@ -115,10 +115,10 @@ rule all:
         # Simulations
         ##################################
         ## Simulation scoring
-        #sim_score_tsvs=expand(path.join(SIM_SCORE_TSV_DIR, "{experiment}.tsv"),
-        #                      experiment=SIM_ALL_EXPERIMENTS),
-        sim_score_jsons=expand(path.join(SIM_SCORE_JSON_DIR, "{sim_fit_comb}.json"),
-                               sim_fit_comb=SIM_ALL_FIT_COMBINATIONS),
+        sim_score_tsvs=expand(path.join(SIM_SCORE_TSV_DIR, "{experiment}.tsv"),
+                              experiment=SIM_ALL_EXPERIMENTS),
+        #sim_score_jsons=expand(path.join(SIM_SCORE_JSON_DIR, "{sim_fit_comb}.json"),
+        #                       sim_fit_comb=SIM_ALL_FIT_COMBINATIONS),
         ## Simulation static visuals
         #sim_batch_plots=expand(path.join(SIM_VIS_FITTED, "{sim_fit_comb}/batch_scatter.png"),
         #                       sim_fit_comb=SIM_ALL_FIT_COMBINATIONS),
@@ -154,16 +154,19 @@ rule all:
         # TCGA runs
         #####################################
         # Visuals
-        exp_fit_interactive_plots=expand(path.join(EXP_VIS_DIR, "{exp_fit_comb}/model.html"),
-                                         exp_fit_comb=EXP_ALL_FIT_COMBINATIONS),
+        #exp_fit_interactive_plots=expand(path.join(EXP_VIS_DIR, "{exp_fit_comb}/model.html"),
+        #                                 exp_fit_comb=EXP_ALL_FIT_COMBINATIONS),
         #exp_fit_x_plots=expand(path.join(EXP_VIS_DIR, "{exp_fit_comb}/X.png"),
         #                       exp_fit_comb=EXP_ALL_FIT_COMBINATIONS),
         #exp_fit_y_plots=expand(path.join(EXP_VIS_DIR, "{exp_fit_comb}/Y.png"),
         #                       exp_fit_comb=EXP_ALL_FIT_COMBINATIONS),
-        exp_fit_batch_param_plots=expand(path.join(EXP_VIS_DIR, "{exp_fit_comb}/batch_params.png"),
-                                         exp_fit_comb=EXP_ALL_FIT_COMBINATIONS),
-        exp_fit_col_param_plots=expand(path.join(EXP_VIS_DIR, "{exp_fit_comb}/col_params.png"),
-                                       exp_fit_comb=EXP_ALL_FIT_COMBINATIONS),
+        #exp_fit_batch_param_plots=expand(path.join(EXP_VIS_DIR, "{exp_fit_comb}/batch_params.png"),
+        #                                 exp_fit_comb=EXP_ALL_FIT_COMBINATIONS),
+        #exp_fit_col_param_plots=expand(path.join(EXP_VIS_DIR, "{exp_fit_comb}/col_params.png"),
+        #                               exp_fit_comb=EXP_ALL_FIT_COMBINATIONS),
+        # Parameters
+        exp_fit_hdfs=expand(path.join(EXP_FIT_PARAM_DIR, "{exp_fit_comb}.hdf"),
+                            exp_fit_comb=EXP_ALL_FIT_COMBINATIONS),
         ####################################
         # Supervised tasks
         ####################################
@@ -277,7 +280,7 @@ rule exp_fit_matfac:
         parsed_pwy_jsons=lambda wc: [f"{assay}_pwy_json="+ path.join(PREP_PWY_DIR, f"{pwys}.json") for assay, pwys in [x.split("=") for x in wc["pwy_params"].split("__")]]
     resources:
         mem_mb=8000,
-    threads: 4 #lambda wc: len(get_cancer_types(wc)) 
+    threads: lambda wc: len(get_cancer_types(wc)) 
     shell:
         "julia --project=. {input.src} {input.data_hdf} {output.fitted_bson} {output.transformed_hdf} {params.parsed_opts} history_json={output.history_json} {params.parsed_pwy_jsons}"
 
@@ -440,7 +443,7 @@ rule sim_fit_matfac:
         parsed_pwy_jsons=lambda wc: [f"{assay}_pwy_json="+ path.join(PREP_PWY_DIR, f"{pwys}.json") for assay, pwys in [x.split("=") for x in wc["pwy_params"].split("__")]]
     resources:
         mem_mb=8000,
-    threads: 4 #lambda wc: len(get_cancer_types(wc)) 
+    threads: lambda wc: len(get_cancer_types(wc)) 
     shell:
         "julia --project=. {input.src} {input.data_hdf} {output.fitted_bson} {output.transformed_hdf} {params.parsed_opts} history_json={output.history_json} {params.parsed_pwy_jsons}"
 

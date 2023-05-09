@@ -240,11 +240,6 @@ function main(args)
         new_feature_ids, 
         featureset_ids_dict = prepare_featuresets(feature_ids, feature_genes, feature_assays,
                                                   omic_types, used_pwy_jsons) 
-        println("featuresets_dict")
-        println(feature_sets_dict)
-        
-        println("featureset_ids_dict")
-        println(featureset_ids_dict)
 
         model_kwargs[:feature_sets_dict] = feature_sets_dict
         model_kwargs[:featureset_names] = featureset_ids_dict
