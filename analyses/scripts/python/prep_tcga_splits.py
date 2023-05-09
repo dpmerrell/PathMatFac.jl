@@ -271,12 +271,16 @@ def target_stratification_labels(target, target_data):
     return strat_target
 
 
-def define_sample_groups(target, ctypes, barcodes, barcode_assays):
+def define_sample_groups(groupby, target, ctypes, barcodes, barcode_assays):
 
-    # For now, group by batch rather than cancer type
-    mrnaseq_idx = np.where(barcode_assays == "mrnaseq")[0][0]
-    mrnaseq_barcodes = barcodes[:,mrnaseq_idx]
-    group_labels = np.vectorize(lambda x: "-".join(x.split("-")[-2:]))(mrnaseq_barcodes) 
+    group_labels = None
+    if groupby == "batch":
+        # For now, group by batch rather than cancer type
+        mrnaseq_idx = np.where(barcode_assays == "mrnaseq")[0][0]
+        mrnaseq_barcodes = barcodes[:,mrnaseq_idx]
+        group_labels = np.vectorize(lambda x: "-".join(x.split("-")[-2:]))(mrnaseq_barcodes) 
+    else:
+        group_labels = ctypes[:]
 
     return group_labels
 
@@ -285,7 +289,9 @@ def split_to_hdf(omic_data, samples, ctype_labels,
                  assays, genes, barcodes, barcode_assays,
                  target_data, idx, output_path):
 
-    with h5py.File(output_path, "w") as f:
+    print("OUTPUT PATH")
+    print(output_path)
+    with h5py.File(output_path, "w", driver='core') as f:
         su.write_hdf(f, "omic_data/data", omic_data[idx,:].transpose())
         su.write_hdf(f, "omic_data/instances", samples[idx], is_string=True)
         su.write_hdf(f, "omic_data/instance_groups", ctype_labels[idx], is_string=True)
@@ -320,7 +326,7 @@ def save_splits(omic_data, samples, ctype_labels,
                 target_data, target, splits, output_path_prefix):
 
     for i, (train_idx, test_idx) in enumerate(splits):
-        pref = output_path_prefix + f"__fold={i}" + f"__target={target}"
+        pref = output_path_prefix + f"fold={i}" 
         save_split(omic_data, samples, ctype_labels,
                    assays, genes, barcodes, barcode_assays,
                    target_data, train_idx, test_idx, pref)
@@ -336,6 +342,7 @@ if __name__=="__main__":
     parser.add_argument("output_prefix")
     parser.add_argument("--target")
     parser.add_argument("--n_folds", type=int, default=5)
+    parser.add_argument("--groupby", type=str, default="batch")
     parser.add_argument("--paradigm_filter", action="store_true", default=False)
  
     args = parser.parse_args()
@@ -345,7 +352,11 @@ if __name__=="__main__":
     out_prefix = args.output_prefix
     target = args.target
     n_folds = args.n_folds
+    groupby = args.groupby
     paradigm_filter = args.paradigm_filter
+
+    print("PREFIX")
+    print(out_prefix)
 
     # Load the omic and clinical data
     data_arrays = load_data(data_hdf, clinical_hdf)
@@ -372,7 +383,7 @@ if __name__=="__main__":
     strat_target_data = target_stratification_labels(target, target_data)
     unq_targets, cnt = np.unique(strat_target_data, return_counts=True)
     print(unq_targets, " ", cnt)
-    split_groups = define_sample_groups(target, filtered_ctype_labels, barcodes, barcode_assays)
+    split_groups = define_sample_groups(groupby, target, filtered_ctype_labels, barcodes, barcode_assays)
 
     cross_val_splits = stratified_group_crossval_splits(strat_target_data, 
                                                         split_groups,

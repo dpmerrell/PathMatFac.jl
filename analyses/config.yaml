@@ -2,6 +2,9 @@
 
 output_dir: "temp/"
 
+mofa_python: "~/envs/py38/bin/python"
+
+
 matfac_simulation_study:
     # List experiments here
 #    test_experiment:
@@ -528,32 +531,154 @@ matfac_tcga_runs:
 
 supervised_folds: 5
 
-#supervised_tasks:
-#    multiomic_setting:
-#        data_params:
+supervised_tasks:
+    multiomic_predictions_hpv:
+        data_params:
+            kept_ctypes: ["HNSC:CESC:ESCA:STAD"]
+            heldout_ctypes: [""]
+        pathway_params:
+            mutation: ["oncogenic:hallmark"]
+            methylation: ["oncogenic:hallmark"]
+            mrnaseq: ["oncogenic:hallmark"]
+            cna: ["positional"] 
+        method_params:
+            matfac:
+                configuration: ["fsard"] 
+                use_batch: ["true"]
+                omic_types: ["mutation:methylation:mrnaseq:cna"]
+                use_gpu: ["true"]
+                var_filter: [0.05]
+                K: [20]
+                max_epochs: [1000]
+                fsard_max_iter: [1]
+                fsard_v0: [0.8]
+            pca:
+                omic_types: ["mutation:methylation:mrnaseq:cna"]
+                var_filter: [0.05]
+#            mofa:
+#                omic_types: ["mutation:methylation:mrnaseq:cna"]
+#                var_filter: [0.05]
+#                output_dim: [20]
+        targets: ["pathologic_stage", "hpv_status", "survival", "ctype"] 
+        groupby: ["batch", "batch", "batch", "batch"]
+#    mrnaseq_predictions_hpv:
+#        datas:
+#            kept_ctypes: ["HNSC:CESC:ESCA:STAD"]
+#            heldout_ctypes: [""]
+#        pathway_params:
+#            mutation: ["oncogenic:hallmark"]
+#            methylation: ["oncogenic:hallmark"]
+#            mrnaseq: ["oncogenic:hallmark"]
+#            cna: ["positional"] 
 #        method_params:
-#            matfac_params:
-#            pca_params:
-#            mofa_params:
-#            plier_params:
-#    mrnaseq_setting:
+#            matfac:
+#                configuration: ["fsard"] 
+#                use_batch: ["true"]
+#                omic_types: ["mrnaseq"]
+#                use_gpu: ["true"]
+#                var_filter: [0.2]
+#                K: [20]
+#                max_epochs: [1000]
+#                fsard_max_iter: [1]
+#                fsard_v0: [0.8]
+#            pca:
+#                omic_types: ["mrnaseq"]
+#                var_filter: [0.2]
+#            mofa:
+#                omic_types: ["mrnaseq"]
+#                var_filter: [0.2]
+#                output_dim: [20]
+#            plier:
+#                omic_type: ["mrnaseq"]
+#                var_filter: [0.2]
+#                output_dim: [20]
+#            gsva:
+#                var_filter: [0.2]
+#        targets: ["pathologic_stage", "hpv_status", "survival", "ctype"] 
+#        groupby: ["batch", "batch", "batch", "batch"]
+#    mrnaseq_methyl_predictions_hpv:
 #        data_params:
+#            kept_ctypes: ["HNSC:CESC:ESCA:STAD"]
+#            heldout_ctypes: [""]
+#        pathway_params:
+#            mutation: ["oncogenic:hallmark"]
+#            methylation: ["oncogenic:hallmark"]
+#            mrnaseq: ["oncogenic:hallmark"]
+#            cna: ["positional"] 
 #        method_params:
-#            matfac_params:
-#            pca_params:
-#            mofa_params:
-#            plier_params:
-#    mrnaseq_methyl_setting:
+#            matfac:
+#                configuration: ["fsard"] 
+#                use_batch: ["true"]
+#                omic_types: ["methylation:mrnaseq"]
+#                use_gpu: ["true"]
+#                var_filter: [0.1]
+#                K: [20]
+#                max_epochs: [1000]
+#                fsard_max_iter: [1]
+#                fsard_v0: [0.8]
+#            pca:
+#                omic_types: ["methylation:mrnaseq"]
+#                var_filter: [0.1]
+#            mofa:
+#                omic_types: ["methylation:mrnaseq"]
+#                var_filter: [0.1]
+#                output_dim: [20]
+#        targets: ["pathologic_stage", "hpv_status", "survival", "ctype"] 
+#        groupby: ["batch", "batch", "batch", "batch"]
+#    mrnaseq_cna_predictions_hpv:
 #        data_params:
+#            kept_ctypes: ["HNSC:CESC:ESCA:STAD"]
+#            heldout_ctypes: [""]
+#        pathway_params:
+#            mutation: ["oncogenic:hallmark"]
+#            methylation: ["oncogenic:hallmark"]
+#            mrnaseq: ["oncogenic:hallmark"]
+#            cna: ["positional"] 
 #        method_params:
-#            matfac_params:
-#            pca_params:
-#            mofa_params:
-#            plier_params:
-#    batch_effect_test:
+#            matfac:
+#                configuration: ["fsard"] 
+#                use_batch: ["true"]
+#                omic_types: ["mrnaseq:cna"]
+#                use_gpu: ["true"]
+#                var_filter: [0.05]
+#                K: [20]
+#                max_epochs: [1000]
+#                fsard_max_iter: [1]
+#                fsard_v0: [0.8]
+#            pca:
+#                omic_types: ["mrnaseq:cna"]
+#                var_filter: [0.1]
+#            mofa:
+#                omic_types: ["mrnaseq:cna"]
+#                var_filter: [0.1]
+#                output_dim: [20]
+#            paradigm:
+#                var_filter: [0.5]
+#                output_dim: [20]
+#        targets: ["pathologic_stage", "hpv_status", "survival", "ctype"] 
+#        groupby: ["batch", "batch", "batch", "batch"]
+#    batch_effect_test_hpv:
 #        data_params:
+#            kept_ctypes: ["HNSC:CESC:ESCA:STAD"]
+#            heldout_ctypes: [""]
+#        pathway_params:
+#            mutation: ["oncogenic:hallmark"]
+#            methylation: ["oncogenic:hallmark"]
+#            mrnaseq: ["oncogenic:hallmark"]
+#            cna: ["positional"] 
 #        method_params:
-#            matfac_params:
-#    
+#            matfac:
+#                configuration: ["fsard"] 
+#                use_batch: ["true","false"]
+#                omic_types: ["mutation:methylation:mrnaseq:cna"]
+#                use_gpu: ["false"]
+#                var_filter: [0.05]
+#                K: [20]
+#                max_epochs: [1000]
+#                fsard_max_iter: [1]
+#                fsard_v0: [0.8]
+#        targets: ["pathologic_stage", "hpv_status", "survival", "ctype"] 
+#        groupby: ["batch", "batch", "batch", "batch"]
+    
         
  

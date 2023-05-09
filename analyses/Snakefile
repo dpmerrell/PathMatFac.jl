@@ -99,11 +99,36 @@ EXP_EXP_FIT_COMBINATIONS = [[path.join(*t) for t in product(*tup) ] for tup in z
 EXP_ALL_FIT_COMBINATIONS = sum(EXP_EXP_FIT_COMBINATIONS, []) 
 EXP_EXP_FIT_COMBINATIONS = dict(zip(EXP_ALL_EXPERIMENTS, EXP_EXP_FIT_COMBINATIONS)) 
 
+####################################
+# MOFA
+MOFA_PYTHON = config["mofa_python"]
 
 ####################################
 # Supervised learning tasks
-SUP_FOLDS = config["supervised_folds"]
+SUP_NFOLDS = config["supervised_folds"]
 
+SUP_DIR = path.join(OUT_DIR, "supervised_tasks")
+SUP_SPLIT_DIR = path.join(SUP_DIR, "data_splits")
+SUP_FIT_TRANS_DIR = path.join(SUP_DIR, "fitted_transforms")
+SUP_FIT_HIST_DIR = path.join(SUP_DIR, "training_histories")
+SUP_TRANS_TRAIN_DIR = path.join(SUP_DIR, "transformed_training_sets")
+SUP_TRANS_TEST_DIR = path.join(SUP_DIR, "transformed_test_sets")
+SUP_FIT_PRED_DIR = path.join(SUP_DIR, "fitted_predictors")
+SUP_SCORE_DIR = path.join(SUP_DIR, "score_jsons")
+
+SUP_ALL_PARAMS = config["supervised_tasks"]
+SUP_ALL_EXPERIMENTS = list(SUP_ALL_PARAMS.keys())
+SUP_FOLDS = [f"fold={f}" for f in range(SUP_NFOLDS)]
+SUP_DATA_PARAMS = [collect_params(SUP_ALL_PARAMS[k]["data_params"]) for k in SUP_ALL_EXPERIMENTS]
+SUP_SPLIT_PARAMS = [[f"target={t}__groupby={g}" for (t,g) in zip(SUP_ALL_PARAMS[k]["targets"], SUP_ALL_PARAMS[k]["groupby"])] for k in SUP_ALL_EXPERIMENTS]
+
+SUP_ALL_SPLIT_COMBINATIONS = [path.join(*t) for tup in zip(SUP_DATA_PARAMS, SUP_SPLIT_PARAMS) for t in product(*tup, SUP_FOLDS)]
+
+SUP_PWY_PARAMS = [collect_params(SUP_ALL_PARAMS[k]["pathway_params"]) for k in SUP_ALL_EXPERIMENTS]
+SUP_METHOD_PARAMS = [[f"method={m}/{p}" for (m,v) in SUP_ALL_PARAMS[k]["method_params"].items() for p in collect_params(v)] for k in SUP_ALL_EXPERIMENTS]
+SUP_TRANS_FIT_COMBINATIONS = [path.join(*t) for tup in zip(SUP_DATA_PARAMS, SUP_SPLIT_PARAMS, SUP_PWY_PARAMS, SUP_METHOD_PARAMS) for t in product(*tup, SUP_FOLDS)]
+
+print(SUP_TRANS_FIT_COMBINATIONS)
 
 #################################################################
 # SNAKEMAKE RULES
@@ -115,8 +140,8 @@ rule all:
         # Simulations
         ##################################
         ## Simulation scoring
-        sim_score_tsvs=expand(path.join(SIM_SCORE_TSV_DIR, "{experiment}.tsv"),
-                              experiment=SIM_ALL_EXPERIMENTS),
+        #sim_score_tsvs=expand(path.join(SIM_SCORE_TSV_DIR, "{experiment}.tsv"),
+        #                      experiment=SIM_ALL_EXPERIMENTS),
         #sim_score_jsons=expand(path.join(SIM_SCORE_JSON_DIR, "{sim_fit_comb}.json"),
         #                       sim_fit_comb=SIM_ALL_FIT_COMBINATIONS),
         ## Simulation static visuals
@@ -165,30 +190,79 @@ rule all:
         #exp_fit_col_param_plots=expand(path.join(EXP_VIS_DIR, "{exp_fit_comb}/col_params.png"),
         #                               exp_fit_comb=EXP_ALL_FIT_COMBINATIONS),
         # Parameters
-        exp_fit_hdfs=expand(path.join(EXP_FIT_PARAM_DIR, "{exp_fit_comb}.hdf"),
-                            exp_fit_comb=EXP_ALL_FIT_COMBINATIONS),
+        #exp_fit_hdfs=expand(path.join(EXP_FIT_PARAM_DIR, "{exp_fit_comb}.hdf"),
+        #                    exp_fit_comb=EXP_ALL_FIT_COMBINATIONS),
         ####################################
         # Supervised tasks
         ####################################
+        sup_fitted_pca=expand(path.join(SUP_FIT_TRANS_DIR, "{fit_comb}.hdf"),
+                              fit_comb=[c for c in SUP_TRANS_FIT_COMBINATIONS if "pca" in c]),
+        sup_fitted_matfacs=expand(path.join(SUP_FIT_TRANS_DIR, "{fit_comb}.bson"),
+                                  fit_comb=[c for c in SUP_TRANS_FIT_COMBINATIONS if "matfac" in c]),
+        sup_splits=expand(path.join(SUP_SPLIT_DIR, "{split_comb}__{sp}.hdf"),
+                          split_comb=SUP_ALL_SPLIT_COMBINATIONS, sp=["train","test"])
+
+
+
+#####################################################################
+# Helper functions
+#####################################################################
+def get_cancer_types(wc, key="tcga_params"):
+    kv = [kv for kv in wc[key].split("__") if "kept_ctype" in kv][0]
+    ctypes_str = kv.split("=")[-1]
+    ctypes = ctypes_str.split(":")
+    return ctypes
 
 
 #####################################################################
 # Supervised tasks
 #####################################################################
 
+rule sup_fit_pca:
+    input:
+        src=path.join(PY_SCRIPT_DIR, "fit_pca.py"),
+        data_hdf=path.join(SUP_SPLIT_DIR, "{data_params}/{split_params}/fold={fold}__train.hdf")
+    output:
+        fitted_hdf=path.join(SUP_FIT_TRANS_DIR, "{data_params,[^/]+}/{split_params,[^/]+}/{pwy_params,[^/]+}/method=pca/{fit_params,[^/]+}/fold={fold,[0-9]+}.hdf"),
+        transformed_hdf=path.join(SUP_TRANS_TRAIN_DIR, "{data_params}/{split_params}/{pwy_params}/method=pca/{fit_params}/fold={fold}.hdf")
+    params:
+        parsed_opts=lambda wc: [f"--{kv[0]} {kv[1]}" for kv in [kv.split("=") for kv in wc["fit_params"].split("__")]]
+    shell:
+        "python {input.src} {input.data_hdf} {output.fitted_hdf} {output.transformed_hdf} {params.parsed_opts}"
+
+
+rule sup_fit_matfac:
+    input:
+        src=path.join(JL_SCRIPT_DIR, "fit_matfac.jl"),
+        data_hdf=path.join(SUP_SPLIT_DIR, "{data_params}/{split_params}/fold={fold}__train.hdf"),
+        pwy_jsons=lambda wc: [path.join(PREP_PWY_DIR, f"{pwys}.json") for pwys in [x.split("=")[-1] for x in wc["pwy_params"].split("__")]]
+    output:
+        fitted_bson=path.join(SUP_FIT_TRANS_DIR, "{data_params,[^/]+}/{split_params,[^/]+}/{pwy_params,[^/]+}/method=matfac/{fit_params,[^/]+}/fold={fold,[0-9]+}.bson"),
+        transformed_hdf=path.join(SUP_TRANS_TRAIN_DIR, "{data_params}/{split_params}/{pwy_params}/method=matfac/{fit_params}/fold={fold}.hdf"),
+        history_json=path.join(SUP_FIT_HIST_DIR, "{data_params}/{split_params}/{pwy_params}/method=matfac/{fit_params}/fold={fold}.json"),
+    params:
+        parsed_opts=lambda wc: wc["fit_params"].split("__"),
+        parsed_pwy_jsons=lambda wc: [f"{assay}_pwy_json="+ path.join(PREP_PWY_DIR, f"{pwys}.json") for assay, pwys in [x.split("=") for x in wc["pwy_params"].split("__")]]
+    resources:
+        mem_mb=8000,
+    threads: lambda wc: len(get_cancer_types(wc, key="data_params")) 
+    shell:
+        "julia --project=. {input.src} {input.data_hdf} {output.fitted_bson} {output.transformed_hdf} {params.parsed_opts} history_json={output.history_json} {params.parsed_pwy_jsons}"
+
+
 rule sup_prep_splits:
     input:
         src="scripts/python/prep_tcga_splits.py",
-        data_hdf=path.join(PREP_TCGA_DIR, "{data}.hdf"),
+        data_hdf=path.join(PREP_TCGA_DIR, "{data_params}.hdf"),
         clinical_hdf=path.join(RAW_TCGA_DIR, "tcga_clinical.hdf"),
         paradigm_hdf=path.join(PREP_PARADIGM_DIR, "paradigm.hdf")
     output:
-        train_sets=[path.join(PREP_TCGA_DIR, "{data,[_.=:0-9a-zA-Z]+}__"+"fold={}".format(i)+"__target={target,[_:a-z]*}__train.hdf") for i in range(SUP_FOLDS)],
-        test_sets=[path.join(PREP_TCGA_DIR, "{data,[_.=:0-9a-zA-Z]+}__"+"fold={}".format(i)+"__target={target,[_:a-z]*}__test.hdf") for i in range(SUP_FOLDS)]
+        train_sets=[path.join(SUP_SPLIT_DIR, "{data_params,[^/]+}/target={t,[^/]+}__groupby={gb,[^/]+}/"+f+"__train.hdf") for f in SUP_FOLDS],
+        test_sets=[path.join(SUP_SPLIT_DIR, "{data_params}/target={t}__groupby={gb}/"+f+"__test.hdf") for f in SUP_FOLDS]
     params:
-        prefix=lambda wc: path.join(PREP_TCGA_DIR, wc["data"]),
+        prefix=lambda wc: "{}/{}/target={}__groupby={}/".format(SUP_SPLIT_DIR, wc["data_params"], wc["t"], wc["gb"])
     shell:
-        "python {input.src} {input.data_hdf} {input.clinical_hdf} {input.paradigm_hdf} {params.prefix} --n_folds {SUP_FOLDS} --target {wildcards.target} --paradigm_filter"
+        "python {input.src} {input.data_hdf} {input.clinical_hdf} {input.paradigm_hdf} {params.prefix} --n_folds {SUP_NFOLDS} --target {wildcards.t} --groupby {wildcards.gb} --paradigm_filter"
 
 
 
@@ -422,11 +496,6 @@ rule true_param_bson_to_hdf:
     shell:
         "julia --project=. {input.src} {input.true_bson} {output.out_hdf}"
 
-def get_cancer_types(wc):
-    kv = [kv for kv in wc["tcga_params"].split("__") if "kept_ctype" in kv][0]
-    ctypes_str = kv.split("=")[-1]
-    ctypes = ctypes_str.split(":")
-    return ctypes 
 
 rule sim_fit_matfac:
     input:

@@ -101,7 +101,7 @@ if __name__=="__main__":
     parser.add_argument("fitted_hdf")
     parser.add_argument("transformed_train_hdf")
     parser.add_argument("--output_dim", help="Use the top-`output_dim` principal components.", type=int, default=10)
-    parser.add_argument("--variance_filter", help="Discard the features with least variance, *keeping* this fraction of the features.", type=float, default=0.5)
+    parser.add_argument("--var_filter", help="Discard the features with least variance, *keeping* this fraction of the features.", type=float, default=0.5)
     args = parser.parse_args()
 
     data_hdf = args.data_hdf
@@ -109,7 +109,7 @@ if __name__=="__main__":
     paradigm_hdf = args.paradigm_hdf
     trans_hdf = args.transformed_train_hdf
     output_dim = args.output_dim
-    v_frac = args.variance_filter
+    v_frac = args.var_filter
 
     # Load data
     Z, sample_ids, sample_groups, features, target = load_data(data_hdf, paradigm_hdf)

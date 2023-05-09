@@ -49,7 +49,8 @@ genesets_to_priormat <- function(genesets, omic_features){
 ###################################################
 option_list <- list(
     make_option("--omic_type", type="character", default="mrnaseq", help="The type of omic data to use. Default 'mrnaseq'."),
-    make_option("--output_dim", type="integer", default=10, help="Number of dimensions the output should take")
+    make_option("--var_filter", type="numeric", default=0.05, help="Number of dimensions the output should take")
+    make_option("--output_dim", type="integer", default=10, help="Number of dimensions the output should take").
     )
 
 parser <- OptionParser(usage="fit_plier.R DATA_HDF PATHWAY_JSON FITTED_RDS OUTPUT_HDF [--mode MODE]",
@@ -60,6 +61,7 @@ arguments <- parse_args(parser, positional_arguments=4)
 opts <- arguments$options
 omic_type <- opts$omic_type
 output_dim <- opts$output_dim
+var_filter <- opts$var_filter
 
 pargs <- arguments$args
 data_hdf <- pargs[1]
@@ -85,10 +87,23 @@ feature_genes <- feature_genes[mrnaseq_cols]
 rownames(omic_data) <- instances
 colnames(omic_data) <- feature_genes
 
-# Filter out the columns with too many NaNs
-omic_data <- omic_data[,(colSums(is.nan(omic_data)) < 0.05*nrow(omic_data))]
 
-#print(omic_data)
+##########################################
+# VAR FILTER
+##########################################
+
+# Keep the top    
+relevant_cols <- (feature_assays == ot)
+relevant_data <- omic_data[,relevant_cols]
+relevant_genes <- feature_genes[relevant_cols]
+colnames(relevant_data) <- sapply(relevant_genes, function(g) paste(g, "_", ot, sep=""))
+
+# Filter the data by NaNs and variance
+relevant_data <- relevant_data[,colSums(is.nan(relevant_data)) < 0.05*nrow(relevant_data)]
+feature_vars <- apply(relevant_data, 2, function(v) var(v, na.rm=TRUE))
+min_var <- quantile(feature_vars, 1-var_filter)
+omic_data <- relevant_data[,feature_vars >= min_var]
+
 print("OMIC DATA")
 print(dim(omic_data))
 
