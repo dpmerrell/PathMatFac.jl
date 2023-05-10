@@ -98,7 +98,7 @@ def transform_data(X, min_components=3, max_components=20):
                     normalize=False,
                     ncomp=max_components, 
                     missing="fill-em",
-                    max_em_iter=500)
+                    max_em_iter=5)
 
     X_trans = result.factors
     rsquare = result.rsquare
@@ -108,6 +108,7 @@ def transform_data(X, min_components=3, max_components=20):
     elbow_idx = max(min_components, elbow_idx)
 
     X_trans = X_trans[:,:elbow_idx]
+    pcs = pcs[:,:elbow_idx]
 
     return X_trans, pcs
 
@@ -142,10 +143,12 @@ def transform_all_data(X, feature_assays):
     assay_Y = []
     assay_labels = []
 
+    print("Transform all data.")
     for unq_a in unq_assays:
         relevant_idx = (feature_assays == unq_a)
         relevant_X = X[:, relevant_idx]
         X_trans, pcs = transform_data(relevant_X)
+        print("\t", unq_a, relevant_X.shape, "-->", X_trans.shape)
         assay_X.append(X_trans)
         assay_Y.append(pcs)
         assay_labels.append([unq_a]*X_trans.shape[1])
@@ -153,6 +156,9 @@ def transform_all_data(X, feature_assays):
     conc_X = np.concatenate(assay_X, axis=1)
     conc_Y = concatenate_pcs(assay_Y)
     result_assays = np.concatenate(assay_labels)
+
+    print("Concatenated X: ", conc_X.shape)
+    print("Concatenated Y: ", conc_Y.shape)
 
     return conc_X, conc_Y, result_assays
 
@@ -162,14 +168,14 @@ if __name__=="__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("data_hdf", help="HDF5 containing tabular data")
     parser.add_argument("fitted_hdf")
-    parser.add_argument("transformed_train_hdf")
+    parser.add_argument("transformed_data_hdf")
     parser.add_argument("--omic_types", help="Use the specified omic assays.", default="mutation:methylation:mrnaseq:cna")
     parser.add_argument("--var_filter", help="Discard the features with least variance, *keeping* this fraction of the features.", type=float, default=0.5)
     args = parser.parse_args()
 
     data_hdf = args.data_hdf
     fitted_hdf = args.fitted_hdf
-    trans_hdf = args.transformed_train_hdf
+    trans_hdf = args.transformed_data_hdf
     v_frac = args.var_filter
     omic_types = args.omic_types.split(":")
 
@@ -193,7 +199,7 @@ if __name__=="__main__":
     Z_std, mu, sigma = standardize_columns(Z_filtered)
     
     # Perform concatenated PCA
-    X, pcs, factor_assays = transform_all_data(Z_std, feature_assays) #, n_components=output_dim)
+    X, pcs, factor_assays = transform_all_data(Z_std, feature_assays) 
 
     # Output the transformed data and the 
     # fitted principal components and standardization parameters

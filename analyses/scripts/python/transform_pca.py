@@ -61,6 +61,8 @@ if __name__=="__main__":
     data_col_idx, model_col_idx = select_features(test_genes, test_assays, 
                                                   model_genes, model_assays)
 
+    print("data_col_idx: ", data_col_idx)
+    print("model_col_idx: ", model_col_idx)
     # Filter the data and model params to keep only those features
     Z_test = Z_test[:,data_col_idx]
     test_genes = test_genes[data_col_idx]
@@ -75,9 +77,11 @@ if __name__=="__main__":
     # Standardize the test data
     Z_std = (Z_test - mu) / sigma
 
+    print("Z_std:", Z_std.shape)
     # Use the principal components to transform the data
     # (have to handle missing data)
     X = su.linear_transform(Z_std, Y)
+    print("Transformed X:", X.shape)
 
     # Save the transformed data to HDF
     with h5py.File(out_hdf, "w", driver="core") as f:

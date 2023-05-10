@@ -76,7 +76,7 @@ SIM_EXP_FIT_COMBINATIONS = [[path.join(*t) for t in product(*tup) ] for tup in z
 SIM_ALL_FIT_COMBINATIONS = sum(SIM_EXP_FIT_COMBINATIONS, []) 
 SIM_EXP_FIT_COMBINATIONS = dict(zip(SIM_ALL_EXPERIMENTS, SIM_EXP_FIT_COMBINATIONS)) 
 
-print(SIM_ALL_SIM_COMBINATIONS)
+#print(SIM_ALL_SIM_COMBINATIONS)
 
 ########################################
 # TCGA runs
@@ -128,7 +128,7 @@ SUP_PWY_PARAMS = [collect_params(SUP_ALL_PARAMS[k]["pathway_params"]) for k in S
 SUP_METHOD_PARAMS = [[f"method={m}/{p}" for (m,v) in SUP_ALL_PARAMS[k]["method_params"].items() for p in collect_params(v)] for k in SUP_ALL_EXPERIMENTS]
 SUP_TRANS_FIT_COMBINATIONS = [path.join(*t) for tup in zip(SUP_DATA_PARAMS, SUP_SPLIT_PARAMS, SUP_PWY_PARAMS, SUP_METHOD_PARAMS) for t in product(*tup, SUP_FOLDS)]
 
-print(SUP_TRANS_FIT_COMBINATIONS)
+#print(SUP_TRANS_FIT_COMBINATIONS)
 
 #################################################################
 # SNAKEMAKE RULES
@@ -140,8 +140,8 @@ rule all:
         # Simulations
         ##################################
         ## Simulation scoring
-        #sim_score_tsvs=expand(path.join(SIM_SCORE_TSV_DIR, "{experiment}.tsv"),
-        #                      experiment=SIM_ALL_EXPERIMENTS),
+        sim_score_tsvs=expand(path.join(SIM_SCORE_TSV_DIR, "{experiment}.tsv"),
+                              experiment=SIM_ALL_EXPERIMENTS),
         #sim_score_jsons=expand(path.join(SIM_SCORE_JSON_DIR, "{sim_fit_comb}.json"),
         #                       sim_fit_comb=SIM_ALL_FIT_COMBINATIONS),
         ## Simulation static visuals
@@ -229,6 +229,7 @@ rule all:
 #####################################################################
 # Helper functions
 #####################################################################
+
 def get_cancer_types(wc, key="tcga_params"):
     kv = [kv for kv in wc[key].split("__") if "kept_ctype" in kv][0]
     ctypes_str = kv.split("=")[-1]
@@ -245,8 +246,8 @@ def get_cancer_types(wc, key="tcga_params"):
 rule sup_score_survival_regressor:
     input:
         src=path.join(R_SCRIPT_DIR, "score_survival_regressor.R"),
-        test_hdf=path.join(SUP_SPLIT_DIR, "{data_params}/target={t}__task=surv__groupby={gb}/fold={fold}__test.hdf"),
-        trained_model=path.join(SUP_FIT_PRED_DIR, "{data_params}/target={t}__task=surv__groupby={gb}/{pwy_params}/{method_params}/{fit_params}/fold={fold}.rds")
+        trained_model=path.join(SUP_FIT_PRED_DIR, "{data_params}/target={t}__task=surv__groupby={gb}/{pwy_params}/{method_params}/{fit_params}/fold={fold}.rds"),
+        test_hdf=path.join(SUP_TRANS_TEST_DIR, "{data_params}/target={t}__task=reg__groupby={gb}/{pwy_params}/{method_params}/{fit_params}/fold={fold}.hdf")
     output:
         score_json=path.join(SUP_SCORE_DIR, "{data_params,[^/]+}/target={t,[^/]+}__task=surv__groupby={gb,[^/]+}/{pwy_params,[^/]+}/{method_params,[^/]+}/{fit_params,[^/]+}/fold={fold,[0-9]+}__scores.json"),
         other_json=path.join(SUP_SCORE_DIR, "{data_params}/target={t}__task=surv__groupby={gb}/{pwy_params}/{method_params}/{fit_params}/fold={fold}__other.json")
@@ -257,8 +258,8 @@ rule sup_score_survival_regressor:
 rule sup_score_regressor:
     input:
         src=path.join(PY_SCRIPT_DIR, "score_regressor.py"),
-        train_hdf=path.join(SUP_SPLIT_DIR, "{data_params}/target={t}__task=reg__groupby={gb}/fold={fold}__train.hdf"),
-        test_hdf=path.join(SUP_SPLIT_DIR, "{data_params}/target={t}__task=reg__groupby={gb}/fold={fold}__test.hdf"),
+        train_hdf=path.join(SUP_TRANS_TRAIN_DIR, "{data_params}/target={t}__task=reg__groupby={gb}/{pwy_params}/{method_params}/{fit_params}/fold={fold}.hdf"),
+        test_hdf=path.join(SUP_TRANS_TEST_DIR, "{data_params}/target={t}__task=reg__groupby={gb}/{pwy_params}/{method_params}/{fit_params}/fold={fold}.hdf"),
         trained_model=path.join(SUP_FIT_PRED_DIR, "{data_params}/target={t}__task=reg__groupby={gb}/{pwy_params}/{method_params}/{fit_params}/fold={fold}.pkl"),
     output:
         score_json=path.join(SUP_SCORE_DIR, "{data_params,[^/]+}/target={t,[^/]+}__task=reg__groupby={gb,[^/]+}/{pwy_params,[^/]+}/{method_params,[^/]+}/{fit_params,[^/]+}/fold={fold,[0-9]+}__scores.json"),
@@ -270,8 +271,8 @@ rule sup_score_regressor:
 rule sup_score_classifier:
     input:
         src=path.join(PY_SCRIPT_DIR, "score_classifier.py"),
-        train_hdf=path.join(SUP_SPLIT_DIR, "{data_params}/target={t}__task=cls__groupby={gb}/fold={fold}__train.hdf"),
-        test_hdf=path.join(SUP_SPLIT_DIR, "{data_params}/target={t}__task=cls__groupby={gb}/fold={fold}__test.hdf"),
+        train_hdf=path.join(SUP_TRANS_TRAIN_DIR, "{data_params}/target={t}__task=cls__groupby={gb}/{pwy_params}/{method_params}/{fit_params}/fold={fold}.hdf"),
+        test_hdf=path.join(SUP_TRANS_TEST_DIR, "{data_params}/target={t}__task=cls__groupby={gb}/{pwy_params}/{method_params}/{fit_params}/fold={fold}.hdf"),
         trained_model=path.join(SUP_FIT_PRED_DIR, "{data_params}/target={t}__task=cls__groupby={gb}/{pwy_params}/{method_params}/{fit_params}/fold={fold}.pkl"),
     output:
         score_json=path.join(SUP_SCORE_DIR, "{data_params,[^/]+}/target={t,[^/]+}__task=cls__groupby={gb,[^/]+}/{pwy_params,[^/]+}/{method_params,[^/]+}/{fit_params,[^/]+}/fold={fold,[0-9]+}__scores.json"),
@@ -287,7 +288,7 @@ rule sup_transform_gsva:
         src=path.join(R_SCRIPT_DIR, "transform_gsva.R"),
         train_hdf=path.join(SUP_SPLIT_DIR, "{data_params}/{split_params}/fold={fold}__train.hdf"),
         test_hdf=path.join(SUP_SPLIT_DIR, "{data_params}/{split_params}/fold={fold}__test.hdf"),
-        fitted_rds=path.join(SUP_FIT_TRANS_DIR, "{data_params,[^/]+}/{split_params,[^/]+}/{pwy_params,[^/]+}/method=gsva/{fit_params,[^/]+}/fold={fold,[0-9]+}.rds"),
+        fitted_rds=path.join(SUP_FIT_TRANS_DIR, "{data_params}/{split_params}/{pwy_params}/method=gsva/{fit_params}/fold={fold}.rds"),
         pwy_json=lambda wc: [path.join(PREP_PWY_DIR, kv.split("=")[1]+".json") for kv in wc["pwy_params"].split("__") if kv.startswith("mrnaseq")]
     output:
         transformed_hdf=path.join(SUP_TRANS_TEST_DIR, "{data_params,[^/]+}/{split_params,[^/]+}/{pwy_params,[^/]+}/method=gsva/{fit_params,[^/]+}/fold={fold,[0-9]+}.hdf")
@@ -295,7 +296,7 @@ rule sup_transform_gsva:
         parsed_opts=lambda wc: [f"--{kv[0]} {kv[1]}" for kv in [kv.split("=") for kv in wc["fit_params"].split("__")]]
     threads: lambda wc: len(get_cancer_types(wc, key="data_params")) 
     shell:
-        "Rscript {input.src} {input.train_hdf} {input.test_hdf} {output.fitted_rds} {input.pwy_json} {output.transformed_hdf} --threads {threads}"
+        "Rscript {input.src} {input.train_hdf} {input.test_hdf} {input.fitted_rds} {input.pwy_json} {output.transformed_hdf} --threads {threads}"
 
 
 rule sup_transform_plier:
@@ -328,7 +329,7 @@ rule sup_transform_mofa:
 
 rule sup_transform_paradigm:
     input:
-        src=path.join(PY_SCRIPT_DIR, "transform_pca.py"),
+        src=path.join(PY_SCRIPT_DIR, "transform_paradigm.py"),
         data_hdf=path.join(SUP_SPLIT_DIR, "{data_params}/{split_params}/fold={fold}__test.hdf"),
         paradigm_hdf=path.join(PREP_PARADIGM_DIR, "paradigm.hdf"),
         fitted_hdf=path.join(SUP_FIT_TRANS_DIR, "{data_params}/{split_params}/{pwy_params}/method=paradigm/{fit_params}/fold={fold}.hdf"),
@@ -377,9 +378,8 @@ rule sup_fit_survival:
         transformed_train=path.join(SUP_TRANS_TRAIN_DIR, "{data_params}/target={t}__task=reg__groupby={gb}/{pwy_params}/{method_params}/{fit_params}/fold={fold}.hdf")
     output:
         trained_model=path.join(SUP_FIT_PRED_DIR, "{data_params,[^/]+}/target={t,[^/]+}__task=surv__groupby={gb,[^/]+}/{pwy_params,[^/]+}/{method_params,[^/]+}/{fit_params,[^/]+}/fold={fold,[0-9]+}.rds"),
-        training_scores=path.join(SUP_FIT_PRED_DIR, "{data_params}/target={t}__task=surv__groupby={gb}/{pwy_params}/{method_params}/{fit_params}/fold={fold}.json")
     shell:
-        "Rscript {input.src} {input.transformed_train} {output.trained_model} {output.training_scores} --target {wildcards.t}"
+        "Rscript {input.src} {input.transformed_train} {output.trained_model}"
 
 rule sup_fit_regressor:
     input:
@@ -440,7 +440,7 @@ rule sup_fit_paradigm:
         data_hdf=path.join(SUP_SPLIT_DIR, "{data_params}/{split_params}/fold={fold}__train.hdf"),
         paradigm_hdf=path.join(PREP_PARADIGM_DIR, "paradigm.hdf")
     output:
-        fitted_hdf=path.join(SUP_FIT_TRANS_DIR, "{data_params,[^/]+}/{split_params,[^/]+}/{pwy_params,[^/]+}/method=paradigm/{fit_params,[^/]+}/fold={fold,[0-9]+}.rds"),
+        fitted_hdf=path.join(SUP_FIT_TRANS_DIR, "{data_params,[^/]+}/{split_params,[^/]+}/{pwy_params,[^/]+}/method=paradigm/{fit_params,[^/]+}/fold={fold,[0-9]+}.hdf"),
         transformed_hdf=path.join(SUP_TRANS_TRAIN_DIR, "{data_params}/{split_params}/{pwy_params}/method=paradigm/{fit_params}/fold={fold}.hdf")
     params:
         parsed_opts=lambda wc: [f"--{kv[0]} {kv[1]}" for kv in [kv.split("=") for kv in wc["fit_params"].split("__")]],

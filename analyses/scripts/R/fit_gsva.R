@@ -36,8 +36,8 @@ var_filter <- opts$var_filter
 pargs <- arguments$args
 data_hdf <- pargs[1]
 pwy_json <- pargs[2]
-transformed_hdf <- pargs[3]
-fitted_model_rds <- pargs[4]
+fitted_model_rds <- pargs[3]
+transformed_hdf <- pargs[4]
 
 ####################################
 # LOAD PATHWAYS

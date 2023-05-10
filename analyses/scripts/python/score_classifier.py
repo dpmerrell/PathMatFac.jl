@@ -13,7 +13,7 @@ def load_data(test_hdf):
     # Load the features and labels from the HDF file
     X = su.load_hdf(test_hdf, "X").transpose()
     labels = su.load_hdf(test_hdf, "target", dtype=str)
-
+    
     # Encode the labels as integers.
     # (label --> its rank in sorted order)
     unq_labels = np.sort(np.unique(labels))
@@ -89,6 +89,7 @@ if __name__=="__main__":
     # Load data
     _, y_train, _ = load_data(train_hdf)
     X, y, y_labels = load_data(test_hdf)
+    print("TEST DATA:", X.shape)
 
     # Make predictions
     y_pred_probs = model.predict_proba(X)

@@ -13,6 +13,8 @@ def load_data(training_hdf):
 
     # Load the features and labels from the HDF file
     X = su.load_hdf(training_hdf, "X").transpose()
+
+    print("TRAINING DATA:", X.shape)
     labels = su.load_hdf(training_hdf, "target", dtype=str)
 
     # Encode the labels as integers.

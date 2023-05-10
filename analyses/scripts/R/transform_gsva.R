@@ -110,18 +110,18 @@ gsva_results <- gsva_results[test_instances,]
 
 ##################################
 # TRANSFORM TEST DATA
-mu <- fitted_params[["mu"]]
-sigma <- fitted_params[["sigma"]]
+#mu <- fitted_params[["mu"]]
+#sigma <- fitted_params[["sigma"]]
 
-print("TRANSFORMING VIA PCA")
-gsva_results <- t((t(gsva_results) - mu)/sigma)
+#print("TRANSFORMING VIA PCA")
+#gsva_results <- t((t(gsva_results) - mu)/sigma)
 
 # Fortunately, we know gsva_results contains no NaNs.
 # So the PCA transform is just matrix multiplication!
-print("GSVA RESULT NANS:")
-print(sum(is.nan(gsva_results)))
-Y <- fitted_params[["Y"]]
-gsva_results <- gsva_results %*% t(Y)
+#print("GSVA RESULT NANS:")
+#print(sum(is.nan(gsva_results)))
+#Y <- fitted_params[["Y"]]
+#gsva_results <- gsva_results %*% t(Y)
 
 
 ####################################
