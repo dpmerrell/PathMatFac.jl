@@ -49,6 +49,7 @@ genesets_to_priormat <- function(genesets, omic_features){
 ###################################################
 option_list <- list(
     make_option("--omic_type", type="character", default="mrnaseq", help="The type of omic data to use. Default 'mrnaseq'."),
+    make_option("--var_filter", type="double", default=0.05, help="Number of dimensions the output should take"),
     make_option("--output_dim", type="integer", default=10, help="Number of dimensions the output should take")
     )
 
@@ -60,6 +61,7 @@ arguments <- parse_args(parser, positional_arguments=4)
 opts <- arguments$options
 omic_type <- opts$omic_type
 output_dim <- opts$output_dim
+var_filter <- opts$var_filter
 
 pargs <- arguments$args
 data_hdf <- pargs[1]
@@ -79,18 +81,25 @@ instances <- h5read(data_hdf, "omic_data/instances")
 instance_groups <- h5read(data_hdf, "omic_data/instance_groups")
 target <- h5read(data_hdf, "target")
 
-mrnaseq_cols <- (feature_assays == omic_type)
-omic_data <- omic_data[,mrnaseq_cols]
-feature_genes <- feature_genes[mrnaseq_cols]
+relevant_cols <- (feature_assays == omic_type)
+omic_data <- omic_data[,relevant_cols]
+feature_genes <- feature_genes[relevant_cols]
+feature_assays <- feature_assays[relevant_cols]
 rownames(omic_data) <- instances
 colnames(omic_data) <- feature_genes
 
-# Filter out the columns with too many NaNs
-omic_data <- omic_data[,(colSums(is.nan(omic_data)) < 0.05*nrow(omic_data))]
+##########################################
+# VAR FILTER
+##########################################
 
-#print(omic_data)
-print("OMIC DATA")
+print("RAW OMIC DATA")
 print(dim(omic_data))
+
+# Filter the data by NaNs and variance
+omic_data <- omic_data[,colSums(is.nan(omic_data)) < 0.05*nrow(omic_data)]
+feature_vars <- apply(omic_data, 2, function(v) var(v, na.rm=TRUE))
+min_var <- quantile(feature_vars, 1-var_filter)
+omic_data <- omic_data[,feature_vars >= min_var]
 
 ####################################################
 # LOAD & PREP PATHWAYS
@@ -102,14 +111,13 @@ pwy_names <- pwy_dict$names
 genesets <- pwys_to_genesets(pwys, pwy_names)
 priormat <- genesets_to_priormat(genesets, colnames(omic_data)) 
 
-#print(priormat)
-print("PRIOR MAT")
+print("PRIOR MATRIX")
 print(dim(priormat))
 
 # Only keep the features that are present in the pathways
 omic_data <- omic_data[, rownames(priormat)]
 
-print("OMIC DATA")
+print("FILTERED OMIC DATA")
 print(dim(omic_data))
 
 ##################################################
@@ -125,7 +133,7 @@ omic_data <- t((t(omic_data) - fitted_params[["mu"]])/fitted_params[["sigma"]])
 omic_data[is.nan(omic_data)] <- 0.0 # Set NaNs to zero. (Equivalent to mean imputation, since data is Z-scored)
 
 # Call PLIER with the given parameter settings.
-plier_result <- PLIER(t(omic_data), priormat, trace=TRUE, scale=FALSE, k=output_dim)
+plier_result <- PLIER(t(omic_data), priormat, trace=TRUE, scale=FALSE, k=output_dim, minGenes=1)
 
 X <- t(plier_result$B)
 

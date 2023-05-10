@@ -502,7 +502,7 @@ function whiten!(model::PathMatFacModel)
             model.matfac.col_transform.layers[1].logsigma[cr] .+= log(Y_rms_max)
         else # Handle the zero-magnitude case
             model.matfac.Y[:,cr] .= 0
-            model.matfac.col_transform.layers[1].logsigma[cr] .= Float32(1e-9) 
+            model.matfac.col_transform.layers[1].logsigma[cr] .= Float32(-1e9)
         end
 
     end

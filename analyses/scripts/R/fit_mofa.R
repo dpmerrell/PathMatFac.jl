@@ -36,8 +36,8 @@ reconstruct_matrix <- function(matrix_ls, original_rows){
 option_list <- list(
     make_option("--output_dim", type="integer", default=10, help="Number of dimensions the output should take"),
     make_option("--omic_types", type="character", default="mutation:methylation:mrnaseq:cna", help="List of omic assays to use, separated by colons (no spaces). Default 'mrnaseq:methylation:mutation:cna'."),
-    make_option("--is_grouped", action="store_true", default=FALSE, help="Toggles sample grouping by cancer type."),
-    make_option("--variance_filter", type="numeric", default=0.5, help="fraction of most-variable features to keep within each view"),
+    make_option("--is_grouped", action="store_true", default=TRUE, help="Toggles sample grouping by cancer type."),
+    make_option("--var_filter", type="double", default=0.5, help="fraction of most-variable features to keep within each view"),
     make_option("--mofa_python", help="path to python that has mofapy2 installed")
     )
 
@@ -51,7 +51,7 @@ omic_types <- opts$omic_types
 omic_types <- strsplit(omic_types, ":")[[1]]
 output_dim <- opts$output_dim
 is_grouped <- opts$is_grouped
-var_filter <- opts$variance_filter
+var_filter <- opts$var_filter
 mofa_python <- opts$mofa_python
 
 reticulate::use_python(mofa_python) 
