@@ -14,8 +14,8 @@ option_list <- list(
     make_option("--kcdf", type="character", default="Gaussian", help="'Gaussian' or 'Poisson'."),
     make_option("--minsize", default=10, help="Minimum gene set size. Default 10."),
     make_option("--maxsize", default=500, help="Maximum gene set size. Default 100."),
-    make_option("--threads", default=1, help="number of CPU threads to use. Default 1."),
-    #make_option("--output_dim", default=10, help="Dimension of the output. We use PCA to transform the GSVA output to this dimension")
+    make_option("--threads", default=4, help="Number of CPU threads to use. Default 1."),
+    make_option("--var_filter", type="double", default=0.05, help="The top fraction of features to keep, ranked by variance")
     )
 
 parser <- OptionParser(usage="fit_gsva.R DATA_HDF PATHWAY_JSON TRANSFORMED_HDF FITTED_MODEL_RDS [OPTS]",
@@ -31,7 +31,7 @@ kcdf <- opts$kcdf
 minsize <- opts$minsize
 maxsize <- opts$maxsize
 threads <- opts$threads
-output_dim <- opts$output_dim
+var_filter <- opts$var_filter
 
 pargs <- arguments$args
 data_hdf <- pargs[1]
@@ -62,23 +62,29 @@ feature_assays <- h5read(data_hdf, "omic_data/feature_assays")
 instances <- h5read(data_hdf, "omic_data/instances")
 instance_groups <- h5read(data_hdf, "omic_data/instance_groups")
 
-mrnaseq_cols <- (feature_assays == omic_type)
-omic_data <- omic_data[,mrnaseq_cols]
-feature_genes <- feature_genes[mrnaseq_cols]
+
+#######################################
+# FILTER THE FEATURES 
+
+# Filter by omic type
+relevant_cols <- (feature_assays == omic_type)
+omic_data <- omic_data[,relevant_cols]
+feature_genes <- feature_genes[relevant_cols]
 rownames(omic_data) <- instances
 colnames(omic_data) <- feature_genes
 
+# Filter features by NaNs 
+omic_data <- omic_data[,colSums(is.nan(omic_data)) < 0.05*nrow(omic_data)]
 
-#######################################
-# HANDLE MISSING VALUES
+# Filter features by variance
+feature_vars <- apply(omic_data, 2, function(v) var(v, na.rm=TRUE))
+min_var <- quantile(feature_vars, 1-var_filter)
+omic_data <- omic_data[,feature_vars >= min_var]
 
-# Only keep genes that are observed for most samples
-omic_data <- omic_data[,colSums(is.nan(omic_data)) < 0.1*dim(omic_data)[1]]
-print(dim(omic_data))
-
-# Stick to inexpensive median imputation for now.
+# Stick to simple/inexpensive median imputation for now.
 # (Reduces impact on KCDF estimates??)
 omic_data <- median_impute(omic_data)
+
 
 ############################################
 # RUN GSVA 

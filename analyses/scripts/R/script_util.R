@@ -40,15 +40,12 @@ pwys_to_genesets <- function(pwys, pwy_names){
         pwy_name <- pwy_names[[i]]
 
         a_vec <- sapply(pwy, function(v) v[[1]])
-        b_vec <- sapply(pwy, function(v) v[[3]])
-        flag_vec <- sapply(pwy, function(v) substr(v[[2]],1,1) == "a")
+        b_vec <- sapply(pwy, function(v) v[[2]])
 
-        a_vec <- a_vec[flag_vec]
-        b_vec <- b_vec[flag_vec]
         all_genes <- c(a_vec, b_vec)
         unq_genes <- unique(all_genes)
 
-        result[[as.character(i)]] <- unq_genes 
+        result[[pwy_name]] <- unq_genes 
     }
     return(result)
 }

@@ -195,6 +195,12 @@ rule all:
         ####################################
         # Supervised tasks
         ####################################
+        sup_fitted_gsva=expand(path.join(SUP_FIT_TRANS_DIR, "{fit_comb}.rds"),
+                                fit_comb=[c for c in SUP_TRANS_FIT_COMBINATIONS if "gsva" in c]),
+        sup_fitted_plier=expand(path.join(SUP_FIT_TRANS_DIR, "{fit_comb}.rds"),
+                                fit_comb=[c for c in SUP_TRANS_FIT_COMBINATIONS if "plier" in c]),
+        sup_fitted_mofa=expand(path.join(SUP_FIT_TRANS_DIR, "{fit_comb}.rds"),
+                              fit_comb=[c for c in SUP_TRANS_FIT_COMBINATIONS if "mofa" in c]),
         sup_fitted_pca=expand(path.join(SUP_FIT_TRANS_DIR, "{fit_comb}.hdf"),
                               fit_comb=[c for c in SUP_TRANS_FIT_COMBINATIONS if "pca" in c]),
         sup_fitted_matfacs=expand(path.join(SUP_FIT_TRANS_DIR, "{fit_comb}.bson"),
@@ -217,6 +223,55 @@ def get_cancer_types(wc, key="tcga_params"):
 #####################################################################
 # Supervised tasks
 #####################################################################
+
+
+##### Fit classifiers/regressors ######
+
+
+
+##### Fit "transforms" ######
+
+rule sup_fit_gsva:
+    input:
+        src=path.join(R_SCRIPT_DIR, "fit_gsva.R"),
+        data_hdf=path.join(SUP_SPLIT_DIR, "{data_params}/{split_params}/fold={fold}__train.hdf"),
+        pwy_json=lambda wc: [path.join(PREP_PWY_DIR, kv.split("=")[1]+".json") for kv in wc["pwy_params"].split("__") if kv.startswith("mrnaseq")]
+    output:
+        fitted_rds=path.join(SUP_FIT_TRANS_DIR, "{data_params,[^/]+}/{split_params,[^/]+}/{pwy_params,[^/]+}/method=gsva/{fit_params,[^/]+}/fold={fold,[0-9]+}.rds"),
+        transformed_hdf=path.join(SUP_TRANS_TRAIN_DIR, "{data_params}/{split_params}/{pwy_params}/method=gsva/{fit_params}/fold={fold}.hdf")
+    params:
+        parsed_opts=lambda wc: [f"--{kv[0]} {kv[1]}" for kv in [kv.split("=") for kv in wc["fit_params"].split("__")]]
+    threads: lambda wc: len(get_cancer_types(wc, key="data_params")) 
+    shell:
+        "Rscript {input.src} {input.data_hdf} {input.pwy_json} {output.fitted_rds} {output.transformed_hdf} {params.parsed_opts} --threads {threads}"
+
+
+rule sup_fit_plier:
+    input:
+        src=path.join(R_SCRIPT_DIR, "fit_plier.R"),
+        data_hdf=path.join(SUP_SPLIT_DIR, "{data_params}/{split_params}/fold={fold}__train.hdf"),
+        pwy_json=lambda wc: [path.join(PREP_PWY_DIR, kv.split("=")[1]+".json") for kv in wc["pwy_params"].split("__") if kv.startswith("mrnaseq")]
+    output:
+        fitted_rds=path.join(SUP_FIT_TRANS_DIR, "{data_params,[^/]+}/{split_params,[^/]+}/{pwy_params,[^/]+}/method=plier/{fit_params,[^/]+}/fold={fold,[0-9]+}.rds"),
+        transformed_hdf=path.join(SUP_TRANS_TRAIN_DIR, "{data_params}/{split_params}/{pwy_params}/method=plier/{fit_params}/fold={fold}.hdf")
+    params:
+        parsed_opts=lambda wc: [f"--{kv[0]} {kv[1]}" for kv in [kv.split("=") for kv in wc["fit_params"].split("__")]],
+    shell:
+        "Rscript {input.src} {input.data_hdf} {input.pwy_json} {output.fitted_rds} {output.transformed_hdf} {params.parsed_opts}"
+
+
+rule sup_fit_mofa:
+    input:
+        src=path.join(R_SCRIPT_DIR, "fit_mofa.R"),
+        data_hdf=path.join(SUP_SPLIT_DIR, "{data_params}/{split_params}/fold={fold}__train.hdf")
+    output:
+        fitted_rds=path.join(SUP_FIT_TRANS_DIR, "{data_params,[^/]+}/{split_params,[^/]+}/{pwy_params,[^/]+}/method=mofa/{fit_params,[^/]+}/fold={fold,[0-9]+}.rds"),
+        transformed_hdf=path.join(SUP_TRANS_TRAIN_DIR, "{data_params}/{split_params}/{pwy_params}/method=mofa/{fit_params}/fold={fold}.hdf")
+    params:
+        parsed_opts=lambda wc: [f"--{kv[0]} {kv[1]}" for kv in [kv.split("=") for kv in wc["fit_params"].split("__")]]
+    shell:
+        "Rscript {input.src} {input.data_hdf} {output.fitted_rds} {output.transformed_hdf} {params.parsed_opts} --mofa_python {MOFA_PYTHON}"
+
 
 rule sup_fit_pca:
     input:
@@ -249,6 +304,7 @@ rule sup_fit_matfac:
     shell:
         "julia --project=. {input.src} {input.data_hdf} {output.fitted_bson} {output.transformed_hdf} {params.parsed_opts} history_json={output.history_json} {params.parsed_pwy_jsons}"
 
+##### Prepare data ######
 
 rule sup_prep_splits:
     input:

@@ -34,7 +34,7 @@ def load_data(data_hdf, modalities):
 
 
 
-def remove_missing(X, out_dim):
+def remove_missing(X, out_dim=20):
 
     finite_X = np.isfinite(X)
     row_key = (np.sum(finite_X, axis=1) > out_dim)
@@ -90,7 +90,7 @@ def find_elbow(rsquare):
     return max_idx
 
 
-def transform_data(X, min_components=3, max_components=50):
+def transform_data(X, min_components=3, max_components=20):
 
     result = PCA(X, standardize=False,
                     method='nipals',
@@ -148,13 +148,13 @@ def transform_all_data(X, feature_assays):
         X_trans, pcs = transform_data(relevant_X)
         assay_X.append(X_trans)
         assay_Y.append(pcs)
-        assay_labels.append([unq_a]*transformed.shape[1])
+        assay_labels.append([unq_a]*X_trans.shape[1])
 
     conc_X = np.concatenate(assay_X, axis=1)
     conc_Y = concatenate_pcs(assay_Y)
     result_assays = np.concatenate(assay_labels)
 
-    return conc_results, result_assays
+    return conc_X, conc_Y, result_assays
 
 
 if __name__=="__main__":
@@ -164,22 +164,20 @@ if __name__=="__main__":
     parser.add_argument("fitted_hdf")
     parser.add_argument("transformed_train_hdf")
     parser.add_argument("--omic_types", help="Use the specified omic assays.", default="mutation:methylation:mrnaseq:cna")
-    #parser.add_argument("--output_dim", help="Use the top-`output_dim` principal components.", type=int)
-    parser.add_argument("--variance_filter", help="Discard the features with least variance, *keeping* this fraction of the features.", type=float, default=0.5)
+    parser.add_argument("--var_filter", help="Discard the features with least variance, *keeping* this fraction of the features.", type=float, default=0.5)
     args = parser.parse_args()
 
     data_hdf = args.data_hdf
     fitted_hdf = args.fitted_hdf
     trans_hdf = args.transformed_train_hdf
-    output_dim = args.output_dim
-    v_frac = args.variance_filter
+    v_frac = args.var_filter
     omic_types = args.omic_types.split(":")
 
     # Load data
     Z, sample_ids, sample_groups, feature_assays, feature_genes, target = load_data(data_hdf, omic_types)
 
     # Remove empty rows and columns
-    Z_nomissing, row_key, col_key = remove_missing(Z, output_dim)
+    Z_nomissing, row_key, col_key = remove_missing(Z, out_dim=20)
     sample_ids = sample_ids[row_key]
     sample_groups = sample_groups[row_key]
     feature_assays = feature_assays[col_key]
@@ -195,7 +193,7 @@ if __name__=="__main__":
     Z_std, mu, sigma = standardize_columns(Z_filtered)
     
     # Perform concatenated PCA
-    X, pcs, factor_assays = transform_all_data(Z_std) #, n_components=output_dim)
+    X, pcs, factor_assays = transform_all_data(Z_std, feature_assays) #, n_components=output_dim)
 
     # Output the transformed data and the 
     # fitted principal components and standardization parameters
