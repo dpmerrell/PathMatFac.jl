@@ -131,17 +131,21 @@ end
 
 function save_simulated_data(output_hdf, D, instances, instance_groups, feature_genes, feature_assays,
                                             barcode_data, barcode_columns)
+    prop = HDF5.FileAccessProperties() 
+    HDF5.setproperties!(prop; driver=HDF5.Drivers.Core())
+    f = h5open(output_hdf, "w"; fapl=prop)
 
-    h5write(output_hdf, "omic_data/data", D)
-    h5write(output_hdf, "omic_data/instances", instances)
-    h5write(output_hdf, "omic_data/instance_groups", instance_groups)
-    h5write(output_hdf, "omic_data/feature_genes", feature_genes)
-    h5write(output_hdf, "omic_data/feature_assays", feature_assays)
+    f["omic_data/data"] = D
+    f["omic_data/instances"] =  instances
+    f["omic_data/instance_groups"] = instance_groups
+    f["omic_data/feature_genes"] = feature_genes
+    f["omic_data/feature_assays"] = feature_assays
     
-    h5write(output_hdf, "barcodes/data", barcode_data)
-    h5write(output_hdf, "barcodes/instances", instances)
-    h5write(output_hdf, "barcodes/features", barcode_columns)
+    f["barcodes/data"] = barcode_data
+    f["barcodes/instances"] = instances
+    f["barcodes/features"] = barcode_columns
 
+    close(f)
 end
 
 function main(args)

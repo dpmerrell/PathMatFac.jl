@@ -499,11 +499,12 @@ function whiten!(model::PathMatFacModel)
         Y_rms_max = maximum(Y_view_rms)
         if Y_rms_max > 0
             model.matfac.Y[:,cr] ./= Y_rms_max 
+            model.matfac.col_transform.layers[1].logsigma[cr] .+= log(Y_rms_max)
         else # Handle the zero-magnitude case
             model.matfac.Y[:,cr] .= 0
+            model.matfac.col_transform.layers[1].logsigma[cr] .= Float32(1e-9) 
         end
 
-        model.matfac.col_transform.layers[1].logsigma[cr] .+= log(Y_rms_max)
     end
 end
 

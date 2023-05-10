@@ -104,11 +104,16 @@ end
 
 function save_transformed(transformed_X, instances, instance_groups, target, output_hdf)
 
-    h5write(output_hdf, "X", transformed_X)
-    h5write(output_hdf, "instances", instances)
-    h5write(output_hdf, "instance_groups", instance_groups)
-    h5write(output_hdf, "target", target)
+    prop = HDF5.FileAccessProperties() 
+    HDF5.setproperties!(prop; driver=HDF5.Drivers.Core())
+    f = h5open(output_hdf, "w"; fapl=prop)
 
+    f["X"] = transformed_X
+    f["instances"] = instances
+    f["instance_groups"] = instance_groups
+    f["target"] = target
+
+    close(f)
 end
 
 function main(args)
