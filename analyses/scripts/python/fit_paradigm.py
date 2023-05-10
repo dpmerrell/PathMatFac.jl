@@ -132,13 +132,13 @@ if __name__=="__main__":
 
     # Output the transformed data and the 
     # fitted principal components and standardization parameters
-    with h5py.File(trans_hdf, "w") as f:
+    with h5py.File(trans_hdf, "w", driver="core") as f:
         su.write_hdf(f, "X", X.transpose())
         su.write_hdf(f, "instances", sample_ids, is_string=True) 
         su.write_hdf(f, "instance_groups", sample_groups, is_string=True)
         su.write_hdf(f, "target", target.transpose(), is_string=True) 
     
-    with h5py.File(fitted_hdf, "w") as f:
+    with h5py.File(fitted_hdf, "w", driver="core") as f:
         su.write_hdf(f, "Y", pcs)
         su.write_hdf(f, "mu", mu)
         su.write_hdf(f, "sigma", sigma)

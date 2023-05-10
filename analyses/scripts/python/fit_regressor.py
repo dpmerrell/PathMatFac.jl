@@ -52,7 +52,9 @@ if __name__=="__main__":
     if target == "pathologic_stage":
         y = su.encode_pathologic_stage(y)
 
-    model = fit_regressor(X, y)
+    rf_kwargs = {"n_estimators": 500}
+
+    model = fit_regressor(X, y, **rf_kwargs)
     pkl.dump(model, open(fitted_pkl, "wb"))
 
     score_dict = compute_scores(model, X, y)

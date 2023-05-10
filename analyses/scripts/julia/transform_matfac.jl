@@ -9,8 +9,37 @@ include("script_util.jl")
 PM = PathwayMultiomics
 
 
-function filter_omic_data!(omic_data, feature_assays, to_use)
+function load_omic_data(omic_hdf)
 
+    # Filter by omic type
+    feature_assays = h5read(omic_hdf, "omic_data/feature_assays")
+
+    # Feature assays and genes    
+    feature_genes = h5read(omic_hdf, "omic_data/feature_genes")
+   
+    # Omic data matrix 
+    omic_data = h5read(omic_hdf, "omic_data/data")
+
+    # Sample ids and conditions
+    sample_ids = h5read(omic_hdf, "omic_data/instances")
+    sample_conditions = h5read(omic_hdf, "omic_data/instance_groups")
+
+    return omic_data, sample_ids, sample_conditions, feature_genes, feature_assays
+end
+
+
+function save_transformed(transformed_X, instances, instance_groups, target, out_hdf)
+
+    prop = HDF5.FileAccessProperties() 
+    HDF5.setproperties!(prop; driver=HDF5.Drivers.Core())
+    f = h5open(out_hdf, "w"; fapl=prop)
+
+    f["X"] = transformed_X
+    f["instances"] = instances
+    f["instance_groups"] = instance_groups
+    f["target"] = target
+
+    close(f)
 end
 
 
@@ -19,27 +48,29 @@ function main(args)
     ################################################
     # PARSE COMMAND LINE ARGUMENTS
     ################################################   
-    omic_hdf_filename = args[1]
+    omic_hdf = args[1]
     fitted_bson = args[2]
-    out_hdf = args[4]
+    out_hdf = args[3]
 
-    opts = Dict{Symbol,Any}(:capacity => 25000000,
-                            :max_epochs => 1000, 
-                            :lr => 0.25,
-                            :rel_tol => 1e-6,
+    opts = Dict{Symbol,Any}(:max_epochs => 1000, 
+                            :lr => 1.0,
+                            :rel_tol => 1e-3,
                             :verbosity => 1,
-                            :history_json => "history.json",
-                            :use_gpu => 1 
+                            :use_gpu => "false",
                            )
-    if length(args) > 4
-        parse_opts!(opts, args[5:end])
+    if length(args) > 3
+        cli_opts = parse_opts(args[4:end])
     end
+    update_opts!(opts, cli_opts)
 
     println("OPTS:")
     println(opts)
-   
-    history_json = pop!(opts, :history_json)
-    use_gpu = pop!(opts, :use_gpu)
+
+    max_epochs = opts[:max_epochs]
+    lr = opts[:lr]
+    rel_tol = opts[:rel_tol]
+    verbosity = opts[:verbosity]
+    use_gpu = opts[:use_gpu]
 
     ######################################################
     # LOAD OMIC DATA
@@ -47,52 +78,27 @@ function main(args)
     println("Loading data...")
 
     # Load the 'omic data itself
-    feature_assays = get_omic_feature_assays(omic_hdf_filename)
-    feature_genes = get_omic_feature_genes(omic_hdf_filename)
-
-    sample_names = get_omic_instances(omic_hdf_filename)
-    sample_conditions = get_cancer_types(omic_hdf_filename)
-    omic_data = get_omic_data(omic_hdf_filename)
+    omic_data, 
+    sample_ids, sample_conditions, 
+    feature_genes, feature_assays = load_omic_data(omic_hdf)
+    feature_ids = map((g,a) -> string(g, "_", a), feature_genes, feature_assays)
 
     # Obtain some column attributes
     feature_distributions = map(x->DISTRIBUTION_MAP[x], feature_assays)
-    feature_weights = map(x->WEIGHT_MAP[x], feature_assays)
-    feature_dogmas = map(x->DOGMA_MAP[x], feature_assays)
-
-    # Load the batch information
-    barcodes = get_barcodes(omic_hdf_filename)
-    batch_dict = barcodes_to_batches(barcodes) 
-
-   
-    #######################################################
-    # LOAD PATHWAYS
-    ####################################################### 
-
-    # Load pathway edgelists
-    pwy_dict = JSON.parsefile(pwy_json) 
-    pwys = pwy_dict["pathways"]
-    pwy_names = pwy_dict["names"]
-    pwy_names = convert(Vector{String}, pwy_names)
-    pwys = convert(Vector{Vector{Vector{Any}}}, pwys)
-
-    # Preprocess them
-    pathway_graphs, feature_ids = prep_pathway_graphs(pwys, feature_genes,
-                                                            feature_dogmas;
-                                                      feature_weights=feature_weights)
+  
+    # Load the prediction target, if it exists 
+    target = ones(size(omic_data,1))
+    try
+        target = h5read(omic_hdf, "target")
+    catch e
+        println("No 'target' field in data HDF; using dummy")
+    end
 
     #######################################################
     # ASSEMBLE MODEL 
     ####################################################### 
-    println("Assembling model...")
-    model = PathMatFacModel(, 
-                            sample_names, sample_conditions,
-                            feature_genes, feature_assays,
-                            batch_dict;
-                            lambda_X_l2=lambda_X_l2, lambda_X_condition=lambda_X_condition, 
-                            lambda_Y_l1=lambda_Y_l1, lambda_Y_selective_l1=lambda_Y_selective_l1,
-                            lambda_Y_graph=lambda_Y_graph,
-                            lambda_layer=lambda_layer)
 
+    model = load_model(fitted_bson)
 
     #######################################################
     # SELECT A GPU (IF APPLICABLE)
@@ -116,30 +122,21 @@ function main(args)
     #######################################################
     # FIT THE MODEL 
     #######################################################
+    transformed = nothing
     try
-        # Move to GPU (if applicable)
-        if use_gpu == 1
-            omic_data_d = gpu(omic_data)
-            model_d = gpu(model)
-            omic_data = nothing
-            model = nothing
-        else
-            omic_data_d = omic_data
-            model_d = model
-        end
-
-        # Construct the outer callback object
-        callback = PathwayMultiomics.OuterCallback(history_json=history_json)
 
         start_time = time()
-        PM.fit!(model_d, omic_data_d; outer_callback=callback, opts...)
+        transformed = transform(model, omic_data;
+                                feature_ids=feature_ids,
+                                feature_views=feature_assays,
+                                sample_ids=sample_ids,
+                                max_epochs=max_epochs, 
+                                lr=lr, rel_tol=rel_tol)
         end_time = time()
 
         println("ELAPSED TIME (s):")
         println(end_time - start_time)
     
-        # Move model back to CPU; save to disk
-        model = cpu(model_d)
     catch e
         if status_file != nothing
             update_device_status(gpu_idx, '0'; status_file=status_file) 
@@ -159,8 +156,12 @@ function main(args)
     ########################################################
     # SAVE RESULTS 
     ########################################################
-    save_model(model, out_bson)
-    PathwayMultiomics.save_params_hdf(model, out_hdf)
+    transformed_X = permutedims(transformed.matfac.X)
+    println("Transformed X")
+    println(size(transformed_X))
+
+    save_transformed(transformed_X, sample_ids, sample_conditions, 
+                                    target, out_hdf)
 
 end
 

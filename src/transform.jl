@@ -7,17 +7,14 @@ function transform(model::PathMatFacModel, D::AbstractMatrix;
                    use_gpu::Bool=true,
                    feature_ids::Union{<:AbstractVector,Nothing}=nothing,
                    sample_ids::Union{<:AbstractVector,Nothing}=nothing,
-                   sample_conditions::Union{<:AbstractVector,Nothing}=nothing,
                    feature_views::Union{<:AbstractVector,Nothing}=nothing,
-                   batch_dict::Union{<:AbstractDict,Nothing}=nothing,
                    verbosity=1, print_prefix="", 
-                   lr=0.1, fit_kwargs...)
+                   max_epochs=1000, lr=1.0, fit_kwargs...)
 
     K, N = size(model.matfac.Y)
     M_new, N_new = size(D)
 
     next_pref = string("    ", print_prefix)
-    nn_pref = string("    ", next_pref)
     v_println("Transforming new data..."; verbosity=verbosity, prefix=print_prefix)
 
     ###################################################
@@ -46,26 +43,13 @@ function transform(model::PathMatFacModel, D::AbstractMatrix;
         old_idx, new_idx = keymatch(model.feature_ids, feature_ids)
     end
 
-    # By default, ignore the sample conditions
-    if sample_conditions != nothing
-        @assert length(sample_conditions) == M_new "`sample_conditions` must have length == size(D,1)"
-    end
-
     if sample_ids != nothing
         @assert length(sample_ids) == M_new "`sample_ids` must have length == size(D,1)"
     else
         sample_ids = collect(1:M_new)
     end
 
-    # By default, ignore batch effects in the new data.
-    # Otherwise, 
-    if batch_dict != nothing
-        @assert Set(keys(batch_dict)) == Set(model.feature_ids) "`batch_dict` keys must match the set of `feature_views`"
-        for v in values(batch_dict)
-            @assert length(v) == M_new "Values of `batch_dict` must have length == size(D,1)"
-        end 
-    end
-
+    
     ###################################################
     # Construct a model to transform the new data
     ##################################################
@@ -85,81 +69,38 @@ function transform(model::PathMatFacModel, D::AbstractMatrix;
     set_layer!(new_model.matfac.col_transform, 3, view(new_model.matfac.col_transform.layers[3], :, old_idx))
     new_model.matfac.Y_reg = x->0.0
     new_model.matfac.noise_model = model.matfac.noise_model[old_idx]
+    new_model.feature_views = model.feature_views[old_idx]
     new_model.feature_ids = feature_ids[new_idx]
-    new_model.feature_views = feature_views[new_idx]
 
     # Construct "sample attributes"
     new_model.matfac.X = similar(model.matfac.X, K, M_new) 
-    new_model.matfac.X .= 0 
+    new_model.matfac.X .= 0
+    new_model.matfac.X_reg = x->0.0 
     new_model.sample_ids = sample_ids
-    new_model.sample_conditions = sample_conditions
-    
-    # If batch info is provided, construct a 
-    # new BatchShift layer and BatchArrayReg.
-    if batch_dict != nothing
-        new_layer = BatchShift(feature_views, batch_dict)
-        set_layer!(new_model.matfac.col_trans, 4, new_layer)
-
-        # The new regularizer should be informed by the values of the
-        # fitted model's batch shift.
-        new_reg = construct_new_batch_reg!(new_layer.theta,
-                                           model.matfac.col_transform_reg.regs[4],
-                                           model.matfac.col_transform.layers[4].theta)
-        set_reg!(new_model.matfac.col_transform_reg, 4, new_reg)
-    else # If we aren't provided batch information, then ignore batch effects
-        set_layer!(new_model.matfac.col_transform, 2, x->x)
-        set_layer!(new_model.matfac.col_transform, 4, x->x)
-    end
-
-    # If sample conditions are provided,
-    # construct a new GroupRegularizer for sample conditions
-    if sample_conditions != nothing
-        new_model.matfac.X_reg.regularizers = (new_model.matfac.X_reg.regularizers[1],
-                                               construct_new_group_reg(sample_conditions,
-                                                                       model.matfac.X_reg.regularizers[2],
-                                                                       model.matfac.X),
-                                               new_model.matfac.X_reg.regularizers[3])
-    end
-
+   
     ##################################################
     # Fit the model to the new data.
     ##################################################
     
     # Move to GPU; initialize an optimizer
-    new_model = gpu(new_model)
-    opt = construct_optimizer(new_model, lr)
-    
+    if use_gpu
+        new_model = gpu(new_model)
+    end
+
     # Freeze the other layers and ignore the column
     # parameters' regularizers
     freeze_layer!(new_model.matfac.col_transform, 1:4)
     freeze_reg!(new_model.matfac.col_transform_reg, 1:4)
 
-    # Fit the new BatchShift, in isolation
-    if batch_dict != nothing
-        v_println("Fitting batch shift..."; verbosity=verbosity, 
-                                            prefix=next_pref)
-        unfreeze_layer!(new_model.matfac.col_transform, 4)
-        unfreeze_reg!(new_model.matfac.col_transform_reg, 4)
-        mf_fit!(new_model; opt=opt, max_epochs=500, update_col_layers=true,
-                           verbosity=verbosity, print_prefix=nn_pref)
-    end
-
     # Update the new X 
-    v_println("Fitting X..."; verbosity=verbosity, 
-                              prefix=next_pref)
-    mf_fit!(new_model; update_X=true, opt=opt, 
-                       verbosity=verbosity, print_prefix=nn_pref,
-                       fit_kwargs...)
+    mf_fit_adapt_lr!(new_model; update_X=true,  
+                                verbosity=verbosity, print_prefix=next_pref,
+                                max_epochs=max_epochs, lr=lr, fit_kwargs...)
 
-    # Finally: update them both, jointly
-    if batch_dict != nothing 
-        v_println("Jointly tuning X and batch shift..."; verbosity=verbosity, 
-                                                         prefix=next_pref)
-        mf_fit!(new_model; update_X=true, update_col_layers=true,
-                           verbosity=verbosity, fit_prefix=nn_pref, 
-                           opt=opt, fit_kwargs...)
+    if use_gpu
+        new_model = cpu(new_model)
     end
-    new_model = cpu(new_model)
+
     unfreeze_layer!(new_model.matfac.col_transform, 1:4)
 
     #############################################################

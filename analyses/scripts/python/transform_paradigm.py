@@ -82,7 +82,7 @@ if __name__=="__main__":
     X = su.linear_transform(Z_std, Y)
 
     # Save the transformed data to HDF
-    with h5py.File(out_hdf, "w") as f:
+    with h5py.File(out_hdf, "w", driver="core") as f:
         su.write_hdf(f, "X", X)
         su.write_hdf(f, "instances", sample_ids, is_string=True) 
         su.write_hdf(f, "instance_groups", sample_groups, is_string=True)

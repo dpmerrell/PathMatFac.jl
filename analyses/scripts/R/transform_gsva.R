@@ -12,7 +12,7 @@ source("scripts/R/script_util.R")
 option_list <- list(
     make_option("--omic_type", type="character", default="mrnaseq", help="The type of omic data to use. Default 'mrnaseq'."),
     make_option("--kcdf", type="character", default="Gaussian", help="'Gaussian' or 'Poisson'."),
-    make_option("--threads", default=1, help="number of CPU cores to use. Default 1.")
+    make_option("--threads", default=1, help="number of threads to use. Default 1.")
     )
 
 parser <- OptionParser(usage="fit_gsva.R TRAIN_HDF TEST_HDF FITTED_RDS PATHWAY_JSON TRANSFORMED_HDF [OPTS]",

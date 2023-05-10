@@ -560,6 +560,7 @@ supervised_tasks:
 #                var_filter: [0.05]
 #                output_dim: [20]
 #        targets: ["pathologic_stage", "hpv_status", "survival", "ctype"] 
+#        tasks: ["reg", "cls", "surv", "cls"]
 #        groupby: ["batch", "batch", "batch", "batch"]
     mrnaseq_predictions_hpv:
         data_params:
@@ -600,9 +601,11 @@ supervised_tasks:
                 omic_type: ["mrnaseq"]
                 #var_filter: [0.2]
                 var_filter: [0.05] 
-        targets: ["hpv_status"] 
-        groupby: ["batch"]
+        targets: ["pathologic_stage", "hpv_status", "survival"] 
+        tasks: ["reg", "cls", "surv"]
+        groupby: ["batch", "batch", "batch"]
         #targets: ["pathologic_stage", "hpv_status", "survival", "ctype"] 
+        #tasks: ["reg", "cls", "surv", "cls"]
         #groupby: ["batch", "batch", "batch", "batch"]
 #    mrnaseq_methyl_predictions_hpv:
 #        data_params:
@@ -632,6 +635,7 @@ supervised_tasks:
 #                var_filter: [0.1]
 #                output_dim: [20]
 #        targets: ["pathologic_stage", "hpv_status", "survival", "ctype"] 
+#        tasks: ["reg", "cls", "surv", "cls"]
 #        groupby: ["batch", "batch", "batch", "batch"]
 #    mrnaseq_cna_predictions_hpv:
 #        data_params:
@@ -661,9 +665,10 @@ supervised_tasks:
 #                var_filter: [0.1]
 #                output_dim: [20]
 #            paradigm:
-#                var_filter: [0.5]
+#                var_filter: [0.1]
 #                output_dim: [20]
 #        targets: ["pathologic_stage", "hpv_status", "survival", "ctype"] 
+#        tasks: ["reg", "cls", "surv", "cls"]
 #        groupby: ["batch", "batch", "batch", "batch"]
 #    batch_effect_test_hpv:
 #        data_params:
@@ -686,6 +691,7 @@ supervised_tasks:
 #                fsard_max_iter: [1]
 #                fsard_v0: [0.8]
 #        targets: ["pathologic_stage", "hpv_status", "survival", "ctype"] 
+#        tasks: ["reg", "cls", "surv", "cls"]
 #        groupby: ["batch", "batch", "batch", "batch"]
     
         
