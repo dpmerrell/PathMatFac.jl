@@ -18,7 +18,8 @@ def load_data(data_hdf):
 
 def load_model(pc_hdf):
 
-    Y = su.load_hdf(pc_hdf, "Y").transpose()
+    Y = su.load_hdf(pc_hdf, "Y")
+    print("Y:", Y.shape)
     mu = su.load_hdf(pc_hdf, "mu")
     sigma = su.load_hdf(pc_hdf, "sigma")
 
@@ -61,8 +62,6 @@ if __name__=="__main__":
     data_col_idx, model_col_idx = select_features(test_genes, test_assays, 
                                                   model_genes, model_assays)
 
-    print("data_col_idx: ", data_col_idx)
-    print("model_col_idx: ", model_col_idx)
     # Filter the data and model params to keep only those features
     Z_test = Z_test[:,data_col_idx]
     test_genes = test_genes[data_col_idx]
