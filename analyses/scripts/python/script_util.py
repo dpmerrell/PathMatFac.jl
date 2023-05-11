@@ -274,7 +274,7 @@ def encode_pathologic_stage(y):
     return np.vectorize(stage_encoder)(y)
 
 
-def linear_transform(Z, Y, lr=1.0, rel_tol=1e-8, max_iter=1000):
+def linear_transform(Z, Y, lr=1.0, rel_tol=1e-6, max_iter=1000):
 
     K, N = Y.shape
     M = Z.shape[0]
@@ -313,8 +313,9 @@ def linear_transform(Z, Y, lr=1.0, rel_tol=1e-8, max_iter=1000):
 
         # Update loop variables
         lss = new_lss
+        if i % 100 == 0: 
+            print("Iteration: {}; Loss: {:.2f}".format(i, lss))
         i += 1
-        #print("Iteration: {}; Loss: {:.2f}".format(i, lss))
 
     if i >= max_iter:
         print("Reached max iter ({}). Terminating".format(max_iter))

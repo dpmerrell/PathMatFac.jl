@@ -17,7 +17,6 @@ def load_data(data_hdf, modalities):
         data = f["omic_data"]["data"][:,:].transpose()
         assays = f["omic_data"]["feature_assays"][:].astype(str)
 
-        #relevant_cols = (assays == modality)
         relevant_cols = np.vectorize(lambda x: x in modality_set)(assays)
         X = data[:,relevant_cols]
 
@@ -33,50 +32,55 @@ def load_data(data_hdf, modalities):
     return X, sample_ids, sample_groups, assays, feature_genes, target
 
 
-
-def remove_missing(X, out_dim=20):
-
+def nan_filter(X, count_axis=0, min_count=20):
     finite_X = np.isfinite(X)
-    row_key = (np.sum(finite_X, axis=1) > out_dim)
-    col_key = (np.sum(finite_X, axis=0) > out_dim)
-
-    X_nomissing = X[row_key,:]
-    X_nomissing = X_nomissing[:,col_key]
-
-    return X_nomissing, row_key, col_key
-
-
-def assay_variance_filter(X, filter_frac):
-    
-    col_vars = np.nanvar(X, axis=0)
-    qtile = np.nanquantile(col_vars, 1 - filter_frac)
-    keep_idx = (col_vars >= qtile)
+    keep_idx = np.where(np.sum(finite_X, axis=count_axis) > min_count)[0]
     return keep_idx
 
 
-def variance_filter(X, feature_assays, filter_frac):
+def variance_filter(X, filter_frac):
+    col_vars = np.nanvar(X, axis=0)
+    qtile = np.nanquantile(col_vars, 1 - filter_frac)
+    keep_idx = np.where(col_vars >= qtile)[0]
+    return keep_idx
+
+
+def filter_assay_cols(X, feature_assays, min_finite_count=20, var_filter_frac=0.05):
 
     unq_a = np.unique(feature_assays)
     all_kept_idx = []
 
     for ua in unq_a:
-        rel_idx = np.where(feature_assays == ua)
+        # For this assay...
+        rel_idx = np.where(feature_assays == ua)[0]
         rel_X = X[:,rel_idx]
-        kept_idx = assay_variance_filter(rel_X, filter_frac)
 
-    conc_kept_idx = np.concatenate(kept_idx)
+        # Filter by NaNs
+        nonnan_idx = nan_filter(rel_X, min_count=min_finite_count)
+        rel_idx = rel_idx[nonnan_idx]
+        rel_X = X[:,rel_idx]
+
+        # Filter by variance
+        highvar_idx = variance_filter(rel_X, var_filter_frac)
+        rel_idx = rel_idx[highvar_idx]
+
+        # keep the result
+        all_kept_idx.append(rel_idx)
+
+    conc_kept_idx = np.concatenate(all_kept_idx)
+    conc_kept_idx = np.sort(conc_kept_idx)
 
     return conc_kept_idx
   
 
-def standardize_columns(X):
+def standardize_columns(Z):
 
-    col_std = np.nanstd(X, axis=0)
-    col_means = np.nanmean(X, axis=0)
+    col_std = np.nanstd(Z, axis=0)
+    col_means = np.nanmean(Z, axis=0)
 
-    X = (X - col_means.transpose()) / col_std.transpose()
+    Z_std = (Z - col_means.transpose()) / col_std.transpose()
 
-    return X, col_means, col_std 
+    return Z_std, col_means, col_std 
 
 
 def find_elbow(rsquare):
@@ -90,9 +94,9 @@ def find_elbow(rsquare):
     return max_idx
 
 
-def transform_data(X, min_components=3, max_components=20):
+def compute_principal_components(Z, min_components=2, max_components=20):
 
-    result = PCA(X, standardize=False,
+    result = PCA(Z, standardize=False,
                     method='nipals',
                     demean=False,
                     normalize=False,
@@ -100,17 +104,38 @@ def transform_data(X, min_components=3, max_components=20):
                     missing="fill-em",
                     max_em_iter=5)
 
-    X_trans = result.factors
     rsquare = result.rsquare
-    pcs = result.loadings
+    pcs = result.coeff
 
     elbow_idx = find_elbow(rsquare)
     elbow_idx = max(min_components, elbow_idx)
 
-    X_trans = X_trans[:,:elbow_idx]
-    pcs = pcs[:,:elbow_idx]
+    pcs = pcs[:elbow_idx,:]
 
-    return X_trans, pcs
+    return pcs
+    
+
+def compute_assay_pcs(X, feature_assays, max_components=20):
+
+    unq_assays = np.unique(feature_assays)
+
+    all_pcs = []
+
+    print("Computing assay-specific principal components...")
+    for ua in unq_assays:
+        rel_idx = np.where(feature_assays == ua)[0]
+        rel_X = X[:,rel_idx]
+
+        kept_rows = nan_filter(rel_X, count_axis=1, min_count=max_components)
+        rel_X = rel_X[kept_rows, :]
+
+        pcs = compute_principal_components(rel_X, max_components=max_components)
+        
+        print("\t",ua,":", pcs.shape)
+
+        all_pcs.append(pcs)
+
+    return all_pcs 
 
 
 # Construct a block-diagonal matrix containing the
@@ -136,32 +161,6 @@ def concatenate_pcs(assay_Y):
     return conc_Y
 
 
-def transform_all_data(X, feature_assays):
-
-    unq_assays = np.unique(feature_assays)
-    assay_X = []
-    assay_Y = []
-    assay_labels = []
-
-    print("Transform all data.")
-    for unq_a in unq_assays:
-        relevant_idx = (feature_assays == unq_a)
-        relevant_X = X[:, relevant_idx]
-        X_trans, pcs = transform_data(relevant_X)
-        print("\t", unq_a, relevant_X.shape, "-->", X_trans.shape)
-        assay_X.append(X_trans)
-        assay_Y.append(pcs)
-        assay_labels.append([unq_a]*X_trans.shape[1])
-
-    conc_X = np.concatenate(assay_X, axis=1)
-    conc_Y = concatenate_pcs(assay_Y)
-    result_assays = np.concatenate(assay_labels)
-
-    print("Concatenated X: ", conc_X.shape)
-    print("Concatenated Y: ", conc_Y.shape)
-
-    return conc_X, conc_Y, result_assays
-
 
 if __name__=="__main__":
 
@@ -182,24 +181,29 @@ if __name__=="__main__":
     # Load data
     Z, sample_ids, sample_groups, feature_assays, feature_genes, target = load_data(data_hdf, omic_types)
 
-    # Remove empty rows and columns
-    Z_nomissing, row_key, col_key = remove_missing(Z, out_dim=20)
-    sample_ids = sample_ids[row_key]
-    sample_groups = sample_groups[row_key]
-    feature_assays = feature_assays[col_key]
-    feature_genes = feature_genes[col_key]
+    # Filter columns by missingness and variance
+    keep_idx = filter_assay_cols(Z, feature_assays, 
+                                 min_finite_count=20, var_filter_frac=v_frac)
+    print("Column filtering: ", Z.shape[1], "-->", len(keep_idx))
+    Z = Z[:,keep_idx]
+    feature_assays = feature_assays[keep_idx]
+    feature_genes = feature_genes[keep_idx]
 
-    # Remove the columns with least variance
-    col_key = variance_filter(Z_nomissing, feature_assays, v_frac)
-    Z_filtered = Z_nomissing[:,col_key]
-    feature_assays = feature_assays[col_key]
-    feature_genes = feature_genes[col_key]
-    
-    # Standardize the remaining columns
-    Z_std, mu, sigma = standardize_columns(Z_filtered)
-    
-    # Perform concatenated PCA
-    X, pcs, factor_assays = transform_all_data(Z_std, feature_assays) 
+    # Standardize the data 
+    Z_std, mu, sigma = standardize_columns(Z)
+
+    print("Z_std:", Z_std.shape)
+
+    # principal components for individual assays
+    all_pcs = compute_assay_pcs(Z_std, feature_assays)
+
+    # Concatenate the assay-wise results
+    full_pcs = concatenate_pcs(all_pcs)
+
+    print("Y:", full_pcs.shape)
+
+    # Transform standardized data via concatenated principal components
+    X = su.linear_transform(Z_std, full_pcs, max_iter=5000, rel_tol=1e-6)
 
     # Output the transformed data and the 
     # fitted principal components and standardization parameters
@@ -208,14 +212,12 @@ if __name__=="__main__":
         su.write_hdf(f, "instances", sample_ids, is_string=True) 
         su.write_hdf(f, "instance_groups", sample_groups, is_string=True)
         su.write_hdf(f, "target", target, is_string=True) 
-        su.write_hdf(f, "factor_assays", factor_assays, is_string=True) 
     
     with h5py.File(fitted_hdf, "w", driver="core") as f:
-        su.write_hdf(f, "Y", pcs)
+        su.write_hdf(f, "Y", full_pcs)
         su.write_hdf(f, "mu", mu)
         su.write_hdf(f, "sigma", sigma)
         su.write_hdf(f, "feature_assays", feature_assays, is_string=True) 
         su.write_hdf(f, "feature_genes", feature_genes, is_string=True) 
-        su.write_hdf(f, "factor_assays", factor_assays, is_string=True) 
         
 
