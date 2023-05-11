@@ -36,7 +36,7 @@ reconstruct_matrix <- function(matrix_ls, original_rows){
 option_list <- list(
     make_option("--output_dim", type="integer", default=10, help="Number of dimensions the output should take"),
     make_option("--omic_types", type="character", default="mutation:methylation:mrnaseq:cna", help="List of omic assays to use, separated by colons (no spaces). Default 'mrnaseq:methylation:mutation:cna'."),
-    make_option("--is_grouped", action="store_true", default=TRUE, help="Toggles sample grouping by cancer type."),
+    make_option("--is_grouped", action="store_true", default=FALSE, help="Toggles sample grouping by cancer type."),
     make_option("--var_filter", type="double", default=0.5, help="fraction of most-variable features to keep within each view"),
     make_option("--mofa_python", help="path to python that has mofapy2 installed")
     )
@@ -90,25 +90,39 @@ mu <- list() # list of views' means
 sigma <- list() # list of views' standard deviations
 
 for(ot in omic_types){
+    print("Assay:")
+    print(ot)
     relevant_cols <- (feature_assays == ot)
     relevant_data <- omic_data[,relevant_cols]
+
     relevant_genes <- feature_genes[relevant_cols]
     colnames(relevant_data) <- sapply(relevant_genes, function(g) paste(g, "_", ot, sep=""))
 
     # Filter the data by NaNs and variance
-    relevant_data <- relevant_data[,colSums(is.nan(relevant_data)) < 0.05*nrow(relevant_data)]
+    relevant_data <- relevant_data[,colSums(is.nan(relevant_data)) < 0.5*nrow(relevant_data)]
+    
     feature_vars <- apply(relevant_data, 2, function(v) var(v, na.rm=TRUE))
-    min_var <- quantile(feature_vars, 1-var_filter)
+    min_var <- quantile(feature_vars, 1-var_filter, na.rm=TRUE)
     relevant_data <- relevant_data[,feature_vars >= min_var]
 
     all_features[[ot]] <- colnames(relevant_data)
-    data_matrices[[ot]] <- t(relevant_data) 
-    mu[[ot]] <- rowMeans(omic_data, na.rm=TRUE)                     
-    sigma[[ot]] <- apply(omic_data, 1, function(v) sd(v, na.rm=TRUE))
-
-    data_matrices[[ot]] <- (data_matrices[[ot]] - mu[[ot]])/sigma[[ot]] 
+   
+    # Standardize Gaussian data 
+    if(assay_dists[[ot]] == "gaussian"){
+        mu[[ot]] <- rowMeans(omic_data, na.rm=TRUE)                     
+        sigma[[ot]] <- apply(omic_data, 1, function(v) sd(v, na.rm=TRUE))
+        data_matrices[[ot]] <- (t(relevant_data) - mu[[ot]])/sigma[[ot]] 
+    
+    # Convert bernoulli data to Booleans
+    }else if(assay_dists[[ot]] == "bernoulli"){
+        mu[[ot]] <- rep(0, dim(relevant_data)[[2]]) 
+        sigma[[ot]] <- rep(1, dim(relevant_data)[[2]])
+        data_matrices[[ot]] <- t(relevant_data) #t(relevant_data > 0.5)
+    }
 }
+
 all_features <- unlist(all_features)
+ 
 mu <- unlist(mu)
 sigma <- unlist(sigma)
 
