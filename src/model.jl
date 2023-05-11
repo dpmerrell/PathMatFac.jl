@@ -141,6 +141,7 @@ function PathMatFacModel(D::AbstractMatrix{<:Real};
     # Sample conditions
     if sample_conditions != nothing
         @assert length(sample_conditions) == M "`sample_conditions` must be nothing or have length equal to size(D,1)"
+        @assert is_contiguous(sample_conditions) "`sample_conditions` must be contiguous; I.e., samples must be grouped by condition."
     end
     
     # Feature IDs 

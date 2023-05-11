@@ -204,8 +204,15 @@ function main(args)
         println("No 'target' field in data HDF; using dummy")
     end
 
+    # Filter the conditions
     filter_idx = var_filter(D, feature_assays, script_opts[:var_filter])
     D, feature_genes, feature_assays = map(x->apply_idx_filter(x, filter_idx), [D, feature_genes, feature_assays])
+
+    # Sort the samples by condition
+    srt_idx = sortperm(sample_conditions)
+    sample_conditions = sample_conditions[srt_idx]
+    sample_ids = sample_ids[srt_idx]
+    D = D[srt_idx,:]
 
     println("DATA:")
     println(size(D))
