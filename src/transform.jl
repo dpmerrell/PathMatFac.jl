@@ -7,7 +7,6 @@ function transform(model::PathMatFacModel, D::AbstractMatrix;
                    use_gpu::Bool=true,
                    feature_ids::Union{<:AbstractVector,Nothing}=nothing,
                    sample_ids::Union{<:AbstractVector,Nothing}=nothing,
-                   feature_views::Union{<:AbstractVector,Nothing}=nothing,
                    verbosity=1, print_prefix="", 
                    max_epochs=1000, lr=1.0, fit_kwargs...)
 
@@ -22,7 +21,7 @@ function transform(model::PathMatFacModel, D::AbstractMatrix;
     ###################################################
 
     # Manage the *column* attributes.
-    # By default, `feature_ids` and `feature_views` are ignored and the columns
+    # By default, `feature_ids` are ignored and the columns
     # of new data are assumed to match the columns of training data.
     new_data = nothing
     old_idx = collect(1:N)
@@ -30,16 +29,9 @@ function transform(model::PathMatFacModel, D::AbstractMatrix;
     if feature_ids == nothing
         @assert N_new == N "Columns of D do not match columns of training data. Provide `feature_ids` to ensure they match."
         feature_ids = copy(model.feature_ids)
-        if feature_views != nothing
-            @assert length(feature_views) == N "`feature_views` must have length == size(D,2) whenever `feature_ids` is not provided"
-        end
     # If `feature_ids` are provided, they are matched against the feature IDs
-    # of the original training data. If `feature_views` are also provided, then
-    # they must match the provided feature_views
+    # of the original training data. 
     else
-        if feature_views != nothing
-            @assert length(feature_views) == length(feature_ids) "`feature_views` must have same length as `feature_ids`."
-        end
         old_idx, new_idx = keymatch(model.feature_ids, feature_ids)
     end
 
@@ -60,19 +52,19 @@ function transform(model::PathMatFacModel, D::AbstractMatrix;
     old_data = model.data
     model.data = nothing
     new_model = deepcopy(model)
-    new_data = D[:, new_idx]
+    new_data = similar(D, M_new, N)
+    new_data .= NaN
+    new_data[:, old_idx] .= D[:, new_idx]
     new_model.data = new_data
 
-    # Construct "feature attributes"
-    new_model.matfac.Y = new_model.matfac.Y[:,old_idx]
-    set_layer!(new_model.matfac.col_transform, 1, view(new_model.matfac.col_transform.layers[1], :, old_idx))
-    set_layer!(new_model.matfac.col_transform, 3, view(new_model.matfac.col_transform.layers[3], :, old_idx))
+    # We aren't updating Y, so we may as well simplify its regularizer
     new_model.matfac.Y_reg = x->0.0
-    new_model.matfac.noise_model = model.matfac.noise_model[old_idx]
-    new_model.feature_views = model.feature_views[old_idx]
-    new_model.feature_ids = feature_ids[new_idx]
 
-    # Construct "sample attributes"
+    # We ignore batch effects on this new data
+    set_layer!(new_model.matfac.col_transform, 2, x->x)
+    set_layer!(new_model.matfac.col_transform, 4, x->x)
+
+    # Construct sample attributes
     new_model.matfac.X = similar(model.matfac.X, K, M_new) 
     new_model.matfac.X .= 0
     new_model.matfac.X_reg = x->0.0 

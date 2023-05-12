@@ -200,21 +200,23 @@ if __name__=="__main__":
     # Concatenate the assay-wise results
     full_pcs = concatenate_pcs(all_pcs)
 
-    print("Y:", full_pcs.shape)
 
     # Transform standardized data via concatenated principal components
     X = su.linear_transform(Z_std, full_pcs, max_iter=5000, rel_tol=1e-6)
+    
+    print("X:", X.shape)
+    print("Y:", full_pcs.shape)
 
     # Output the transformed data and the 
     # fitted principal components and standardization parameters
     with h5py.File(trans_hdf, "w", driver="core") as f:
-        su.write_hdf(f, "X", X.transpose())
+        su.write_hdf(f, "X", X)
         su.write_hdf(f, "instances", sample_ids, is_string=True) 
         su.write_hdf(f, "instance_groups", sample_groups, is_string=True)
         su.write_hdf(f, "target", target, is_string=True) 
     
     with h5py.File(fitted_hdf, "w", driver="core") as f:
-        su.write_hdf(f, "Y", full_pcs)
+        su.write_hdf(f, "Y", full_pcs.transpose())
         su.write_hdf(f, "mu", mu)
         su.write_hdf(f, "sigma", sigma)
         su.write_hdf(f, "feature_assays", feature_assays, is_string=True) 

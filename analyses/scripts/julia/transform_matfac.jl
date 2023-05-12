@@ -56,7 +56,7 @@ function main(args)
                             :lr => 1.0,
                             :rel_tol => 1e-3,
                             :verbosity => 1,
-                            :use_gpu => "false",
+                            :use_gpu => false,
                            )
     if length(args) > 3
         cli_opts = parse_opts(args[4:end])
@@ -124,13 +124,12 @@ function main(args)
     #######################################################
     transformed = nothing
     try
-
         start_time = time()
         transformed = transform(model, omic_data;
                                 feature_ids=feature_ids,
-                                feature_views=feature_assays,
                                 sample_ids=sample_ids,
-                                max_epochs=max_epochs, 
+                                max_epochs=max_epochs,
+                                use_gpu=use_gpu, 
                                 lr=lr, rel_tol=rel_tol)
         end_time = time()
 

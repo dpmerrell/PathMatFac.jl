@@ -18,7 +18,7 @@ def load_data(data_hdf):
 
 def load_model(pc_hdf):
 
-    Y = su.load_hdf(pc_hdf, "Y")
+    Y = su.load_hdf(pc_hdf, "Y").transpose()
     print("Y:", Y.shape)
     mu = su.load_hdf(pc_hdf, "mu")
     sigma = su.load_hdf(pc_hdf, "sigma")
@@ -38,7 +38,6 @@ def select_features(test_genes, test_assays,
 
     return test_idx, model_idx
  
-
 
 
 if __name__=="__main__":
