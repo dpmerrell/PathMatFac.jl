@@ -375,7 +375,7 @@ rule sup_transform_matfac:
 rule sup_fit_survival:
     input:
         src="scripts/R/fit_survival_regressor.R",
-        transformed_train=path.join(SUP_TRANS_TRAIN_DIR, "{data_params}/target={t}__task=reg__groupby={gb}/{pwy_params}/{method_params}/{fit_params}/fold={fold}.hdf")
+        transformed_train=path.join(SUP_TRANS_TRAIN_DIR, "{data_params}/target={t}__task=surv__groupby={gb}/{pwy_params}/{method_params}/{fit_params}/fold={fold}.hdf")
     output:
         trained_model=path.join(SUP_FIT_PRED_DIR, "{data_params,[^/]+}/target={t,[^/]+}__task=surv__groupby={gb,[^/]+}/{pwy_params,[^/]+}/{method_params,[^/]+}/{fit_params,[^/]+}/fold={fold,[0-9]+}.rds"),
     shell:
