@@ -140,8 +140,8 @@ rule all:
         # Simulations
         ##################################
         ## Simulation scoring
-        sim_score_tsvs=expand(path.join(SIM_SCORE_TSV_DIR, "{experiment}.tsv"),
-                              experiment=SIM_ALL_EXPERIMENTS),
+        #sim_score_tsvs=expand(path.join(SIM_SCORE_TSV_DIR, "{experiment}.tsv"),
+        #                      experiment=SIM_ALL_EXPERIMENTS),
         #sim_score_jsons=expand(path.join(SIM_SCORE_JSON_DIR, "{sim_fit_comb}.json"),
         #                       sim_fit_comb=SIM_ALL_FIT_COMBINATIONS),
         ## Simulation static visuals
@@ -192,6 +192,8 @@ rule all:
         # Parameters
         #exp_fit_hdfs=expand(path.join(EXP_FIT_PARAM_DIR, "{exp_fit_comb}.hdf"),
         #                    exp_fit_comb=EXP_ALL_FIT_COMBINATIONS),
+        #exp_fit_bsons=expand(path.join(EXP_FIT_PARAM_DIR, "{exp_fit_comb}.bson"),
+        #                     exp_fit_comb=EXP_ALL_FIT_COMBINATIONS),
         ####################################
         # Supervised tasks
         ####################################
@@ -206,11 +208,13 @@ rule all:
         #sup_trans_test_matfac=expand(path.join(SUP_TRANS_TEST_DIR, "{fit_comb}.hdf"),
         #                             fit_comb=[c for c in SUP_TRANS_FIT_COMBINATIONS if "matfac" in c]),
         ## Fitted classifiers, regressors, survival regressors
+        #sup_trained_surv=expand(path.join(SUP_FIT_PRED_DIR, "{pred_comb}.rds"),
+        #                       pred_comb=[c for c in SUP_TRANS_FIT_COMBINATIONS if "task=surv" in c]),
         #sup_trained_reg=expand(path.join(SUP_FIT_PRED_DIR, "{pred_comb}.pkl"),
         #                       pred_comb=[c for c in SUP_TRANS_FIT_COMBINATIONS if "task=reg" in c]),
         #sup_trained_cls=expand(path.join(SUP_FIT_PRED_DIR, "{pred_comb}.pkl"),
         #                       pred_comb=[c for c in SUP_TRANS_FIT_COMBINATIONS if "task=cls" in c]),
-        ## Fitted transforms
+        # Fitted transforms
         #sup_fitted_gsva=expand(path.join(SUP_FIT_TRANS_DIR, "{fit_comb}.rds"),
         #                        fit_comb=[c for c in SUP_TRANS_FIT_COMBINATIONS if "gsva" in c]),
         #sup_fitted_plier=expand(path.join(SUP_FIT_TRANS_DIR, "{fit_comb}.rds"),
@@ -247,7 +251,7 @@ rule sup_score_survival_regressor:
     input:
         src=path.join(R_SCRIPT_DIR, "score_survival_regressor.R"),
         trained_model=path.join(SUP_FIT_PRED_DIR, "{data_params}/target={t}__task=surv__groupby={gb}/{pwy_params}/{method_params}/{fit_params}/fold={fold}.rds"),
-        test_hdf=path.join(SUP_TRANS_TEST_DIR, "{data_params}/target={t}__task=reg__groupby={gb}/{pwy_params}/{method_params}/{fit_params}/fold={fold}.hdf")
+        test_hdf=path.join(SUP_TRANS_TEST_DIR, "{data_params}/target={t}__task=surv__groupby={gb}/{pwy_params}/{method_params}/{fit_params}/fold={fold}.hdf")
     output:
         score_json=path.join(SUP_SCORE_DIR, "{data_params,[^/]+}/target={t,[^/]+}__task=surv__groupby={gb,[^/]+}/{pwy_params,[^/]+}/{method_params,[^/]+}/{fit_params,[^/]+}/fold={fold,[0-9]+}__scores.json"),
         other_json=path.join(SUP_SCORE_DIR, "{data_params}/target={t}__task=surv__groupby={gb}/{pwy_params}/{method_params}/{fit_params}/fold={fold}__other.json")
@@ -445,7 +449,7 @@ rule sup_fit_paradigm:
     params:
         parsed_opts=lambda wc: [f"--{kv[0]} {kv[1]}" for kv in [kv.split("=") for kv in wc["fit_params"].split("__")]],
     shell:
-        "Rscript {input.src} {input.data_hdf} {input.paradigm_hdf} {output.fitted_hdf} {output.transformed_hdf} {params.parsed_opts}"
+        "python {input.src} {input.data_hdf} {input.paradigm_hdf} {output.fitted_hdf} {output.transformed_hdf} {params.parsed_opts}"
 
 
 rule sup_fit_mofa:
