@@ -548,7 +548,7 @@ supervised_tasks:
         groupby: ["batch", "batch", "batch", "batch"]
     mrnaseq_predictions_hpv:
         data_params:
-            kept_ctypes: ["HNSC"] #:CESC:ESCA:STAD"]
+            kept_ctypes: ["HNSC:CESC:ESCA:STAD"]
             heldout_ctypes: [""]
         pathway_params:
             mutation: ["oncogenic:hallmark"]
