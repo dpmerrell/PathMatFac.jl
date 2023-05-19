@@ -151,6 +151,8 @@ if __name__=="__main__":
                 }
 
     opt_dict = parse_opts(args[3:], defaults)
+    if len(opt_dict["kept_ctypes"]) == 0:
+        opt_dict["kept_ctypes"] = su.ALL_CTYPES
 
     heldout_ctypes = opt_dict["heldout_ctypes"]
     kept_ctypes = opt_dict["kept_ctypes"]

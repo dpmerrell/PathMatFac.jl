@@ -404,20 +404,13 @@ end
 
 
 function reweight_eb!(gr::GroupRegularizer, X::AbstractMatrix; mixture_p=Float32(1.0))
-    #new_vars = map(idx -> mean(view(X,:,idx).^2, dims=2), gr.group_idx)
-    #max_vars = map(v -> fill(maximum(v), size(v)), new_vars)
-    #new_weights = map(v -> Float32(1e-1 .+ 0.5) ./ (Float32(1e-1) .+ Float32(0.5).*v), max_vars)
-    #if isa(X, CuArray)
-    #    new_weights = map(v -> gpu(v), new_weights)
-    #end
-    # 
-    #gr.group_weights = new_weights
+    
     K = size(X,1)
     new_weights = []
     for gidx in gr.group_idx
         X_v = view(X, :, gidx)
         F = svd(X_v)
-        s = F.S
+        s = cpu(F.S)
         v_max = s[1]^2
         push!(new_weights, fill(Float32(mixture_p/v_max), K))
     end
