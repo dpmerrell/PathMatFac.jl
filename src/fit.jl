@@ -912,6 +912,7 @@ function fit!(model::PathMatFacModel; lr=1.0,
                                       abs_tol=1e-5,
                                       verbosity=1,
                                       print_prefix="",
+                                      capacity=capacity,
                                       kwargs...)
   
     hist=nothing
@@ -928,6 +929,7 @@ function fit!(model::PathMatFacModel; lr=1.0,
                                       print_prefix=print_prefix,
                                       rel_tol=rel_tol,
                                       abs_tol=abs_tol,
+                                      capacity=capacity,
                                       kwargs...)
     elseif isa(model.matfac.Y_reg, FeatureSetARDReg)
         fit_feature_set_ard!(model; lr=lr,
@@ -939,6 +941,7 @@ function fit!(model::PathMatFacModel; lr=1.0,
                                     fsard_term_rtol=fsard_term_rtol,
                                     verbosity=verbosity,
                                     print_prefix=print_prefix,
+                                    capacity=capacity,
                                     kwargs...)
     else
         fit_non_ard!(model; history=hist, 
@@ -949,7 +952,8 @@ function fit!(model::PathMatFacModel; lr=1.0,
                             n_lambda=n_lambda, 
                             lambda_min_frac=lambda_min_frac,
                             verbosity=verbosity,
-                            print_prefix=print_prefix, 
+                            print_prefix=print_prefix,
+                            capacity=capacity, 
                             kwargs...)
     end
 
@@ -969,7 +973,15 @@ function fit!(model::PathMatFacModel; lr=1.0,
         unfreeze_layer!(model.matfac.col_transform, 1:3)
     end
 
+    # Postprocess the factors:
+    # Whiten the embedding
     whiten!(model)
+    
+    # Reweight the column losses.
+    # This is important for `transform`ing new samples.
+    reweight_col_losses!(model; capacity=capacity, history=hist)
+
+    # Reorder the factors
     reorder_by_importance!(model)
     history!(hist; name="reorder_factors")
 

@@ -8,7 +8,7 @@ function transform(model::PathMatFacModel, D::AbstractMatrix;
                    feature_ids::Union{<:AbstractVector,Nothing}=nothing,
                    sample_ids::Union{<:AbstractVector,Nothing}=nothing,
                    verbosity=1, print_prefix="", 
-                   max_epochs=1000, lr=1.0, fit_kwargs...)
+                   max_epochs=1000, lr=1.0, capacity=10^8, fit_kwargs...)
 
     K, N = size(model.matfac.Y)
     M_new, N_new = size(D)
@@ -87,7 +87,7 @@ function transform(model::PathMatFacModel, D::AbstractMatrix;
     # Update the new X 
     mf_fit_adapt_lr!(new_model; update_X=true,  
                                 verbosity=verbosity, print_prefix=next_pref,
-                                max_epochs=max_epochs, lr=lr, fit_kwargs...)
+                                max_epochs=max_epochs, lr=lr, capacity=capacity, fit_kwargs...)
 
     if use_gpu
         new_model = cpu(new_model)
