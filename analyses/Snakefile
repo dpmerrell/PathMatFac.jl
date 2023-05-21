@@ -115,6 +115,7 @@ SUP_TRANS_TRAIN_DIR = path.join(SUP_DIR, "transformed_training_sets")
 SUP_TRANS_TEST_DIR = path.join(SUP_DIR, "transformed_test_sets")
 SUP_FIT_PRED_DIR = path.join(SUP_DIR, "fitted_predictors")
 SUP_SCORE_DIR = path.join(SUP_DIR, "score_jsons")
+SUP_VIS_DIR = path.join(SUP_DIR, "visuals")
 
 SUP_ALL_PARAMS = config["supervised_tasks"]
 SUP_ALL_EXPERIMENTS = list(SUP_ALL_PARAMS.keys())
@@ -197,6 +198,10 @@ rule all:
         ####################################
         # Supervised tasks
         ####################################
+        # Visualized transformed matfac
+        sup_trans_test_matfac_vis=expand(path.join(SUP_VIS_DIR, "{fit_comb}__{tt}.html"),
+                                         fit_comb=[c for c in SUP_TRANS_FIT_COMBINATIONS if ("matfac" in c)],
+                                         tt=["train","test"]),
         # Prediction scores
         sup_score_jsons=expand(path.join(SUP_SCORE_DIR, "{sup_comb}__scores.json"),
                                sup_comb=SUP_TRANS_FIT_COMBINATIONS),
@@ -206,6 +211,8 @@ rule all:
         #sup_trans_test_mofa=expand(path.join(SUP_TRANS_TEST_DIR, "{fit_comb}.hdf"),
         #                           fit_comb=[c for c in SUP_TRANS_FIT_COMBINATIONS if "mofa" in c]),
         #sup_trans_test_matfac=expand(path.join(SUP_TRANS_TEST_DIR, "{fit_comb}.hdf"),
+        #                             fit_comb=[c for c in SUP_TRANS_FIT_COMBINATIONS if "matfac" in c]),
+        #sup_trans_test_matfac=expand(path.join(SUP_TRANS_TEST_DIR, "{fit_comb}.bson"),
         #                             fit_comb=[c for c in SUP_TRANS_FIT_COMBINATIONS if "matfac" in c]),
         ## Fitted classifiers, regressors, survival regressors
         #sup_trained_surv=expand(path.join(SUP_FIT_PRED_DIR, "{pred_comb}.rds"),
@@ -244,6 +251,28 @@ def get_cancer_types(wc, key="tcga_params"):
 #####################################################################
 # Supervised tasks
 #####################################################################
+
+######### Supervised task visualizations ######################
+
+rule sup_vis_test_interactive:
+    input:
+        src=path.join(JL_SCRIPT_DIR, "vis_model.jl"),
+        transformed_bson=path.join(SUP_TRANS_TEST_DIR, "{path}.bson"),
+    output:
+        param_html=path.join(SUP_VIS_DIR, "{path}__test.html"),
+    shell:
+        "julia --project=. {input.src} {input.transformed_bson} {output.param_html}"
+
+rule sup_vis_train_interactive:
+    input:
+        src=path.join(JL_SCRIPT_DIR, "vis_model.jl"),
+        transformed_bson=path.join(SUP_FIT_TRANS_DIR, "{path}.bson"),
+    output:
+        param_html=path.join(SUP_VIS_DIR, "{path}__train.html"),
+    shell:
+        "julia --project=. {input.src} {input.transformed_bson} {output.param_html}"
+
+
 
 ########### Predict and score on test data ###########
 
@@ -365,13 +394,14 @@ rule sup_transform_matfac:
         fitted_bson=path.join(SUP_FIT_TRANS_DIR, "{data_params}/{split_params}/{pwy_params}/method=matfac/{fit_params}/fold={fold}.bson"),
     output:
         transformed_hdf=path.join(SUP_TRANS_TEST_DIR, "{data_params,[^/]+}/{split_params,[^/]+}/{pwy_params,[^/]+}/method=matfac/{fit_params,[^/]+}/fold={fold,[0-9]+}.hdf"),
+        transformed_bson=path.join(SUP_TRANS_TEST_DIR, "{data_params,[^/]+}/{split_params,[^/]+}/{pwy_params,[^/]+}/method=matfac/{fit_params,[^/]+}/fold={fold,[0-9]+}.bson"),
     params:
         parsed_opts=lambda wc: wc["fit_params"].split("__"),
     resources:
         mem_mb=8000,
     threads: lambda wc: len(get_cancer_types(wc, key="data_params")) 
     shell:
-        "julia --project=. {input.src} {input.data_hdf} {input.fitted_bson} {output.transformed_hdf} {params.parsed_opts}"
+        "julia --project=. {input.src} {input.data_hdf} {input.fitted_bson} {output.transformed_hdf} {output.transformed_bson} {params.parsed_opts}"
 
 
 ########### Fit classifiers/regressors ############
@@ -510,6 +540,8 @@ rule sup_prep_splits:
         test_sets=[path.join(SUP_SPLIT_DIR, "{data_params}/target={t}__task={tk}__groupby={gb}/"+f+"__test.hdf") for f in SUP_FOLDS]
     params:
         prefix=lambda wc: "{}/{}/target={}__task={}__groupby={}/".format(SUP_SPLIT_DIR, wc["data_params"], wc["t"], wc["tk"], wc["gb"])
+    resources:
+        mem_mb=8000,
     shell:
         "python {input.src} {input.data_hdf} {input.clinical_hdf} {input.paradigm_hdf} {params.prefix} --n_folds {SUP_NFOLDS} --target {wildcards.t} --groupby {wildcards.gb} --paradigm_filter"
 

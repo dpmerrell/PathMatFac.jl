@@ -1,5 +1,5 @@
 
-from sklearn.metrics import f1_score, roc_auc_score, roc_curve, accuracy_score, confusion_matrix
+from sklearn.metrics import f1_score, roc_auc_score, roc_curve, accuracy_score, confusion_matrix, average_precision_score, precision_recall_curve
 import script_util as su
 import pickle as pkl
 import numpy as np
@@ -34,8 +34,12 @@ def compute_scores(y, pred_y, pred_y_probs, y_train):
     if pred_y_probs.shape[1] > 2:
         scores['roc_auc_ovr'] = roc_auc_score(y, pred_y_probs, multi_class="ovr")
         scores['roc_auc_ovo'] = roc_auc_score(y, pred_y_probs, multi_class="ovo")
+        #scores['av_prec_micro'] = average_precision_score(y, pred_y, average="micro")
+        #scores['av_prec_macro'] = average_precision_score(y, pred_y, average="macro")
     else:
         scores['roc_auc'] = roc_auc_score(y, pred_y_probs[:,1])
+        scores['av_prec'] = average_precision_score(y, pred_y_probs[:,1])
+        scores['av_prec_baseline'] = np.mean(y) 
     
     # Compute the performance of a trivial baseline
     unq_train, train_counts = np.unique(y_train, return_counts=True)
@@ -61,6 +65,11 @@ def compute_other_attributes(y_labels, y, pred_y, pred_y_probs):
         results["roc"] = {"fpr": list(fpr),
                           "tpr": list(tpr)
                          }
+
+        prec, rec, th = precision_recall_curve(y, pred_y_probs[:,1])
+        results["pr"] = {"prec": list(prec),
+                         "rec": list(rec)
+                        }
 
     return results
 

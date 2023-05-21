@@ -24,23 +24,36 @@ def score_batch_param(true_values, fitted_values, score_fn):
 # Scores for the factors X,Y 
 ##########################################################
 def span_similarity(Y_true, Y_fitted):
+    # Compute the numerator
     YtYf = np.dot(Y_true, Y_fitted.transpose())
-    YfYf = np.dot(Y_fitted, Y_fitted.transpose())
+    numerator = np.sum(YtYf)
+
+    # Compute the denominator
+    ut, st, vht = np.linalg.svd(Y_true)
+    uf, sf, vhf = np.linalg.svd(Y_fitted)
+
+    k_min = min(Y_true.shape[0], Y_fitted.shape[0])
+    st = st[:k_min]
+    sf = sf[:k_min]
+    denom = np.sum(st*st*sf*sf)
+    return numerator/denom
+
+    #YfYf = np.dot(Y_fitted, Y_fitted.transpose())
 
     # Subtle point: We don't want to artificially penalize Y_fitted
     # for having fewer rows than Y_true. So we only use
     # Y_true's first K_fitted singular values in that case.
-    K_true = Y_true.shape[0]
-    K_fitted = Y_fitted.shape[0]
-    YtYt_sqfrobenius = None
-    if K_true > K_fitted:
-        u, s, vh = np.linalg.svd(Y_true)
-        YtYt_sqfrobenius = np.sum(s[:K_fitted]*s[:K_fitted])
-    else:
-        YtYt = np.dot(Y_true, Y_true.transpose())
-        YtYt_sqfrobenius = np.sum(YtYt*YtYt)
+    #K_true = Y_true.shape[0]
+    #K_fitted = Y_fitted.shape[0]
+    #YtYt_sqfrobenius = None
+    #if K_true > K_fitted:
+    #    u, s, vh = np.linalg.svd(Y_true)
+    #    YtYt_sqfrobenius = np.sum(s[:K_fitted]*s[:K_fitted])
+    #else:
+    #    YtYt = np.dot(Y_true, Y_true.transpose())
+    #    YtYt_sqfrobenius = np.sum(YtYt*YtYt)
 
-    return np.sum(YtYf*YtYf) / np.sqrt(YtYt_sqfrobenius*np.sum(YfYf*YfYf))
+    #return np.sum(YtYf*YtYf) / np.sqrt(YtYt_sqfrobenius*np.sum(YfYf*YfYf))
 
 
 # Compute a simple p-value for this cosine similarity

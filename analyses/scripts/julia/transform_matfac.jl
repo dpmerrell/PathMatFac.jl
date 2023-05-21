@@ -51,10 +51,11 @@ function main(args)
     omic_hdf = args[1]
     fitted_bson = args[2]
     out_hdf = args[3]
+    out_bson = args[4]
 
     opts = Dict{Symbol,Any}(:max_epochs => 1000, 
                             :lr => 1.0,
-                            :rel_tol => 1e-3,
+                            :rel_tol => 1e-6,
                             :verbosity => 1,
                             :use_gpu => false,
                            )
@@ -105,19 +106,20 @@ function main(args)
     #######################################################
     # If a gpu_status file is provided, use it to 
     # select an unoccupied GPU
-    status_file = nothing
-    gpu_idx = nothing
-    if haskey(opts, :gpu_status_file) 
-        status_file = pop!(opts, :gpu_status_file)
-        gpu_idx = get_available_device(status_file=status_file)
-        update_device_status(gpu_idx, '1'; status_file=status_file)
+    if use_gpu
+        status_file = nothing
+        gpu_idx = nothing
+        if haskey(opts, :gpu_status_file) 
+            status_file = pop!(opts, :gpu_status_file)
+            gpu_idx = get_available_device(status_file=status_file)
+            update_device_status(gpu_idx, '1'; status_file=status_file)
 
-        if gpu_idx != nothing
-            CUDA.device!(gpu_idx-1)
-            println(string("Using CUDA device ", gpu_idx-1))
+            if gpu_idx != nothing
+                CUDA.device!(gpu_idx-1)
+                println(string("Using CUDA device ", gpu_idx-1))
+            end
         end
     end
-
 
     #######################################################
     # FIT THE MODEL 
@@ -129,16 +131,20 @@ function main(args)
                                 feature_ids=feature_ids,
                                 sample_ids=sample_ids,
                                 max_epochs=max_epochs,
-                                use_gpu=use_gpu, 
+                                use_gpu=use_gpu,
+                                print_iter=100, 
                                 lr=lr, rel_tol=rel_tol)
         end_time = time()
+        save_model(transformed, out_bson)
 
         println("ELAPSED TIME (s):")
         println(end_time - start_time)
     
     catch e
-        if status_file != nothing
-            update_device_status(gpu_idx, '0'; status_file=status_file) 
+        if use_gpu
+            if status_file != nothing
+                update_device_status(gpu_idx, '0'; status_file=status_file) 
+            end
         end
         throw(e)
     end
@@ -147,8 +153,10 @@ function main(args)
     ########################################################
     # RELEASE GPU (IF APPLICABLE)
     ########################################################
-    if status_file != nothing
-        update_device_status(gpu_idx, '0'; status_file=status_file) 
+    if use_gpu
+        if status_file != nothing
+            update_device_status(gpu_idx, '0'; status_file=status_file) 
+        end
     end
    
  
