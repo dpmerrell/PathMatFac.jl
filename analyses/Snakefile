@@ -203,6 +203,8 @@ rule all:
         # Transform scatter plots
         sup_scatter=expand(path.join(SUP_VIS_DIR, "embedding_scatter", "{experiment}/{fold}.png"),
                            experiment=["multiomic_predictions_hpv_nobatch"], fold=SUP_FOLDS),
+        sup_score_plots=expand(path.join(SUP_VIS_DIR, "score_charts", "{experiment}/{fold}.png"),
+                           experiment=["multiomic_predictions_hpv_nobatch"], fold=SUP_FOLDS),
         # Visualized transformed matfac
         #sup_trans_test_matfac_vis=expand(path.join(SUP_VIS_DIR, "{fit_comb}__{tt}.html"),
         #                                 fit_comb=[c for c in SUP_TRANS_FIT_COMBINATIONS if ("matfac" in c)],
@@ -258,6 +260,15 @@ def get_cancer_types(wc, key="tcga_params"):
 #####################################################################
 
 ######### Supervised task visualizations ######################
+
+rule sup_vis_scores:
+    input:
+        src=path.join(PY_SCRIPT_DIR, "vis_predictor_scores.py"),
+        score_jsons=lambda wc: [path.join(SUP_SCORE_DIR, f"{comb}", "fold={fold}__scores.json") for comb in SUP_EXP_COMBINATIONS[wc["experiment"]]],
+    output:
+        out_png=path.join(SUP_VIS_DIR, "score_charts", "{experiment,[^/]+}/fold={fold,[0-9]+}.png")
+    shell:
+        "python {input.src} {output.out_png} --score_jsons {input.score_jsons} --n_folds {SUP_NFOLDS}"
 
 rule sup_vis_scatter:
     input:
