@@ -385,7 +385,7 @@ matfac_tcga_runs:
             use_batch: ["true"]
             omic_types: ["mrnaseq", "methylation", "cna", "mutation", "methylation:mrnaseq", "methylation:mrnaseq:cna", "mutation:methylation:mrnaseq:cna"]
             use_gpu: ["false"]
-            var_filter: [0.05]
+            var_filter: [0.05, 0.1]
             K: [50]
             max_epochs: [1000]
             fsard_max_iter: [1]
@@ -543,6 +543,36 @@ supervised_tasks:
                 omic_types: ["mutation:methylation:mrnaseq:cna"]
                 var_filter: [0.05]
                 output_dim: [25]
+        targets: ["pathologic_stage", "hpv_status", "survival", "ctype"] 
+        tasks: ["reg", "cls", "surv", "cls"]
+        groupby: ["batch", "batch", "batch", "batch"]
+    multiomic_predictions_hpv_nobatch:
+        data_params:
+            kept_ctypes: ["HNSC:CESC:ESCA:STAD"]
+            heldout_ctypes: [""]
+        pathway_params:
+            mutation: ["oncogenic:hallmark"]
+            methylation: ["oncogenic:hallmark"]
+            mrnaseq: ["oncogenic:hallmark"]
+            cna: ["positional"] 
+        method_params:
+            matfac:
+                configuration: ["fsard"] 
+                use_batch: ["false"]
+                omic_types: ["mutation:methylation:mrnaseq:cna"]
+                use_gpu: ["true"]
+                var_filter: [0.05]
+                K: [20]
+                max_epochs: [1000]
+                fsard_max_iter: [1]
+                fsard_v0: [0.8]
+            pca:
+                omic_types: ["mutation:methylation:mrnaseq:cna"]
+                var_filter: [0.05]
+            mofa:
+                omic_types: ["mutation:methylation:mrnaseq:cna"]
+                var_filter: [0.05]
+                output_dim: [20]
         targets: ["pathologic_stage", "hpv_status", "survival", "ctype"] 
         tasks: ["reg", "cls", "surv", "cls"]
         groupby: ["batch", "batch", "batch", "batch"]

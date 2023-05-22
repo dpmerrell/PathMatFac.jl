@@ -129,6 +129,8 @@ SUP_PWY_PARAMS = [collect_params(SUP_ALL_PARAMS[k]["pathway_params"]) for k in S
 SUP_METHOD_PARAMS = [[f"method={m}/{p}" for (m,v) in SUP_ALL_PARAMS[k]["method_params"].items() for p in collect_params(v)] for k in SUP_ALL_EXPERIMENTS]
 SUP_TRANS_FIT_COMBINATIONS = [path.join(*t) for tup in zip(SUP_DATA_PARAMS, SUP_SPLIT_PARAMS, SUP_PWY_PARAMS, SUP_METHOD_PARAMS) for t in product(*tup, SUP_FOLDS)]
 
+SUP_EXP_COMBINATIONS = {ex: [path.join(*t) for t in product(*tup)] for ex, tup in zip(SUP_ALL_EXPERIMENTS, zip(SUP_DATA_PARAMS, SUP_SPLIT_PARAMS, SUP_PWY_PARAMS, SUP_METHOD_PARAMS)) }
+
 #print(SUP_TRANS_FIT_COMBINATIONS)
 
 #################################################################
@@ -198,13 +200,16 @@ rule all:
         ####################################
         # Supervised tasks
         ####################################
+        # Transform scatter plots
+        sup_scatter=expand(path.join(SUP_VIS_DIR, "embedding_scatter", "{experiment}/{fold}.png"),
+                           experiment=["multiomic_predictions_hpv_nobatch"], fold=SUP_FOLDS),
         # Visualized transformed matfac
-        sup_trans_test_matfac_vis=expand(path.join(SUP_VIS_DIR, "{fit_comb}__{tt}.html"),
-                                         fit_comb=[c for c in SUP_TRANS_FIT_COMBINATIONS if ("matfac" in c)],
-                                         tt=["train","test"]),
+        #sup_trans_test_matfac_vis=expand(path.join(SUP_VIS_DIR, "{fit_comb}__{tt}.html"),
+        #                                 fit_comb=[c for c in SUP_TRANS_FIT_COMBINATIONS if ("matfac" in c)],
+        #                                 tt=["train","test"]),
         # Prediction scores
-        sup_score_jsons=expand(path.join(SUP_SCORE_DIR, "{sup_comb}__scores.json"),
-                               sup_comb=SUP_TRANS_FIT_COMBINATIONS),
+        #sup_score_jsons=expand(path.join(SUP_SCORE_DIR, "{sup_comb}__scores.json"),
+        #                       sup_comb=SUP_TRANS_FIT_COMBINATIONS),
         ## Transformed test sets
         #sup_trans_test_pca=expand(path.join(SUP_TRANS_TEST_DIR, "{fit_comb}.hdf"),
         #                           fit_comb=[c for c in SUP_TRANS_FIT_COMBINATIONS if "pca" in c]),
@@ -253,6 +258,16 @@ def get_cancer_types(wc, key="tcga_params"):
 #####################################################################
 
 ######### Supervised task visualizations ######################
+
+rule sup_vis_scatter:
+    input:
+        src=path.join(PY_SCRIPT_DIR, "vis_prediction_embeddings.py"),
+        train_hdfs=lambda wc: [path.join(SUP_TRANS_TRAIN_DIR, f"{comb}", "fold={fold}.hdf") for comb in SUP_EXP_COMBINATIONS[wc["experiment"]]],
+        test_hdfs=lambda wc: [path.join(SUP_TRANS_TEST_DIR, f"{comb}", "fold={fold}.hdf") for comb in SUP_EXP_COMBINATIONS[wc["experiment"]]]
+    output:
+        out_png=path.join(SUP_VIS_DIR, "embedding_scatter", "{experiment,[^/]+}/fold={fold,[0-9]+}.png")
+    shell:
+        "python {input.src} {output.out_png} --train_hdfs {input.train_hdfs} --test_hdfs {input.test_hdfs}"
 
 rule sup_vis_test_interactive:
     input:
