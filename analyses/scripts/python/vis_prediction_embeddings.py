@@ -11,6 +11,7 @@ import h5py
 
 NAMES = su.NICE_NAMES
 
+mpl.rcParams['font.family'] = "serif"
 
 def hdfs_to_embedding(train_hdfs, test_hdfs):
 
@@ -45,9 +46,10 @@ def plot_classifier_embedding(ax, X_train, y_train, X_test, y_test, color_list):
                    color=color, marker="o", s=0.25)
 
         test_rows = (y_test == label)
-        ax.scatter(X_test[test_rows,0],
-                   X_test[test_rows,1], 
-                   color=color, marker="*", s=0.5)
+#        ax.scatter(X_test[test_rows,0],
+#                   X_test[test_rows,1], 
+#                   color="red", marker="*", s=2.0)
+#                   #color=color, marker="*", s=2.0)
 
     return
 
@@ -75,10 +77,11 @@ def plot_regression_embedding(ax, train_X, train_y, test_X, test_y):
                vmin=vmin, vmax=vmax, cmap="binary",
                marker="o", s=0.25)
 
-    ax.scatter(test_X[:,0], test_X[:,1], 
-               c=test_y,
-               vmin=vmin, vmax=vmax, cmap="binary",
-               marker="*", s=0.5)
+#    ax.scatter(test_X[:,0], test_X[:,1], 
+#               color="red",
+#               #c=test_y,
+#               #vmin=vmin, vmax=vmax, cmap="binary",
+#               marker="*", s=2.0)
 
     return
 
@@ -115,22 +118,24 @@ def plot_survival_embedding(ax, train_X, train_y, test_X, test_y):
                c=train_alive_y, 
                vmin=alive_vmin, vmax=alive_vmax, cmap="Blues",
                marker="o", s=0.25)
-    # (test, living)
-    ax.scatter(test_alive_X[:,0], test_alive_X[:,1], 
-               c=test_alive_y,
-               vmin=alive_vmin, vmax=alive_vmax, cmap="Blues",
-               marker="*", s=0.5)
+ #   # (test, living)
+ #   ax.scatter(test_alive_X[:,0], test_alive_X[:,1], 
+ #              color="red",
+ #              #c=test_alive_y,
+ #              #vmin=alive_vmin, vmax=alive_vmax, cmap="Blues",
+ #              marker="*", s=0.5)
 
     # (train, dead)
     ax.scatter(train_dead_X[:,0], train_dead_X[:,1],
                c=train_dead_y, 
                vmin=dead_vmin, vmax=dead_vmax, cmap="Reds_r",
                marker="o", s=0.25)
-    # (test, dead)
-    ax.scatter(test_dead_X[:,0], test_dead_X[:,1], 
-               c=test_dead_y,
-               vmin=dead_vmin, vmax=dead_vmax, cmap="Reds_r",
-               marker="*", s=0.5)
+#    # (test, dead)
+#    ax.scatter(test_dead_X[:,0], test_dead_X[:,1],
+#               color="red", 
+#               #c=test_dead_y,
+#               #vmin=dead_vmin, vmax=dead_vmax, cmap="Reds_r",
+#               marker="*", s=0.5)
     return
 
 

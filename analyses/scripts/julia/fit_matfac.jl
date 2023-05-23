@@ -182,6 +182,7 @@ function main(args)
                                   :fsard_max_iter => 10,
                                   :fsard_max_A_iter => 1000,
                                   :fsard_term_rtol => 1e-3,
+                                  :svd_rotate => true,
                                   :keep_history => false,
                                   )
     update_opts!(fit_kwargs, cli_opts)
@@ -213,6 +214,13 @@ function main(args)
     sample_conditions = sample_conditions[srt_idx]
     sample_ids = sample_ids[srt_idx]
     D = D[srt_idx,:]
+  
+    # Some targets are matrices, others are vectors. 
+    if isa(target, AbstractMatrix) 
+        target = target[srt_idx,:]
+    else
+        target = target[srt_idx]
+    end
 
     println("DATA:")
     println(size(D))
