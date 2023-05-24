@@ -85,6 +85,7 @@ EXP_FIT_PARAM_DIR = path.join(EXP_DIR, "fitted_params")
 EXP_FIT_TRANS_DIR = path.join(EXP_DIR, "transformed_data")
 EXP_FIT_HIST_DIR = path.join(EXP_DIR, "training_histories")
 EXP_VIS_DIR = path.join(EXP_DIR, "visuals")
+EXP_FSARD_DIR = path.join(EXP_DIR, "fsard_summaries")
 
 EXP_ALL_PARAMS = config["matfac_tcga_runs"]
 EXP_ALL_EXPERIMENTS = list(EXP_ALL_PARAMS.keys())
@@ -182,6 +183,8 @@ rule all:
         # TCGA runs
         #####################################
         # Visuals
+        exp_fit_fsard_tsvs=expand(path.join(EXP_FSARD_DIR, "{exp_fit_comb}/summary.tsv"),
+                                            exp_fit_comb=EXP_ALL_FIT_COMBINATIONS),
         #exp_fit_interactive_plots=expand(path.join(EXP_VIS_DIR, "{exp_fit_comb}/model.html"),
         #                                 exp_fit_comb=EXP_ALL_FIT_COMBINATIONS),
         #exp_fit_x_plots=expand(path.join(EXP_VIS_DIR, "{exp_fit_comb}/X.png"),
@@ -195,16 +198,16 @@ rule all:
         # Parameters
         #exp_fit_hdfs=expand(path.join(EXP_FIT_PARAM_DIR, "{exp_fit_comb}.hdf"),
         #                    exp_fit_comb=EXP_ALL_FIT_COMBINATIONS),
-        #exp_fit_bsons=expand(path.join(EXP_FIT_PARAM_DIR, "{exp_fit_comb}.bson"),
-        #                     exp_fit_comb=EXP_ALL_FIT_COMBINATIONS),
+        exp_fit_bsons=expand(path.join(EXP_FIT_PARAM_DIR, "{exp_fit_comb}.bson"),
+                             exp_fit_comb=EXP_ALL_FIT_COMBINATIONS),
         ####################################
         # Supervised tasks
         ####################################
         # Transform scatter plots
-        sup_scatter=expand(path.join(SUP_VIS_DIR, "embedding_scatter", "{experiment}/{fold}.png"),
-                           experiment=["multiomic_predictions_hpv", "mrnaseq_predictions_hpv"], fold=SUP_FOLDS),
-        sup_score_plots=expand(path.join(SUP_VIS_DIR, "score_charts", "{experiment}.png"),
-                           experiment=["multiomic_predictions_hpv", "mrnaseq_predictions_hpv"]),
+        #sup_scatter=expand(path.join(SUP_VIS_DIR, "embedding_scatter", "{experiment}/{fold}.png"),
+        #                   experiment=["multiomic_predictions_hpv", "mrnaseq_predictions_hpv"], fold=SUP_FOLDS),
+        #sup_score_plots=expand(path.join(SUP_VIS_DIR, "score_charts", "{experiment}.png"),
+        #                   experiment=["multiomic_predictions_hpv", "mrnaseq_predictions_hpv"]),
         # Visualized transformed matfac
         #sup_trans_test_matfac_vis=expand(path.join(SUP_VIS_DIR, "{fit_comb}__{tt}.html"),
         #                                 fit_comb=[c for c in SUP_TRANS_FIT_COMBINATIONS if ("basic" in c)],
@@ -576,6 +579,15 @@ rule sup_prep_splits:
 #################################################################
 # TCGA RUNS: visuals
 #################################################################
+
+rule exp_interpret_fsard:
+    input:
+        src=path.join(JL_SCRIPT_DIR, "interpret_matfac.jl"),
+        fitted_bson=path.join(EXP_FIT_PARAM_DIR, "{path}.bson")
+    output:
+        exp_fit_fsard_tsv=path.join(EXP_FSARD_DIR, "{path}/summary.tsv")
+    shell:
+        "julia --project=. {input.src} {input.fitted_bson} {output.exp_fit_fsard_tsv}"
 
 rule exp_vis_fit_interactive:
     input:
