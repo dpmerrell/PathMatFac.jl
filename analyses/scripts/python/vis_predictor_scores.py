@@ -15,6 +15,7 @@ import json
 NAMES = su.NICE_NAMES
 SCORE_MAP = su.ALL_SCORES
 
+mpl.rcParams['font.family'] = "serif"
 
 def plot_prediction_scores(ax, result_data): 
     """
@@ -25,7 +26,7 @@ def plot_prediction_scores(ax, result_data):
     score_str = SCORE_MAP[target] 
     trivial_score_str = score_str + "_baseline"
 
-    ymin = 0.0
+    ymin = -0.5
     ymax = 1.0
     xmin = 0.5
     xmax = len(methods) + 0.5
@@ -38,24 +39,28 @@ def plot_prediction_scores(ax, result_data):
         score_dicts = [json.load(open(rj,"r")) for rj in score_jsons]
         trivial_scores = [score_dict[trivial_score_str] for score_dict in score_dicts]
         scores = [score_dict[score_str] for score_dict in score_dicts]
-        rel_scores = [s - t for s,t in zip(scores, trivial_scores]
+        rel_scores = [(s-t)/t for s,t in zip(scores, trivial_scores)]
         ymin = min(ymin, np.min(rel_scores))
         ymax = max(ymax, np.max(rel_scores))
         all_scores.append(rel_scores)
-        #all_trivial_scores |= set(trivial_scores)
 
-    #for ts in list(all_trivial_scores):
-    #    ax.plot([xmin, xmax],[ts, ts], "--", linewidth=0.5, color="grey")
+    ax.plot([xmin, xmax], [0,0], "--", color="k", linewidth=0.4)
  
     method_names = [NAMES[m] for m in methods]
     ax.boxplot(all_scores, labels=method_names)
     
     y_spread = ymax - ymin
     ax.set_xlim([xmin, xmax])
-    ax.set_ylim([ymin - 0.05*y_spread, ymax + 0.05*y_spread]) 
+    ax.set_ylim([ymin - 0.05*y_spread, ymax + 0.05*y_spread])
+    y_tick_vals = np.arange( np.round(ymin - abs(ymin)%0.5), np.round(ymax + (0.5 - ymax%0.5)), 0.5)
+    ax.set_yticks(y_tick_vals)
+    ax.set_yticklabels([f"{int(y)}%" for y in y_tick_vals*100])
     ax.tick_params(axis='x', labelrotation=45)
-    ax.set_title(NAMES[target]) 
-    ax.set_ylabel(NAMES[score_str])
+    ax.set_title(NAMES[target])
+    modifier = " gain"
+    if score_str == "mse":
+        modifier = " reduction"
+    ax.set_ylabel(NAMES[score_str] + modifier)
 
     return 
 
@@ -92,7 +97,7 @@ if __name__=="__main__":
     fig, axarr = su.make_subplot_grid(plot_prediction_scores, grid, 
                                       [1], target_names, figsize=figsize)
 
-    plt.suptitle("Performance relative to trivial baseline ({}-fold cross-validation)".format(n_folds))
+    plt.suptitle("Performance improvement over random prediction ({}-fold cross-validation)".format(n_folds))
     plt.tight_layout()
     plt.savefig(out_png, dpi=300)
 

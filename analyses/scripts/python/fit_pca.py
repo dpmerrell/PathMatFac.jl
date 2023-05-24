@@ -138,6 +138,22 @@ def compute_assay_pcs(X, feature_assays, max_components=20):
     return all_pcs 
 
 
+def choose_top_pcs(assay_Y, K):
+
+    k_vec = np.array([y.shape[0] for y in assay_Y])
+    k_fracs = k_vec / np.sum(k_vec)
+    
+    kept_Y = []
+    total_k = 0
+    for i, Y in enumerate(assay_Y):
+        k = min(K - total_k, 
+                int(np.round(K*k_fracs[i]))) 
+        total_k += k
+        kept_Y.append(Y[:k,:])
+
+    return kept_Y
+
+
 # Construct a block-diagonal matrix containing the
 # concatenated principal vectors
 def concatenate_pcs(assay_Y):
@@ -170,12 +186,15 @@ if __name__=="__main__":
     parser.add_argument("transformed_data_hdf")
     parser.add_argument("--omic_types", help="Use the specified omic assays.", default="mutation:methylation:mrnaseq:cna")
     parser.add_argument("--var_filter", help="Discard the features with least variance, *keeping* this fraction of the features.", type=float, default=0.5)
+    parser.add_argument("--output_dim", help="Number of dimensions for the transformed data", type=int, default=25)
+
     args = parser.parse_args()
 
     data_hdf = args.data_hdf
     fitted_hdf = args.fitted_hdf
     trans_hdf = args.transformed_data_hdf
     v_frac = args.var_filter
+    K = args.output_dim
     omic_types = args.omic_types.split(":")
 
     # Load data
@@ -183,7 +202,7 @@ if __name__=="__main__":
 
     # Filter columns by missingness and variance
     keep_idx = filter_assay_cols(Z, feature_assays, 
-                                 min_finite_count=20, var_filter_frac=v_frac)
+                                 min_finite_count=K, var_filter_frac=v_frac)
     print("Column filtering: ", Z.shape[1], "-->", len(keep_idx))
     Z = Z[:,keep_idx]
     feature_assays = feature_assays[keep_idx]
@@ -197,9 +216,11 @@ if __name__=="__main__":
     # principal components for individual assays
     all_pcs = compute_assay_pcs(Z_std, feature_assays)
 
-    # Concatenate the assay-wise results
-    full_pcs = concatenate_pcs(all_pcs)
+    # Choose the top K PCs
+    top_pcs = choose_top_pcs(all_pcs, K)
 
+    # Concatenate the assay-wise results
+    full_pcs = concatenate_pcs(top_pcs)
 
     # Transform standardized data via concatenated principal components
     X = su.linear_transform(Z_std, full_pcs, max_iter=5000, rel_tol=1e-6)
