@@ -143,8 +143,8 @@ rule all:
         # Simulations
         ##################################
         ## Simulation scoring
-        #sim_score_tsvs=expand(path.join(SIM_SCORE_TSV_DIR, "{experiment}.tsv"),
-        #                      experiment=SIM_ALL_EXPERIMENTS),
+        sim_score_tsvs=expand(path.join(SIM_SCORE_TSV_DIR, "{experiment}.tsv"),
+                              experiment=SIM_ALL_EXPERIMENTS),
         #sim_score_jsons=expand(path.join(SIM_SCORE_JSON_DIR, "{sim_fit_comb}.json"),
         #                       sim_fit_comb=SIM_ALL_FIT_COMBINATIONS),
         ## Simulation static visuals
@@ -201,46 +201,48 @@ rule all:
         # Supervised tasks
         ####################################
         # Transform scatter plots
-        sup_scatter=expand(path.join(SUP_VIS_DIR, "embedding_scatter", "{experiment}/{fold}.png"),
-                           experiment=["multiomic_predictions_hpv", "mrnaseq_predictions_hpv"], fold=SUP_FOLDS),
-        sup_score_plots=expand(path.join(SUP_VIS_DIR, "score_charts", "{experiment}.png"),
-                           experiment=["multiomic_predictions_hpv", "mrnaseq_predictions_hpv"]),
+        #sup_scatter=expand(path.join(SUP_VIS_DIR, "embedding_scatter", "{experiment}/{fold}.png"),
+        #                   experiment=["multiomic_predictions_hpv", "mrnaseq_predictions_hpv"], fold=SUP_FOLDS),
+        #sup_score_plots=expand(path.join(SUP_VIS_DIR, "score_charts", "{experiment}.png"),
+        #                   experiment=["multiomic_predictions_hpv", "mrnaseq_predictions_hpv"]),
         # Visualized transformed matfac
         #sup_trans_test_matfac_vis=expand(path.join(SUP_VIS_DIR, "{fit_comb}__{tt}.html"),
         #                                 fit_comb=[c for c in SUP_TRANS_FIT_COMBINATIONS if ("basic" in c)],
         #                                 tt=["train","test"]),
         # Prediction scores
-        #sup_score_jsons=expand(path.join(SUP_SCORE_DIR, "{sup_comb}__scores.json"),
-        #                       sup_comb=SUP_TRANS_FIT_COMBINATIONS),
+        sup_score_jsons=expand(path.join(SUP_SCORE_DIR, "{sup_comb}__scores.json"),
+                               sup_comb=SUP_TRANS_FIT_COMBINATIONS),
         ## Transformed test sets
-        #sup_trans_test_pca=expand(path.join(SUP_TRANS_TEST_DIR, "{fit_comb}.hdf"),
-        #                           fit_comb=[c for c in SUP_TRANS_FIT_COMBINATIONS if "pca" in c]),
-        #sup_trans_test_mofa=expand(path.join(SUP_TRANS_TEST_DIR, "{fit_comb}.hdf"),
-        #                           fit_comb=[c for c in SUP_TRANS_FIT_COMBINATIONS if "mofa" in c]),
-        #sup_trans_test_matfac=expand(path.join(SUP_TRANS_TEST_DIR, "{fit_comb}.hdf"),
-        #                             fit_comb=[c for c in SUP_TRANS_FIT_COMBINATIONS if "matfac" in c]),
-        #sup_trans_test_matfac=expand(path.join(SUP_TRANS_TEST_DIR, "{fit_comb}.bson"),
-        #                             fit_comb=[c for c in SUP_TRANS_FIT_COMBINATIONS if "matfac" in c]),
-        ## Fitted classifiers, regressors, survival regressors
-        #sup_trained_surv=expand(path.join(SUP_FIT_PRED_DIR, "{pred_comb}.rds"),
-        #                       pred_comb=[c for c in SUP_TRANS_FIT_COMBINATIONS if "task=surv" in c]),
-        #sup_trained_reg=expand(path.join(SUP_FIT_PRED_DIR, "{pred_comb}.pkl"),
-        #                       pred_comb=[c for c in SUP_TRANS_FIT_COMBINATIONS if "task=reg" in c]),
-        #sup_trained_cls=expand(path.join(SUP_FIT_PRED_DIR, "{pred_comb}.pkl"),
-        #                       pred_comb=[c for c in SUP_TRANS_FIT_COMBINATIONS if "task=cls" in c]),
+        sup_trans_test_pca=expand(path.join(SUP_TRANS_TEST_DIR, "{fit_comb}.hdf"),
+                                   fit_comb=[c for c in SUP_TRANS_FIT_COMBINATIONS if "pca" in c]),
+        sup_trans_test_mofa=expand(path.join(SUP_TRANS_TEST_DIR, "{fit_comb}.hdf"),
+                                   fit_comb=[c for c in SUP_TRANS_FIT_COMBINATIONS if "mofa" in c]),
+        sup_trans_test_matfac=expand(path.join(SUP_TRANS_TEST_DIR, "{fit_comb}.hdf"),
+                                     fit_comb=[c for c in SUP_TRANS_FIT_COMBINATIONS if "matfac" in c]),
+        sup_trans_test_paradigm=expand(path.join(SUP_TRANS_TEST_DIR, "{fit_comb}.hdf"),
+                                     fit_comb=[c for c in SUP_TRANS_FIT_COMBINATIONS if "paradigm" in c]),
+        # Fitted classifiers, regressors, survival regressors
+        sup_trained_surv=expand(path.join(SUP_FIT_PRED_DIR, "{pred_comb}.rds"),
+                               pred_comb=[c for c in SUP_TRANS_FIT_COMBINATIONS if "task=surv" in c]),
+        sup_trained_reg=expand(path.join(SUP_FIT_PRED_DIR, "{pred_comb}.pkl"),
+                               pred_comb=[c for c in SUP_TRANS_FIT_COMBINATIONS if "task=reg" in c]),
+        sup_trained_cls=expand(path.join(SUP_FIT_PRED_DIR, "{pred_comb}.pkl"),
+                               pred_comb=[c for c in SUP_TRANS_FIT_COMBINATIONS if "task=cls" in c]),
         # Fitted transforms
-        #sup_fitted_gsva=expand(path.join(SUP_FIT_TRANS_DIR, "{fit_comb}.rds"),
-        #                        fit_comb=[c for c in SUP_TRANS_FIT_COMBINATIONS if "gsva" in c]),
-        #sup_fitted_plier=expand(path.join(SUP_FIT_TRANS_DIR, "{fit_comb}.rds"),
-        #                        fit_comb=[c for c in SUP_TRANS_FIT_COMBINATIONS if "plier" in c]),
-        #sup_fitted_mofa=expand(path.join(SUP_FIT_TRANS_DIR, "{fit_comb}.rds"),
-        #                      fit_comb=[c for c in SUP_TRANS_FIT_COMBINATIONS if "mofa" in c]),
-        #sup_fitted_pca=expand(path.join(SUP_FIT_TRANS_DIR, "{fit_comb}.hdf"),
-        #                      fit_comb=[c for c in SUP_TRANS_FIT_COMBINATIONS if "pca" in c]),
-        #sup_fitted_matfacs=expand(path.join(SUP_FIT_TRANS_DIR, "{fit_comb}.bson"),
-        #                          fit_comb=[c for c in SUP_TRANS_FIT_COMBINATIONS if "matfac" in c]),
-        #sup_splits=expand(path.join(SUP_SPLIT_DIR, "{split_comb}__{sp}.hdf"),
-        #                  split_comb=SUP_ALL_SPLIT_COMBINATIONS, sp=["train","test"])
+        sup_fitted_gsva=expand(path.join(SUP_FIT_TRANS_DIR, "{fit_comb}.rds"),
+                                fit_comb=[c for c in SUP_TRANS_FIT_COMBINATIONS if "gsva" in c]),
+        sup_fitted_plier=expand(path.join(SUP_FIT_TRANS_DIR, "{fit_comb}.rds"),
+                                fit_comb=[c for c in SUP_TRANS_FIT_COMBINATIONS if "plier" in c]),
+        sup_fitted_mofa=expand(path.join(SUP_FIT_TRANS_DIR, "{fit_comb}.rds"),
+                              fit_comb=[c for c in SUP_TRANS_FIT_COMBINATIONS if "mofa" in c]),
+        sup_fitted_pca=expand(path.join(SUP_FIT_TRANS_DIR, "{fit_comb}.hdf"),
+                              fit_comb=[c for c in SUP_TRANS_FIT_COMBINATIONS if "pca" in c]),
+        sup_fitted_matfacs=expand(path.join(SUP_FIT_TRANS_DIR, "{fit_comb}.bson"),
+                                  fit_comb=[c for c in SUP_TRANS_FIT_COMBINATIONS if "matfac" in c]),
+        sup_fitted_paradigm=expand(path.join(SUP_FIT_TRANS_DIR, "{fit_comb}.hdf"),
+                                  fit_comb=[c for c in SUP_TRANS_FIT_COMBINATIONS if "paradigm" in c]),
+        sup_splits=expand(path.join(SUP_SPLIT_DIR, "{split_comb}__{sp}.hdf"),
+                          split_comb=SUP_ALL_SPLIT_COMBINATIONS, sp=["train","test"])
 
 
 
