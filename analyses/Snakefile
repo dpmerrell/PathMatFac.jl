@@ -195,16 +195,16 @@ rule all:
         # Parameters
         #exp_fit_hdfs=expand(path.join(EXP_FIT_PARAM_DIR, "{exp_fit_comb}.hdf"),
         #                    exp_fit_comb=EXP_ALL_FIT_COMBINATIONS),
-        #exp_fit_bsons=expand(path.join(EXP_FIT_PARAM_DIR, "{exp_fit_comb}.bson"),
-        #                     exp_fit_comb=EXP_ALL_FIT_COMBINATIONS),
+        exp_fit_bsons=expand(path.join(EXP_FIT_PARAM_DIR, "{exp_fit_comb}.bson"),
+                             exp_fit_comb=EXP_ALL_FIT_COMBINATIONS),
         ####################################
         # Supervised tasks
         ####################################
         # Transform scatter plots
-        sup_scatter=expand(path.join(SUP_VIS_DIR, "embedding_scatter", "{experiment}/{fold}.png"),
-                           experiment=["multiomic_predictions_hpv_nobatch"], fold=SUP_FOLDS),
-        sup_score_plots=expand(path.join(SUP_VIS_DIR, "score_charts", "{experiment}/{fold}.png"),
-                           experiment=["multiomic_predictions_hpv_nobatch"], fold=SUP_FOLDS),
+        #sup_scatter=expand(path.join(SUP_VIS_DIR, "embedding_scatter", "{experiment}/{fold}.png"),
+        #                   experiment=["basic_test"], fold=SUP_FOLDS),
+        #sup_score_plots=expand(path.join(SUP_VIS_DIR, "score_charts", "{experiment}.png"),
+        #                   experiment=["multiomic_predictions_hpv","mrnaseq_cna_predictions_hpv"]) 
         # Visualized transformed matfac
         #sup_trans_test_matfac_vis=expand(path.join(SUP_VIS_DIR, "{fit_comb}__{tt}.html"),
         #                                 fit_comb=[c for c in SUP_TRANS_FIT_COMBINATIONS if ("matfac" in c)],
@@ -264,9 +264,9 @@ def get_cancer_types(wc, key="tcga_params"):
 rule sup_vis_scores:
     input:
         src=path.join(PY_SCRIPT_DIR, "vis_predictor_scores.py"),
-        score_jsons=lambda wc: [path.join(SUP_SCORE_DIR, f"{comb}", "fold={fold}__scores.json") for comb in SUP_EXP_COMBINATIONS[wc["experiment"]]],
+        score_jsons=lambda wc: [path.join(SUP_SCORE_DIR, f"{comb}", f"fold={fold}__scores.json") for comb in SUP_EXP_COMBINATIONS[wc["experiment"]] for fold in range(SUP_NFOLDS)],
     output:
-        out_png=path.join(SUP_VIS_DIR, "score_charts", "{experiment,[^/]+}/fold={fold,[0-9]+}.png")
+        out_png=path.join(SUP_VIS_DIR, "score_charts", "{experiment,[^/]+}.png")
     shell:
         "python {input.src} {output.out_png} --score_jsons {input.score_jsons} --n_folds {SUP_NFOLDS}"
 
@@ -819,7 +819,7 @@ rule sim_fit_matfac:
         parsed_pwy_jsons=lambda wc: [f"{assay}_pwy_json="+ path.join(PREP_PWY_DIR, f"{pwys}.json") for assay, pwys in [x.split("=") for x in wc["pwy_params"].split("__")]]
     resources:
         mem_mb=8000,
-    threads: lambda wc: len(get_cancer_types(wc)) 
+    threads: 1 #lambda wc: len(get_cancer_types(wc)) 
     shell:
         "julia --project=. {input.src} {input.data_hdf} {output.fitted_bson} {output.transformed_hdf} {params.parsed_opts} history_json={output.history_json} {params.parsed_pwy_jsons}"
 

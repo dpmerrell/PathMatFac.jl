@@ -24,21 +24,32 @@ NICE_NAMES = {"gender": "Sex",
               "missing": "Missing Data",
               "l1_fraction": "$L^1$ Fraction",
               "X_pwy_spearman_corr": "Pathway Activation Spearman",
+              "X_spansim": "$X$ span sim.",
+              "Y_spansim": "$Y$ span sim.",
+              "A_aucpr": "$A$ AUCPR",
               "roc_auc": "AUCROC",
               "mse": "MSE",
               "accuracy": "Accuracy",
               "concordance": "Concordance",
               "matfac": "PathMatFac",
+              "matfac_batch": "PathMatFac (batch)",
+              "matfac_nobatch": "PathMatFac (no batch)",
               "mofa": "MOFA+",
               "plier": "PLIER",
               "pca": "PCA",
+              "raw": "Raw data",
               "paradigm": "PARADIGM",
               "gsva": "GSVA",
               "mutation": "Mutation",
               "cna": "CNA",
               "methylation": "Methylation",
               "rppa": "RPPA",
-              "mrnaseq": "RNA-seq"
+              "mrnaseq": "RNA-seq",
+              "EB": "Emp. Bayes",
+              "EM": "Exp. Max.",
+              "LSQ": "Least Sq.",
+              "theta_r2": "$R^2$",
+              "logdelta_spearman": "Spearman"
               }
 
 
@@ -54,7 +65,7 @@ ALL_COLORS = ["red","blue","black","orange","yellow","grey","silver"]
 
 ALL_TARGETS = ["survival","ctype","pathologic_stage","hpv_status"]
 
-ALL_METHODS = ["matfac", "mofa", "plier", "pca", "paradigm", "gsva"]
+ALL_METHODS = ["matfac", "matfac_batch", "matfac_nobatch", "mofa", "plier", "pca", "paradigm", "gsva", "raw"]
 
 ALL_SCORES = {"survival": "concordance",
               "ctype": "accuracy",
