@@ -653,7 +653,8 @@ end
 
 function basic_fit_reg_weight_eb!(model::PathMatFacModel; 
                                   capacity=Int(10e8), lr=1.0, max_epochs=1000, 
-                                  verbosity=1, print_prefix="", history=nothing, kwargs...) 
+                                  verbosity=1, print_prefix="", history=nothing, 
+                                  svd_rotate=true, kwargs...) 
 
     K = size(model.matfac.X,1)
     n_pref = string(print_prefix, "    ")
@@ -662,8 +663,7 @@ function basic_fit_reg_weight_eb!(model::PathMatFacModel;
     orig_X_reg = model.matfac.X_reg
     orig_Y_reg = model.matfac.Y_reg
 
-    #model.matfac.X_reg = L2Regularizer(K, Float32(0.5))
-    model.matfac.X_reg = X -> Float32(0.0) 
+    model.matfac.X_reg = X -> Float32(0.5)*sum(X.*X) #Float32(0.0) 
     model.matfac.Y_reg = construct_minimal_regularizer(model)
 
     # Fit the model without regularization (except the Bernoulli factors).
@@ -675,9 +675,9 @@ function basic_fit_reg_weight_eb!(model::PathMatFacModel;
                       reweight_losses=true,
                       fit_batch=fit_batch, 
                       init_factors=true,
-                      #fit_factors=true,
-                      svd_rotate=true,
-                      whiten=true,
+                      svd_rotate=svd_rotate,
+                      #whiten=true,
+                      whiten=false,
                       verbosity=verbosity, print_prefix=n_pref, 
                       capacity=capacity,
                       lr=lr, max_epochs=max_epochs,
@@ -719,9 +719,7 @@ function fit_non_ard!(model::PathMatFacModel; fit_reg_weight="EB",
         fit_batch = isa(model.matfac.col_transform.layers[2], BatchScale)
         basic_fit!(model; fit_mu=true, fit_logsigma=true, reweight_losses=true,
                           fit_batch=fit_batch, 
-                          #init_factors=true, 
                           fit_factors=true, 
-                          #whiten=true, 
                           kwargs...)
     end
 end
@@ -734,6 +732,7 @@ function fit_ard!(model::PathMatFacModel; max_epochs=1000, capacity=10^8,
                                           verbosity=1, print_prefix="",
                                           history=nothing,
                                           lr=1.0, lr_regress=1.0, lr_theta=1.0,
+                                          svd_rotate=true,
                                           kwargs...)
 
     n_pref = string(print_prefix, "    ")
@@ -755,7 +754,7 @@ function fit_ard!(model::PathMatFacModel; max_epochs=1000, capacity=10^8,
                       fit_logsigma=true,
                       init_factors=true,
                       reweight_losses=true,
-                      svd_rotate=true,
+                      svd_rotate=svd_rotate,
                       whiten=true,
                       lr_regress=lr_regress, lr_theta=lr_theta,
                       verbosity=verbosity,
@@ -797,6 +796,7 @@ function fit_feature_set_ard!(model::PathMatFacModel; lr=1.0,
                                                       fsard_max_A_iter=1000,
                                                       fsard_term_rtol=1e-5,
                                                       verbosity=1, print_prefix="",
+                                                      svd_rotate=true,
                                                       history=nothing,
                                                       kwargs...)
 
@@ -808,7 +808,7 @@ function fit_feature_set_ard!(model::PathMatFacModel; lr=1.0,
     v_println("##### Pre-fitting with vanilla ARD... #####"; verbosity=verbosity,
                                                  prefix=print_prefix)
     fit_ard!(model; max_epochs=max_epochs, capacity=capacity, lr=lr,
-                    verbosity=verbosity, print_prefix=n_pref, history=history, kwargs...)
+                    verbosity=verbosity, print_prefix=n_pref, history=history, svd_rotate=svd_rotate, kwargs...)
 
     # Next, put the FeatureSetARDReg back in place and
     # continue fitting the model.
@@ -904,6 +904,7 @@ function fit!(model::PathMatFacModel; lr=1.0,
                                       lambda_max=nothing,
                                       lambda_min_frac=1e-3, 
                                       keep_history=false,
+                                      svd_rotate=true,
                                       fit_joint=false,
                                       fsard_max_iter=10,
                                       fsard_max_A_iter=1000,
@@ -930,6 +931,7 @@ function fit!(model::PathMatFacModel; lr=1.0,
                                       rel_tol=rel_tol,
                                       abs_tol=abs_tol,
                                       capacity=capacity,
+                                      svd_rotate=svd_rotate,
                                       kwargs...)
     elseif isa(model.matfac.Y_reg, FeatureSetARDReg)
         fit_feature_set_ard!(model; lr=lr,
@@ -939,6 +941,7 @@ function fit!(model::PathMatFacModel; lr=1.0,
                                     fsard_max_iter=fsard_max_iter,
                                     fsard_max_A_iter=fsard_max_A_iter,
                                     fsard_term_rtol=fsard_term_rtol,
+                                    svd_rotate=svd_rotate,
                                     verbosity=verbosity,
                                     print_prefix=print_prefix,
                                     capacity=capacity,
@@ -951,6 +954,7 @@ function fit!(model::PathMatFacModel; lr=1.0,
                             lambda_max=lambda_max, 
                             n_lambda=n_lambda, 
                             lambda_min_frac=lambda_min_frac,
+                            svd_rotate=svd_rotate,
                             verbosity=verbosity,
                             print_prefix=print_prefix,
                             capacity=capacity, 
