@@ -440,6 +440,10 @@ function ChainRulesCore.rrule(gr::GroupRegularizer, X::AbstractMatrix)
         println("CR")
         println(typeof(cr))
         println(cr)
+
+        println("w")
+        println(typeof(w))
+        println(size(w))
         X_view = view(X, :, cr)
         diffs_view = view(diffs,:,cr)
         diffs_view .= w .* X_view
