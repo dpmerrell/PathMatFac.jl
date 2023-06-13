@@ -430,22 +430,8 @@ end
 
 function ChainRulesCore.rrule(gr::GroupRegularizer, X::AbstractMatrix)
 
-    println("X")
-    println(typeof(X))
-    println(size(X))
-
     diffs = zero(X)
-    println("DIFFS")
-    println(typeof(diffs))
-    println(size(diffs))
     for (w,cr) in zip(gr.group_weights, gr.group_idx)
-        println("CR")
-        println(typeof(cr))
-        println(cr)
-
-        println("w")
-        println(typeof(w))
-        println(size(w))
         X_view = view(X, :, cr)
         diffs_view = view(diffs,:,cr)
         diffs_view .= w .* X_view
