@@ -8,6 +8,8 @@ import pandas as pd
 import numpy as np
 import argparse
 import h5py
+import umap
+
 
 NAMES = su.NICE_NAMES
 
@@ -23,12 +25,17 @@ def hdfs_to_embedding(train_hdfs, test_hdfs):
     test_X = su.load_hdf(test_hdf, "X", dtype=float).transpose()
     test_y = su.load_hdf(test_hdf, "target", dtype=str).transpose()
 
-    pca = PCA(n_components=2, whiten=True)
-    pca.fit(train_X, train_y)
+    # OLD PCA PLOTTING
+    #pca = PCA(n_components=2, whiten=True)
+    #pca.fit(train_X, train_y)
 
-    train_X = pca.transform(train_X)
-    test_X = pca.transform(test_X)
-    
+    #train_X = pca.transform(train_X)
+    #test_X = pca.transform(test_X)
+      
+    um = umap.UMAP()
+    train_X = um.fit_transform(train_X)
+    test_X = um.transform(test_X)
+ 
     return train_X, train_y, test_X, test_y
 
 
@@ -45,11 +52,10 @@ def plot_classifier_embedding(ax, X_train, y_train, X_test, y_test, color_list):
                    X_train[train_rows,1], 
                    color=color, marker="o", s=0.25)
 
-        test_rows = (y_test == label)
-#        ax.scatter(X_test[test_rows,0],
-#                   X_test[test_rows,1], 
-#                   color="red", marker="*", s=2.0)
-#                   #color=color, marker="*", s=2.0)
+        #test_rows = (y_test == label)
+        #ax.scatter(X_test[test_rows,0],
+        #           X_test[test_rows,1], 
+        #           color=color, marker="+", s=4.0)
 
     return
 
@@ -77,11 +83,10 @@ def plot_regression_embedding(ax, train_X, train_y, test_X, test_y):
                vmin=vmin, vmax=vmax, cmap="binary",
                marker="o", s=0.25)
 
-#    ax.scatter(test_X[:,0], test_X[:,1], 
-#               color="red",
-#               #c=test_y,
-#               #vmin=vmin, vmax=vmax, cmap="binary",
-#               marker="*", s=2.0)
+    #ax.scatter(test_X[:,0], test_X[:,1], 
+    #           c=test_y,
+    #           vmin=vmin, vmax=vmax, cmap="binary",
+    #           marker="+", s=4.0)
 
     return
 
@@ -118,24 +123,22 @@ def plot_survival_embedding(ax, train_X, train_y, test_X, test_y):
                c=train_alive_y, 
                vmin=alive_vmin, vmax=alive_vmax, cmap="Blues",
                marker="o", s=0.25)
- #   # (test, living)
- #   ax.scatter(test_alive_X[:,0], test_alive_X[:,1], 
- #              color="red",
- #              #c=test_alive_y,
- #              #vmin=alive_vmin, vmax=alive_vmax, cmap="Blues",
- #              marker="*", s=0.5)
+    ## (test, living)
+    #ax.scatter(test_alive_X[:,0], test_alive_X[:,1], 
+    #           c=test_alive_y,
+    #           vmin=alive_vmin, vmax=alive_vmax, cmap="Blues",
+    #           marker="+", s=4.0)
 
     # (train, dead)
     ax.scatter(train_dead_X[:,0], train_dead_X[:,1],
                c=train_dead_y, 
                vmin=dead_vmin, vmax=dead_vmax, cmap="Reds_r",
                marker="o", s=0.25)
-#    # (test, dead)
-#    ax.scatter(test_dead_X[:,0], test_dead_X[:,1],
-#               color="red", 
-#               #c=test_dead_y,
-#               #vmin=dead_vmin, vmax=dead_vmax, cmap="Reds_r",
-#               marker="*", s=0.5)
+    ## (test, dead)
+    #ax.scatter(test_dead_X[:,0], test_dead_X[:,1],
+    #           c=test_dead_y,
+    #           vmin=dead_vmin, vmax=dead_vmax, cmap="Reds_r",
+    #           marker="+", s=4.0)
     return
 
 
@@ -165,6 +168,9 @@ def plot_prediction_embeddings(ax, result_data):
         embedded_data[1] = su.encode_pathologic_stage(embedded_data[1]) 
         embedded_data[3] = su.encode_pathologic_stage(embedded_data[3]) 
         plot_regression_embedding(ax, *embedded_data)
+
+    ax.set_xticks([])
+    ax.set_yticks([])
 
     if i == nrow - 1:
         ax.set_xlabel(NAMES[colname])
@@ -210,7 +216,7 @@ if __name__=="__main__":
 
     #fig.text(0.5, 0.04, "Prediction targets", ha="center")
     #fig.text(0.04, 0.5, "Dimension reduction methods", rotation="vertical", ha="center")
-    plt.tight_layout()
+    plt.tight_layout(pad=0.1, h_pad=0.1, w_pad=0.1)
     plt.savefig(out_png, dpi=300)
 
  

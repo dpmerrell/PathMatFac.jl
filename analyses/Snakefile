@@ -204,45 +204,47 @@ rule all:
         #sup_scatter=expand(path.join(SUP_VIS_DIR, "embedding_scatter", "{experiment}/{fold}.png"),
         #                   experiment=["multiomic_predictions_hpv", "mrnaseq_predictions_hpv"], fold=SUP_FOLDS),
         #sup_score_plots=expand(path.join(SUP_VIS_DIR, "score_charts", "{experiment}.png"),
-        #                   experiment=["multiomic_predictions_hpv", "mrnaseq_predictions_hpv"]),
+        #                                experiment=["multiomic_predictions_hpv", "mrnaseq_predictions_hpv", "mrnaseq_cna_predictions_hpv"]),
         # Visualized transformed matfac
         #sup_trans_test_matfac_vis=expand(path.join(SUP_VIS_DIR, "{fit_comb}__{tt}.html"),
         #                                 fit_comb=[c for c in SUP_TRANS_FIT_COMBINATIONS if ("basic" in c)],
         #                                 tt=["train","test"]),
         # Prediction scores
-        sup_score_jsons=expand(path.join(SUP_SCORE_DIR, "{sup_comb}__scores.json"),
-                               sup_comb=SUP_TRANS_FIT_COMBINATIONS),
+        #sup_score_jsons=expand(path.join(SUP_SCORE_DIR, "{sup_comb}__scores.json"),
+        #                       sup_comb=SUP_TRANS_FIT_COMBINATIONS),
         ## Transformed test sets
-        sup_trans_test_pca=expand(path.join(SUP_TRANS_TEST_DIR, "{fit_comb}.hdf"),
-                                   fit_comb=[c for c in SUP_TRANS_FIT_COMBINATIONS if "pca" in c]),
-        sup_trans_test_mofa=expand(path.join(SUP_TRANS_TEST_DIR, "{fit_comb}.hdf"),
-                                   fit_comb=[c for c in SUP_TRANS_FIT_COMBINATIONS if "mofa" in c]),
-        sup_trans_test_matfac=expand(path.join(SUP_TRANS_TEST_DIR, "{fit_comb}.hdf"),
-                                     fit_comb=[c for c in SUP_TRANS_FIT_COMBINATIONS if "matfac" in c]),
-        sup_trans_test_paradigm=expand(path.join(SUP_TRANS_TEST_DIR, "{fit_comb}.hdf"),
-                                     fit_comb=[c for c in SUP_TRANS_FIT_COMBINATIONS if "paradigm" in c]),
-        # Fitted classifiers, regressors, survival regressors
-        sup_trained_surv=expand(path.join(SUP_FIT_PRED_DIR, "{pred_comb}.rds"),
-                               pred_comb=[c for c in SUP_TRANS_FIT_COMBINATIONS if "task=surv" in c]),
-        sup_trained_reg=expand(path.join(SUP_FIT_PRED_DIR, "{pred_comb}.pkl"),
-                               pred_comb=[c for c in SUP_TRANS_FIT_COMBINATIONS if "task=reg" in c]),
-        sup_trained_cls=expand(path.join(SUP_FIT_PRED_DIR, "{pred_comb}.pkl"),
-                               pred_comb=[c for c in SUP_TRANS_FIT_COMBINATIONS if "task=cls" in c]),
-        # Fitted transforms
-        sup_fitted_gsva=expand(path.join(SUP_FIT_TRANS_DIR, "{fit_comb}.rds"),
-                                fit_comb=[c for c in SUP_TRANS_FIT_COMBINATIONS if "gsva" in c]),
-        sup_fitted_plier=expand(path.join(SUP_FIT_TRANS_DIR, "{fit_comb}.rds"),
-                                fit_comb=[c for c in SUP_TRANS_FIT_COMBINATIONS if "plier" in c]),
-        sup_fitted_mofa=expand(path.join(SUP_FIT_TRANS_DIR, "{fit_comb}.rds"),
-                              fit_comb=[c for c in SUP_TRANS_FIT_COMBINATIONS if "mofa" in c]),
-        sup_fitted_pca=expand(path.join(SUP_FIT_TRANS_DIR, "{fit_comb}.hdf"),
-                              fit_comb=[c for c in SUP_TRANS_FIT_COMBINATIONS if "pca" in c]),
-        sup_fitted_matfacs=expand(path.join(SUP_FIT_TRANS_DIR, "{fit_comb}.bson"),
-                                  fit_comb=[c for c in SUP_TRANS_FIT_COMBINATIONS if "matfac" in c]),
-        sup_fitted_paradigm=expand(path.join(SUP_FIT_TRANS_DIR, "{fit_comb}.hdf"),
-                                  fit_comb=[c for c in SUP_TRANS_FIT_COMBINATIONS if "paradigm" in c]),
-        sup_splits=expand(path.join(SUP_SPLIT_DIR, "{split_comb}__{sp}.hdf"),
-                          split_comb=SUP_ALL_SPLIT_COMBINATIONS, sp=["train","test"])
+        #sup_trans_test_raw=expand(path.join(SUP_TRANS_TEST_DIR, "{fit_comb}.hdf"),
+        #                           fit_comb=[c for c in SUP_TRANS_FIT_COMBINATIONS if "raw" in c]),
+        #sup_trans_test_pca=expand(path.join(SUP_TRANS_TEST_DIR, "{fit_comb}.hdf"),
+        #                           fit_comb=[c for c in SUP_TRANS_FIT_COMBINATIONS if "pca" in c]),
+        #sup_trans_test_mofa=expand(path.join(SUP_TRANS_TEST_DIR, "{fit_comb}.hdf"),
+        #                           fit_comb=[c for c in SUP_TRANS_FIT_COMBINATIONS if "mofa" in c]),
+        #sup_trans_test_matfac=expand(path.join(SUP_TRANS_TEST_DIR, "{fit_comb}.hdf"),
+        #                             fit_comb=[c for c in SUP_TRANS_FIT_COMBINATIONS if "matfac" in c]),
+        #sup_trans_test_paradigm=expand(path.join(SUP_TRANS_TEST_DIR, "{fit_comb}.hdf"),
+        #                             fit_comb=[c for c in SUP_TRANS_FIT_COMBINATIONS if "paradigm" in c]),
+        ## Fitted classifiers, regressors, survival regressors
+        #sup_trained_surv=expand(path.join(SUP_FIT_PRED_DIR, "{pred_comb}.rds"),
+        #                       pred_comb=[c for c in SUP_TRANS_FIT_COMBINATIONS if "task=surv" in c]),
+        #sup_trained_reg=expand(path.join(SUP_FIT_PRED_DIR, "{pred_comb}.pkl"),
+        #                       pred_comb=[c for c in SUP_TRANS_FIT_COMBINATIONS if "task=reg" in c]),
+        #sup_trained_cls=expand(path.join(SUP_FIT_PRED_DIR, "{pred_comb}.pkl"),
+        #                       pred_comb=[c for c in SUP_TRANS_FIT_COMBINATIONS if "task=cls" in c]),
+        ## Fitted transforms
+        #sup_fitted_gsva=expand(path.join(SUP_FIT_TRANS_DIR, "{fit_comb}.rds"),
+        #                        fit_comb=[c for c in SUP_TRANS_FIT_COMBINATIONS if "gsva" in c]),
+        #sup_fitted_plier=expand(path.join(SUP_FIT_TRANS_DIR, "{fit_comb}.rds"),
+        #                        fit_comb=[c for c in SUP_TRANS_FIT_COMBINATIONS if "plier" in c]),
+        #sup_fitted_mofa=expand(path.join(SUP_FIT_TRANS_DIR, "{fit_comb}.rds"),
+        #                      fit_comb=[c for c in SUP_TRANS_FIT_COMBINATIONS if "mofa" in c]),
+        #sup_fitted_pca=expand(path.join(SUP_FIT_TRANS_DIR, "{fit_comb}.hdf"),
+        #                      fit_comb=[c for c in SUP_TRANS_FIT_COMBINATIONS if "pca" in c]),
+        #sup_fitted_matfacs=expand(path.join(SUP_FIT_TRANS_DIR, "{fit_comb}.bson"),
+        #                          fit_comb=[c for c in SUP_TRANS_FIT_COMBINATIONS if "matfac" in c]),
+        #sup_fitted_paradigm=expand(path.join(SUP_FIT_TRANS_DIR, "{fit_comb}.hdf"),
+        #                          fit_comb=[c for c in SUP_TRANS_FIT_COMBINATIONS if "paradigm" in c]),
+        #sup_splits=expand(path.join(SUP_SPLIT_DIR, "{split_comb}__{sp}.hdf"),
+        #                  split_comb=SUP_ALL_SPLIT_COMBINATIONS, sp=["train","test"])
 
 
 
@@ -344,6 +346,19 @@ rule sup_score_classifier:
 
 ########### Transform test data ###########
 
+rule sup_transform_raw:
+    input:
+        src=path.join(PY_SCRIPT_DIR, "transform_raw.py"),
+        data_hdf=path.join(SUP_SPLIT_DIR, "{data_params}/{split_params}/fold={fold}__test.hdf"),
+        fitted_hdf=path.join(SUP_FIT_TRANS_DIR, "{data_params}/{split_params}/{pwy_params}/method=raw/{fit_params}/fold={fold}.hdf"),
+    output:
+        transformed_hdf=path.join(SUP_TRANS_TEST_DIR, "{data_params,[^/]+}/{split_params,[^/]+}/{pwy_params,[^/]+}/method=raw/{fit_params,[^/]+}/fold={fold,[0-9]+}.hdf"),
+    resources:
+        mem_mb=8000,
+    threads: 1 
+    shell:
+        "python {input.src} {input.data_hdf} {input.fitted_hdf} {output.transformed_hdf}"
+
 rule sup_transform_gsva:
     input:
         src=path.join(R_SCRIPT_DIR, "transform_gsva.R"),
@@ -419,10 +434,10 @@ rule sup_transform_matfac:
     input:
         src=path.join(JL_SCRIPT_DIR, "transform_matfac.jl"),
         data_hdf=path.join(SUP_SPLIT_DIR, "{data_params}/{split_params}/fold={fold}__test.hdf"),
-        fitted_bson=path.join(SUP_FIT_TRANS_DIR, "{data_params}/{split_params}/{pwy_params}/method=matfac/{fit_params}/fold={fold}.bson"),
+        fitted_bson=path.join(SUP_FIT_TRANS_DIR, "{data_params}/{split_params}/{pwy_params}/method=matfac{mf_mode}/{fit_params}/fold={fold}.bson"),
     output:
-        transformed_hdf=path.join(SUP_TRANS_TEST_DIR, "{data_params,[^/]+}/{split_params,[^/]+}/{pwy_params,[^/]+}/method=matfac/{fit_params,[^/]+}/fold={fold,[0-9]+}.hdf"),
-        transformed_bson=path.join(SUP_TRANS_TEST_DIR, "{data_params,[^/]+}/{split_params,[^/]+}/{pwy_params,[^/]+}/method=matfac/{fit_params,[^/]+}/fold={fold,[0-9]+}.bson"),
+        transformed_hdf=path.join(SUP_TRANS_TEST_DIR, "{data_params,[^/]+}/{split_params,[^/]+}/{pwy_params,[^/]+}/method=matfac{mf_mode,[_a-z]*}/{fit_params,[^/]+}/fold={fold,[0-9]+}.hdf"),
+        transformed_bson=path.join(SUP_TRANS_TEST_DIR, "{data_params,[^/]+}/{split_params,[^/]+}/{pwy_params,[^/]+}/method=matfac{mf_mode,[_a-z]*}/{fit_params,[^/]+}/fold={fold,[0-9]+}.bson"),
     params:
         parsed_opts=lambda wc: wc["fit_params"].split("__"),
     resources:
@@ -466,6 +481,20 @@ rule sup_fit_classifier:
 
 
 ########### Fit "transforms" ############
+
+rule sup_fit_raw:
+    input:
+        src=path.join(PY_SCRIPT_DIR, "fit_raw.py"),
+        data_hdf=path.join(SUP_SPLIT_DIR, "{data_params}/{split_params}/fold={fold}__train.hdf"),
+    output:
+        fitted_hdf=path.join(SUP_FIT_TRANS_DIR, "{data_params,[^/]+}/{split_params,[^/]+}/{pwy_params,[^/]+}/method=raw/{fit_params,[^/]+}/fold={fold,[0-9]+}.hdf"),
+        transformed_hdf=path.join(SUP_TRANS_TRAIN_DIR, "{data_params}/{split_params}/{pwy_params}/method=raw/{fit_params}/fold={fold}.hdf")
+    params:
+        parsed_opts=lambda wc: [f"--{kv[0]} {kv[1]}" for kv in [kv.split("=") for kv in wc["fit_params"].split("__")]]
+    threads: 1 
+    shell:
+        "python {input.src} {input.data_hdf} {output.fitted_hdf} {output.transformed_hdf} {params.parsed_opts}"
+
 
 rule sup_fit_gsva:
     input:
@@ -542,9 +571,9 @@ rule sup_fit_matfac:
         data_hdf=path.join(SUP_SPLIT_DIR, "{data_params}/{split_params}/fold={fold}__train.hdf"),
         pwy_jsons=lambda wc: [path.join(PREP_PWY_DIR, f"{pwys}.json") for pwys in [x.split("=")[-1] for x in wc["pwy_params"].split("__")]]
     output:
-        fitted_bson=path.join(SUP_FIT_TRANS_DIR, "{data_params,[^/]+}/{split_params,[^/]+}/{pwy_params,[^/]+}/method=matfac/{fit_params,[^/]+}/fold={fold,[0-9]+}.bson"),
-        transformed_hdf=path.join(SUP_TRANS_TRAIN_DIR, "{data_params}/{split_params}/{pwy_params}/method=matfac/{fit_params}/fold={fold}.hdf"),
-        history_json=path.join(SUP_FIT_HIST_DIR, "{data_params}/{split_params}/{pwy_params}/method=matfac/{fit_params}/fold={fold}.json"),
+        fitted_bson=path.join(SUP_FIT_TRANS_DIR, "{data_params,[^/]+}/{split_params,[^/]+}/{pwy_params,[^/]+}/method=matfac{mf_mode,[_a-z]*}/{fit_params,[^/]+}/fold={fold,[0-9]+}.bson"),
+        transformed_hdf=path.join(SUP_TRANS_TRAIN_DIR, "{data_params}/{split_params}/{pwy_params}/method=matfac{mf_mode,[_a-z]*}/{fit_params}/fold={fold}.hdf"),
+        history_json=path.join(SUP_FIT_HIST_DIR, "{data_params}/{split_params}/{pwy_params}/method=matfac{mf_mode,[_a-z]*}/{fit_params}/fold={fold}.json"),
     params:
         parsed_opts=lambda wc: wc["fit_params"].split("__"),
         parsed_pwy_jsons=lambda wc: [f"{assay}_pwy_json="+ path.join(PREP_PWY_DIR, f"{pwys}.json") for assay, pwys in [x.split("=") for x in wc["pwy_params"].split("__")]]
@@ -821,7 +850,7 @@ rule sim_fit_matfac:
         parsed_pwy_jsons=lambda wc: [f"{assay}_pwy_json="+ path.join(PREP_PWY_DIR, f"{pwys}.json") for assay, pwys in [x.split("=") for x in wc["pwy_params"].split("__")]]
     resources:
         mem_mb=8000,
-    threads: lambda wc: len(get_cancer_types(wc)) 
+    threads: 1 #lambda wc: len(get_cancer_types(wc)) 
     shell:
         "julia --project=. {input.src} {input.data_hdf} {output.fitted_bson} {output.transformed_hdf} {params.parsed_opts} history_json={output.history_json} {params.parsed_pwy_jsons}"
 

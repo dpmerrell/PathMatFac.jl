@@ -179,6 +179,7 @@ function main(args)
                                   :max_epochs => 1000,
                                   :fit_reg_weight => "EB",
                                   :fit_joint => false,
+                                  :batch_method => "EM",
                                   :fsard_max_iter => 10,
                                   :fsard_max_A_iter => 1000,
                                   :fsard_term_rtol => 1e-3,

@@ -29,9 +29,12 @@ NICE_NAMES = {"gender": "Sex",
               "accuracy": "Accuracy",
               "concordance": "Concordance",
               "matfac": "PathMatFac",
+              "matfac_batch": "P.M.F. (batch)",
+              "matfac_nobatch": "P.M.F. (no batch)",
               "mofa": "MOFA+",
               "plier": "PLIER",
               "pca": "PCA",
+              "raw": "Raw data",
               "paradigm": "PARADIGM",
               "gsva": "GSVA",
               "mutation": "Mutation",
@@ -54,7 +57,7 @@ ALL_COLORS = ["red","blue","black","orange","yellow","grey","silver"]
 
 ALL_TARGETS = ["survival","ctype","pathologic_stage","hpv_status"]
 
-ALL_METHODS = ["matfac", "mofa", "plier", "pca", "paradigm", "gsva"]
+ALL_METHODS = ["raw", "matfac", "matfac_batch", "matfac_nobatch", "mofa", "plier", "pca", "paradigm", "gsva"]
 
 ALL_SCORES = {"survival": "concordance",
               "ctype": "accuracy",
