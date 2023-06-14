@@ -935,7 +935,7 @@ function fit!(model::PathMatFacModel; lr=1.0,
                                       abs_tol=1e-5,
                                       verbosity=1,
                                       print_prefix="",
-                                      capacity=capacity,
+                                      capacity=10^8,
                                       kwargs...)
   
     hist=nothing

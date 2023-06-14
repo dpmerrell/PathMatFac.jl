@@ -13,6 +13,9 @@
 # (2) fitting the matrix A on the matrix Y.
 # 
 
+export interpret
+
+
 mutable struct FeatureSetARDReg
     col_ranges::Tuple  # Tuple of UnitRanges -- encodes views
     A::Tuple           # Tuple of L_v x K matrices
@@ -288,6 +291,65 @@ function update_A!(reg::FeatureSetARDReg, Y::AbstractMatrix;
 
         reg.beta[:,cr] .= beta0.*(reg.v0 .+ transpose(A)*S)
     end
+end
+
+
+#####################################################
+# Make a user-friendly DataFrame of FSARD results
+#####################################################
+
+function interpret(reg::FeatureSetARDReg)
+
+    # We'll populate this dictionary and make
+    # a DataFrame from it
+    entries = [String[],
+               String[],
+               String[],
+               Float64[]
+              ]
+    cols = [:factor, :view, :gene_set, :score]
+
+    reg = cpu(reg)
+
+    K = size(reg.A[1], 2)
+    for k=1:K
+        new_factor = true 
+        for (v, A) in enumerate(reg.A)
+            new_view = true
+            
+            srt_idx = sortperm(A[:,k]; rev=true)
+            srt_a = A[srt_idx,k]
+            srt_names = reg.featureset_ids[v][srt_idx]
+
+            for l=1:size(A,1)
+                
+                if srt_a[l] > 0
+                    # Check if factor needs to be incremented
+                    if new_factor
+                        push!(entries[1], string(k))
+                        new_factor = false
+                    else
+                        push!(entries[1], "") 
+                    end
+
+                    # Check if view needs to be incremented
+                    if new_view
+                        push!(entries[2], string(v))
+                        new_view = false
+                    else
+                        push!(entries[2], "")
+                    end
+
+                    push!(entries[3], string(srt_names[l]))
+                    push!(entries[4], Float32(srt_a[l]))
+                else
+                    break
+                end
+            end
+        end
+    end
+
+    return DataFrame(entries, cols)
 end
 
 

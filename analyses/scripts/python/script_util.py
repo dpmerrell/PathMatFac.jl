@@ -24,6 +24,9 @@ NICE_NAMES = {"gender": "Sex",
               "missing": "Missing Data",
               "l1_fraction": "$L^1$ Fraction",
               "X_pwy_spearman_corr": "Pathway Activation Spearman",
+              "X_spansim": "$X$ span sim.",
+              "Y_spansim": "$Y$ span sim.",
+              "A_aucpr": "$A$ AUCPR",
               "roc_auc": "AUCROC",
               "mse": "MSE",
               "accuracy": "Accuracy",
@@ -41,7 +44,12 @@ NICE_NAMES = {"gender": "Sex",
               "cna": "CNA",
               "methylation": "Methylation",
               "rppa": "RPPA",
-              "mrnaseq": "RNA-seq"
+              "mrnaseq": "RNA-seq",
+              "EB": "Emp. Bayes",
+              "EM": "Exp. Max.",
+              "LSQ": "Least Sq.",
+              "theta_r2": "$R^2$",
+              "logdelta_spearman": "Spearman"
               }
 
 

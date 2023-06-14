@@ -430,9 +430,9 @@ function ChainRulesCore.rrule(gr::GroupRegularizer, X::AbstractMatrix)
 
     diffs = zero(X)
     for (w,cr) in zip(gr.group_weights, gr.group_idx)
-        X_view = view(X,:,cr)
+        X_view = view(X, :, cr)
         diffs_view = view(diffs,:,cr)
-        diffs_view .= w.*X_view
+        diffs_view .= w .* X_view
     end
     loss = Float32(0.5)*sum(diffs.*X)
 

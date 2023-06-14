@@ -282,7 +282,7 @@ matfac_tcga_runs:
 #            mrnaseq: ["oncogenic"]
 #            cna: ["positional"] 
 #        fit_params:
-#            configuration: ["fsard"] # TODO change to `fsard`
+#            configuration: ["basic"] # TODO change to `fsard`
 #            use_batch: ["true"]
 #            omic_types: ["mutation:methylation:mrnaseq:cna"]
 #            use_gpu: ["false"]
@@ -291,172 +291,74 @@ matfac_tcga_runs:
 #            max_epochs: [1000]
 #            fsard_max_iter: [1]
 #            fsard_v0: [0.8]
-    config_comparison_hpv:
+    time_test:
         n_reps: 1
         data_params:
-            kept_ctypes: ["HNSC:CESC:ESCA:STAD"]
+            kept_ctypes: ["HNSC", "HNSC:CESC:ESCA:STAD"]
             heldout_ctypes: [""]
         pathways: 
-            mutation: ["oncogenic:hallmark"]
-            methylation: ["oncogenic:hallmark"]
-            mrnaseq: ["oncogenic:hallmark"]
-            cna: ["positional"] 
-        fit_params:
-            configuration: ["basic", "fsard"]
-            use_batch: ["true"]
-            omic_types: ["mutation:methylation:mrnaseq:cna"]
-            use_gpu: ["false"]
-            var_filter: [0.05]
-            K: [50]
-            max_epochs: [1000]
-            fsard_max_iter: [1, 10]
-            fsard_v0: [0.5, 0.8, 0.95]
-    immunologic_hpv:
-        n_reps: 1
-        data_params:
-            kept_ctypes: ["HNSC:CESC:ESCA:STAD"]
-            heldout_ctypes: [""]
-        pathways: 
-            mutation: ["oncogenic:hallmark"]
-            methylation: ["immunologic"]
-            mrnaseq: ["immunologic"]
+            mutation: ["oncogenic"]
+            methylation: ["oncogenic"]
+            mrnaseq: ["oncogenic"]
             cna: ["positional"] 
         fit_params:
             configuration: ["fsard"]
             use_batch: ["true"]
             omic_types: ["mutation:methylation:mrnaseq:cna"]
             use_gpu: ["false"]
-            var_filter: [0.05]
-            K: [50]
+            var_filter: [0.025, 0.05]
+            K: [25]
             max_epochs: [1000]
             fsard_max_iter: [1]
             fsard_v0: [0.8]
-    K_sensitivity_hpv:
-        n_reps: 1
-        data_params:
-            kept_ctypes: ["HNSC:CESC:ESCA:STAD"]
-            heldout_ctypes: [""]
-        pathways: 
-            mutation: ["oncogenic:hallmark"]
-            methylation: ["oncogenic:hallmark"]
-            mrnaseq: ["oncogenic:hallmark"]
-            cna: ["positional"] 
-        fit_params:
-            configuration: ["fsard"] 
-            use_batch: ["true"]
-            omic_types: ["mutation:methylation:mrnaseq:cna"]
-            use_gpu: ["false"]
-            var_filter: [0.05]
-            K: [10, 25, 50, 75]
-            max_epochs: [1000]
-            fsard_max_iter: [1]
-            fsard_v0: [0.8]
-    batch_effect_runs_hpv:
-        n_reps: 1
-        data_params:
-            kept_ctypes: ["HNSC:CESC:ESCA:STAD"]
-            heldout_ctypes: [""]
-        pathways: 
-            mutation: ["oncogenic:hallmark"]
-            methylation: ["oncogenic:hallmark"]
-            mrnaseq: ["oncogenic:hallmark"]
-            cna: ["positional"] 
-        fit_params:
-            configuration: ["fsard"] 
-            use_batch: ["true", "false"]
-            omic_types: ["mutation:methylation:mrnaseq:cna"]
-            use_gpu: ["false"]
-            var_filter: [0.05]
-            K: [50]
-            max_epochs: [1000]
-            fsard_max_iter: [1]
-            fsard_v0: [0.8]
-    assay_types_hpv:
-        n_reps: 1
-        data_params:
-            kept_ctypes: ["HNSC:CESC:ESCA:STAD"]
-            heldout_ctypes: [""]
-        pathways: 
-            mutation: ["oncogenic:hallmark"]
-            methylation: ["oncogenic:hallmark"]
-            mrnaseq: ["oncogenic:hallmark"]
-            cna: ["positional"] 
-        fit_params:
-            configuration: ["fsard"] 
-            use_batch: ["true"]
-            omic_types: ["mrnaseq", "methylation", "cna", "mutation", "methylation:mrnaseq", "methylation:mrnaseq:cna", "mutation:methylation:mrnaseq:cna"]
-            use_gpu: ["false"]
-            var_filter: [0.05, 0.1]
-            K: [50]
-            max_epochs: [1000]
-            fsard_max_iter: [1]
-            fsard_v0: [0.8]
-#    # Pancancer GPU runs
-#    canonicalpwys_pancancer:
+#    config_comparison_hpv:
 #        n_reps: 1
 #        data_params:
-#            kept_ctypes: [""]
-#            heldout_ctypes: ["OV:GBM:LAML"]
-#        pathways: 
-#            mutation: ["canonicalpwys"]
-#            methylation: ["canonicalpwys"]
-#            mrnaseq: ["canonicalpwys"]
-#            cna: ["positional"] 
-#        fit_params:
-#            configuration: ["fsard"]
-#            use_batch: ["true"]
-#            omic_types: ["mutation:methylation:mrnaseq:cna"]
-#            use_gpu: ["true"]
-#            var_filter: [0.1]
-#            K: [50]
-#            max_epochs: [3000]
-#            fsard_max_iter: [1]
-#            fsard_v0: [0.8]
-#    celltype_oncogenic_pancancer:
-#        n_reps: 1
-#        data_params:
-#            kept_ctypes: [""]
-#            heldout_ctypes: ["OV:GBM:LAML"]
-#        pathways: 
-#            mutation: ["celltype:oncogenic:hallmark"]
-#            methylation: ["celltype:oncogenic:hallmark"]
-#            mrnaseq: ["celltype:oncogenic:hallmark"]
-#            cna: ["positional"] 
-#        fit_params:
-#            configuration: ["basic", "fsard"]
-#            use_batch: ["true"]
-#            omic_types: ["mutation:methylation:mrnaseq:cna"]
-#            use_gpu: ["true"]
-#            var_filter: [0.1]
-#            K: [50]
-#            max_epochs: [3000]
-#            fsard_max_iter: [1]
-#            fsard_v0: [0.8]
-#    config_comparison_pancancer:
-#        n_reps: 1
-#        data_params:
-#            kept_ctypes: [""]
-#            heldout_ctypes: ["OV:GBM:LAML"]
+#            kept_ctypes: ["HNSC:CESC:ESCA:STAD"]
+#            heldout_ctypes: [""]
 #        pathways: 
 #            mutation: ["oncogenic:hallmark"]
 #            methylation: ["oncogenic:hallmark"]
 #            mrnaseq: ["oncogenic:hallmark"]
 #            cna: ["positional"] 
 #        fit_params:
-#            configuration: ["basic", "fsard"]
+#            #configuration: ["basic", "fsard"]
+#            configuration: ["fsard"]
 #            use_batch: ["true"]
 #            omic_types: ["mutation:methylation:mrnaseq:cna"]
-#            use_gpu: ["true"]
-#            var_filter: [0.1]
-#            K: [50]
-#            max_epochs: [3000]
-#            fsard_max_iter: [1, 10]
-#            fsard_v0: [0.5, 0.8, 0.95]
-#    K_sensitivity_pancancer:
+#            use_gpu: ["false"]
+#            var_filter: [0.05]
+#            K: [25]
+#            max_epochs: [1000]
+#            #fsard_max_iter: [1, 10]
+#            fsard_max_iter: [1]
+#            #fsard_v0: [0.5, 0.8, 0.95]
+#            fsard_v0: [0.8]
+#    immunologic_hpv:
 #        n_reps: 1
 #        data_params:
-#            kept_ctypes: [""]
-#            heldout_ctypes: ["OV:GBM:LAML"]
+#            kept_ctypes: ["HNSC:CESC:ESCA:STAD"]
+#            heldout_ctypes: [""]
+#        pathways: 
+#            mutation: ["oncogenic:hallmark"]
+#            methylation: ["immunologic"]
+#            mrnaseq: ["immunologic"]
+#            cna: ["positional"] 
+#        fit_params:
+#            configuration: ["fsard"]
+#            use_batch: ["true"]
+#            omic_types: ["mutation:methylation:mrnaseq:cna"]
+#            use_gpu: ["false"]
+#            var_filter: [0.05]
+#            K: [50]
+#            max_epochs: [1000]
+#            fsard_max_iter: [1]
+#            fsard_v0: [0.8]
+#    K_sensitivity_hpv:
+#        n_reps: 1
+#        data_params:
+#            kept_ctypes: ["HNSC:CESC:ESCA:STAD"]
+#            heldout_ctypes: [""]
 #        pathways: 
 #            mutation: ["oncogenic:hallmark"]
 #            methylation: ["oncogenic:hallmark"]
@@ -466,17 +368,17 @@ matfac_tcga_runs:
 #            configuration: ["fsard"] 
 #            use_batch: ["true"]
 #            omic_types: ["mutation:methylation:mrnaseq:cna"]
-#            use_gpu: ["true"]
-#            var_filter: [0.1]
-#            K: [10, 20, 50]
-#            max_epochs: [3000]
+#            use_gpu: ["false"]
+#            var_filter: [0.05]
+#            K: [10, 25, 50, 75]
+#            max_epochs: [1000]
 #            fsard_max_iter: [1]
 #            fsard_v0: [0.8]
-#    batch_effect_runs_pancancer:
+#    batch_effect_runs_hpv:
 #        n_reps: 1
 #        data_params:
-#            kept_ctypes: [""]
-#            heldout_ctypes: ["OV:GBM:LAML"]
+#            kept_ctypes: ["HNSC:CESC:ESCA:STAD"]
+#            heldout_ctypes: [""]
 #        pathways: 
 #            mutation: ["oncogenic:hallmark"]
 #            methylation: ["oncogenic:hallmark"]
@@ -486,17 +388,17 @@ matfac_tcga_runs:
 #            configuration: ["fsard"] 
 #            use_batch: ["true", "false"]
 #            omic_types: ["mutation:methylation:mrnaseq:cna"]
-#            use_gpu: ["true"]
-#            var_filter: [1]
+#            use_gpu: ["false"]
+#            var_filter: [0.05]
 #            K: [50]
-#            max_epochs: [3000]
+#            max_epochs: [1000]
 #            fsard_max_iter: [1]
 #            fsard_v0: [0.8]
-#    assay_types_pancancer:
+#    assay_types_hpv:
 #        n_reps: 1
 #        data_params:
-#            kept_ctypes: [""]
-#            heldout_ctypes: ["OV:GBM:LAML"]
+#            kept_ctypes: ["HNSC:CESC:ESCA:STAD"]
+#            heldout_ctypes: [""]
 #        pathways: 
 #            mutation: ["oncogenic:hallmark"]
 #            methylation: ["oncogenic:hallmark"]
@@ -506,12 +408,133 @@ matfac_tcga_runs:
 #            configuration: ["fsard"] 
 #            use_batch: ["true"]
 #            omic_types: ["mrnaseq", "methylation", "cna", "mutation", "methylation:mrnaseq", "methylation:mrnaseq:cna", "mutation:methylation:mrnaseq:cna"]
-#            use_gpu: ["gpu"]
-#            var_filter: [0.1]
+#            use_gpu: ["false"]
+#            var_filter: [0.05, 0.1]
 #            K: [50]
-#            max_epochs: [3000]
+#            max_epochs: [1000]
 #            fsard_max_iter: [1]
 #            fsard_v0: [0.8]
+##    # Pancancer GPU runs
+##    canonicalpwys_pancancer:
+##        n_reps: 1
+##        data_params:
+##            kept_ctypes: [""]
+##            heldout_ctypes: ["OV:GBM:LAML"]
+##        pathways: 
+##            mutation: ["canonicalpwys"]
+##            methylation: ["canonicalpwys"]
+##            mrnaseq: ["canonicalpwys"]
+##            cna: ["positional"] 
+##        fit_params:
+##            configuration: ["fsard"]
+##            use_batch: ["true"]
+##            omic_types: ["mutation:methylation:mrnaseq:cna"]
+##            use_gpu: ["true"]
+##            var_filter: [0.1]
+##            K: [50]
+##            max_epochs: [3000]
+##            fsard_max_iter: [1]
+##            fsard_v0: [0.8]
+##    celltype_oncogenic_pancancer:
+##        n_reps: 1
+##        data_params:
+##            kept_ctypes: [""]
+##            heldout_ctypes: ["OV:GBM:LAML"]
+##        pathways: 
+##            mutation: ["celltype:oncogenic:hallmark"]
+##            methylation: ["celltype:oncogenic:hallmark"]
+##            mrnaseq: ["celltype:oncogenic:hallmark"]
+##            cna: ["positional"] 
+##        fit_params:
+##            configuration: ["basic", "fsard"]
+##            use_batch: ["true"]
+##            omic_types: ["mutation:methylation:mrnaseq:cna"]
+##            use_gpu: ["true"]
+##            var_filter: [0.1]
+##            K: [50]
+##            max_epochs: [3000]
+##            fsard_max_iter: [1]
+##            fsard_v0: [0.8]
+##    config_comparison_pancancer:
+##        n_reps: 1
+##        data_params:
+##            kept_ctypes: [""]
+##            heldout_ctypes: ["OV:GBM:LAML"]
+##        pathways: 
+##            mutation: ["oncogenic:hallmark"]
+##            methylation: ["oncogenic:hallmark"]
+##            mrnaseq: ["oncogenic:hallmark"]
+##            cna: ["positional"] 
+##        fit_params:
+##            configuration: ["basic", "fsard"]
+##            use_batch: ["true"]
+##            omic_types: ["mutation:methylation:mrnaseq:cna"]
+##            use_gpu: ["true"]
+##            var_filter: [0.1]
+##            K: [50]
+##            max_epochs: [3000]
+##            fsard_max_iter: [1, 10]
+##            fsard_v0: [0.5, 0.8, 0.95]
+##    K_sensitivity_pancancer:
+##        n_reps: 1
+##        data_params:
+##            kept_ctypes: [""]
+##            heldout_ctypes: ["OV:GBM:LAML"]
+##        pathways: 
+##            mutation: ["oncogenic:hallmark"]
+##            methylation: ["oncogenic:hallmark"]
+##            mrnaseq: ["oncogenic:hallmark"]
+##            cna: ["positional"] 
+##        fit_params:
+##            configuration: ["fsard"] 
+##            use_batch: ["true"]
+##            omic_types: ["mutation:methylation:mrnaseq:cna"]
+##            use_gpu: ["true"]
+##            var_filter: [0.1]
+##            K: [10, 20, 50]
+##            max_epochs: [3000]
+##            fsard_max_iter: [1]
+##            fsard_v0: [0.8]
+##    batch_effect_runs_pancancer:
+##        n_reps: 1
+##        data_params:
+##            kept_ctypes: [""]
+##            heldout_ctypes: ["OV:GBM:LAML"]
+##        pathways: 
+##            mutation: ["oncogenic:hallmark"]
+##            methylation: ["oncogenic:hallmark"]
+##            mrnaseq: ["oncogenic:hallmark"]
+##            cna: ["positional"] 
+##        fit_params:
+##            configuration: ["fsard"] 
+##            use_batch: ["true", "false"]
+##            omic_types: ["mutation:methylation:mrnaseq:cna"]
+##            use_gpu: ["true"]
+##            var_filter: [1]
+##            K: [50]
+##            max_epochs: [3000]
+##            fsard_max_iter: [1]
+##            fsard_v0: [0.8]
+##    assay_types_pancancer:
+##        n_reps: 1
+##        data_params:
+##            kept_ctypes: [""]
+##            heldout_ctypes: ["OV:GBM:LAML"]
+##        pathways: 
+##            mutation: ["oncogenic:hallmark"]
+##            methylation: ["oncogenic:hallmark"]
+##            mrnaseq: ["oncogenic:hallmark"]
+##            cna: ["positional"] 
+##        fit_params:
+##            configuration: ["fsard"] 
+##            use_batch: ["true"]
+##            omic_types: ["mrnaseq", "methylation", "cna", "mutation", "methylation:mrnaseq", "methylation:mrnaseq:cna", "mutation:methylation:mrnaseq:cna"]
+##            use_gpu: ["gpu"]
+##            var_filter: [0.1]
+##            K: [50]
+##            max_epochs: [3000]
+##            fsard_max_iter: [1]
+##            fsard_v0: [0.8]
  
 
 supervised_folds: 5
@@ -636,6 +659,5 @@ supervised_tasks:
         targets: ["pathologic_stage", "hpv_status", "survival", "ctype"] 
         tasks: ["reg", "cls", "surv", "cls"]
         groupby: ["batch", "batch", "batch", "batch"]
-    
         
  

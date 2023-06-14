@@ -214,6 +214,7 @@ function main(args)
     srt_idx = sortperm(sample_conditions)
     sample_conditions = sample_conditions[srt_idx]
     sample_ids = sample_ids[srt_idx]
+    target = target[srt_idx]
     D = D[srt_idx,:]
   
     # Some targets are matrices, others are vectors. 
