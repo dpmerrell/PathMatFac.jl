@@ -324,19 +324,26 @@ function assign_values!(tup1, tup2)
 end
 
 function theta_delta_em(model::MF.MatFacModel, delta2::Tuple, sigma2::AbstractVector, data::AbstractMatrix; 
-                        capacity=10^8, batch_em_max_iter=100, batch_em_rtol=1e-8, verbosity=1, print_prefix="", history=nothing)
+                        update_priors=true, capacity=10^8, batch_em_max_iter=100, batch_em_rtol=1e-8, verbosity=1, print_prefix="", history=nothing)
 
     theta = model.col_transform.layers[4].theta
     theta_lsq = deepcopy(theta.values)
     theta_old = deepcopy(theta.values)
     batch_sizes = ba_map(d->isfinite.(d), theta, data)
-        
+       
+    theta_mean = nothing
+    theta_var = nothing
+    alpha = nothing
+    beta = nothing
+ 
     diffs = MutableLinkedList() 
     for iter=1:batch_em_max_iter
     
-        # Update priors  
-        theta_mean, theta_var = theta_mom(theta.values)
-        alpha, beta = delta2_mom(delta2)
+        # Update priors 
+        if update_priors | (iter == 1)  
+            theta_mean, theta_var = theta_mom(theta.values)
+            alpha, beta = delta2_mom(delta2)
+        end
 
         # Update batch shift (theta)
         assign_values!(theta_old, theta.values)
@@ -372,7 +379,7 @@ function init_batch_effects!(model::PathMatFacModel; capacity=10^8,
                                                      max_epochs=5000,
                                                      lr_regress=0.25,
                                                      lr_mu=0.1,
-                                                     batch_em=true,
+                                                     batch_method="EM",
                                                      batch_em_rtol=1e-8,
                                                      batch_em_max_iter=100,
                                                      verbosity=1, print_prefix="",
@@ -456,13 +463,24 @@ function init_batch_effects!(model::PathMatFacModel; capacity=10^8,
 
     # Update the estimated batch parameters in an EB fashion
     theta_values = model.matfac.col_transform.layers[4].theta.values
-    if batch_em
+    if batch_method == "EM"
         v_println("Batch effect EM procedure:"; prefix=print_prefix, verbosity=verbosity)
         theta_values, delta2_values = theta_delta_em(model.matfac, delta2_values, col_vars, model.data;
+                                                     update_priors=true,
                                                      capacity=capacity,
                                                      batch_em_max_iter=batch_em_max_iter,
                                                      batch_em_rtol=batch_em_rtol,
                                                      print_prefix=n_pref, verbosity=verbosity)
+    elseif batch_method == "EB"
+        v_println("Batch effect EB procedure:"; prefix=print_prefix, verbosity=verbosity)
+        theta_values, delta2_values = theta_delta_em(model.matfac, delta2_values, col_vars, model.data;
+                                                     update_priors=false,
+                                                     capacity=capacity,
+                                                     batch_em_max_iter=batch_em_max_iter,
+                                                     batch_em_rtol=batch_em_rtol,
+                                                     print_prefix=n_pref, verbosity=verbosity)
+    else
+        v_println("Using least-squares batch effect estimates"; prefix=print_prefix, verbosity=verbosity)
     end
 
     # Set the model's parameters to the fitted values
@@ -543,7 +561,8 @@ end
 
 ################################
 # Procedures for simple models
-function basic_fit!(model::PathMatFacModel; fit_batch=false, 
+function basic_fit!(model::PathMatFacModel; fit_batch=false,
+                                            batch_method="EM", 
                                             fit_mu=false, fit_logsigma=false,
                                             reweight_losses=false,
                                             init_factors=false,
@@ -579,7 +598,8 @@ function basic_fit!(model::PathMatFacModel; fit_batch=false,
         # Fit the batch shift parameters.
         v_println("Fitting batch parameters..."; verbosity=verbosity,
                                                  prefix=print_prefix)
-        init_batch_effects!(model; capacity=capacity, 
+        init_batch_effects!(model; batch_method=batch_method,
+                                   capacity=capacity, 
                                    max_epochs=max_epochs,
                                    verbosity=verbosity,
                                    print_prefix=n_prefix,
@@ -733,6 +753,7 @@ function fit_ard!(model::PathMatFacModel; max_epochs=1000, capacity=10^8,
                                           history=nothing,
                                           lr=1.0, lr_regress=1.0, lr_theta=1.0,
                                           svd_rotate=true,
+                                          batch_method="EM",
                                           kwargs...)
 
     n_pref = string(print_prefix, "    ")
@@ -759,6 +780,7 @@ function fit_ard!(model::PathMatFacModel; max_epochs=1000, capacity=10^8,
                       lr_regress=lr_regress, lr_theta=lr_theta,
                       verbosity=verbosity,
                       print_prefix=n_pref,
+                      batch_method=batch_method,
                       max_epochs=max_epochs,
                       capacity=capacity,
                       history=history,

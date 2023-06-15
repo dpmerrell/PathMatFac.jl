@@ -412,7 +412,9 @@ function reweight_eb!(gr::GroupRegularizer, X::AbstractMatrix; mixture_p=Float32
         F = svd(X_v)
         s = cpu(F.S)
         v_max = s[1]^2
-        push!(new_weights, fill(Float32(mixture_p/v_max), K))
+        w = similar(X, K)
+        w .= mixture_p / v_max
+        push!(new_weights, w)
     end
     gr.group_weights = Tuple(new_weights)
 end
@@ -428,18 +430,8 @@ end
 
 function ChainRulesCore.rrule(gr::GroupRegularizer, X::AbstractMatrix)
 
-    println("X")
-    println(typeof(X))
-    println(size(X))
-
     diffs = zero(X)
-    println("DIFFS")
-    println(typeof(diffs))
-    println(size(diffs))
     for (w,cr) in zip(gr.group_weights, gr.group_idx)
-        println("CR")
-        println(typeof(cr))
-        println(cr)
         X_view = view(X, :, cr)
         diffs_view = view(diffs,:,cr)
         diffs_view .= w .* X_view

@@ -26,7 +26,7 @@ def score_batch_param(true_values, fitted_values, score_fn):
 def span_similarity(Y_true, Y_fitted):
     # Compute the numerator
     YtYf = np.dot(Y_true, Y_fitted.transpose())
-    numerator = np.sum(YtYf)
+    numerator = np.sum(YtYf*YtYf)
 
     # Compute the denominator
     ut, st, vht = np.linalg.svd(Y_true)
@@ -185,17 +185,17 @@ def compute_scores(true_hdf, fitted_hdf):
             Y_true = f_true["Y"][:,:].transpose()
             Y_fitted = f_fitted["Y"][:,:].transpose()
             scores["Y_spansim"] = span_similarity(Y_true, Y_fitted)
-            spansim_null, spansim_p_value = spansim_pvalue(Y_true, Y_fitted, scores["Y_spansim"])
-            scores["Y_spansim_null"] = spansim_null
-            scores["Y_spansim_pvalue"] = spansim_p_value
+            #spansim_null, spansim_p_value = spansim_pvalue(Y_true, Y_fitted, scores["Y_spansim"])
+            #scores["Y_spansim_null"] = spansim_null
+            #scores["Y_spansim_pvalue"] = spansim_p_value
 
             print("Scoring X...")
             X_true = f_true["X"][:,:].transpose()
             X_fitted = f_fitted["X"][:,:].transpose()
             scores["X_spansim"] = span_similarity(X_true, X_fitted)
-            spansim_null, spansim_p_value = spansim_pvalue(X_true, X_fitted, scores["X_spansim"])
-            scores["X_spansim_null"] = spansim_null
-            scores["X_spansim_pvalue"] = spansim_p_value
+            #spansim_null, spansim_p_value = spansim_pvalue(X_true, X_fitted, scores["X_spansim"])
+            #scores["X_spansim_null"] = spansim_null
+            #scores["X_spansim_pvalue"] = spansim_p_value
 
             if ("fsard" in f_true.keys()) and ("fsard" in f_fitted.keys()): 
                 print("Scoring A...")

@@ -41,107 +41,107 @@ matfac_simulation_study:
 #            fsard_v0: [0.9]
 #            rel_tol: [0.00001]
 #            abs_tol: [0.0001]
-    # Questions:
-    # * How does factor recovery vary with problem size?
-    # * How many iterations are necessary for a useful matrix factorization? How does this vary with problem size? 
-    # * How does time/iteration vary with problem size?
-    size_sims_cpu:
-        n_reps: 5
-        data_params:
-            kept_ctypes: ["HNSC", "HNSC:CESC:ESCA:STAD", "HNSC:CESC:ESCA:STAD:BRCA:LUSC"]
-            heldout_ctypes: [""]
-        pathways: 
-            mutation: ["oncogenic:hallmark"]
-            methylation: ["oncogenic:hallmark"]
-            mrnaseq: ["oncogenic:hallmark"]
-            cna: ["positional"] 
-        sim_params:
-            configuration: ["fsard"]
-            use_batch: ["true"]
-            var_filter: [0.0125, 0.025, 0.05]
-            K: [25]
-            S_add_corruption: [0.05]
-            S_remove_corruption: [0.05]
-            normal_noise: [0.1]
-            missingness: [0.1]
-            A_density: [0.1]
-            between_batch_std: [0.1]
-        fit_params:
-            configuration: ["fsard"]
-            use_batch: ["true"]
-            use_gpu: ["false"]
-            var_filter: [1.0]
-            K: [25]
-            max_epochs: [500, 1000, 2000]
-            fsard_max_iter: [1]
-            fsard_v0: [0.8]
-    # Questions:
-    # * How sensitive is FSARD to misspecified K?
-    # * Does ARD-regularization "prune away" spurious factors?
-    K_robustness_sims_cpu:
-        n_reps: 5
-        data_params:
-            kept_ctypes: ["HNSC:CESC:ESCA:STAD"]
-            heldout_ctypes: [""]
-        pathways: 
-            mutation: ["oncogenic:hallmark"]
-            methylation: ["oncogenic:hallmark"]
-            mrnaseq: ["oncogenic:hallmark"]
-            cna: ["positional"] 
-        sim_params:
-            configuration: ["fsard"]
-            use_batch: ["true"]
-            var_filter: [0.025]
-            K: [10, 25, 50]
-            S_add_corruption: [0.05]
-            S_remove_corruption: [0.05]
-            normal_noise: [0.1]
-            missingness: [0.1]
-            A_density: [0.1]
-            between_batch_std: [0.1]
-        fit_params:
-            configuration: ["fsard"]
-            use_batch: ["true"]
-            use_gpu: ["false"]
-            var_filter: [1.0]
-            K: [10, 25, 50]
-            max_epochs: [1000]
-            fsard_max_iter: [1]
-            fsard_v0: [0.8]
-    # Questions:
-    #     * How robust is the model to noisy data? 
-    noise_robustness_sims:
-        n_reps: 5
-        data_params:
-            kept_ctypes: ["HNSC:CESC:ESCA:STAD"]
-            heldout_ctypes: [""]
-        pathways: 
-            mutation: ["oncogenic:hallmark"]
-            methylation: ["oncogenic:hallmark"]
-            mrnaseq: ["oncogenic:hallmark"]
-            cna: ["positional"] 
-        sim_params:
-            configuration: ["fsard"]
-            use_batch: ["true"]
-            var_filter: [0.025]
-            K: [25]
-            S_add_corruption: [0.05]
-            S_remove_corruption: [0.05]
-            normal_noise: [0.1, 0.25, 0.5]
-            missingness: [0.1]
-            A_density: [0.1]
-            between_batch_std: [0.1]
-        fit_params:
-            configuration: ["fsard"]
-            use_batch: ["true"]
-            use_gpu: ["false"]
-            var_filter: [1.0]
-            K: [25]
-            max_epochs: [1000]
-            fsard_max_iter: [1]
-            fsard_v0: [0.8]
-    # Questions:
-    #     * How robust is the model to missing data? 
+#    # Questions:
+#    # * How does factor recovery vary with problem size?
+#    # * How many iterations are necessary for a useful matrix factorization? How does this vary with problem size? 
+#    # * How does time/iteration vary with problem size?
+#    size_sims_cpu:
+#        n_reps: 5
+#        data_params:
+#            kept_ctypes: ["CHOL","ESCA", "HNSC", "HNSC:CESC:ESCA:STAD", "HNSC:CESC:ESCA:STAD:BRCA:LUSC"]
+#            heldout_ctypes: [""]
+#        pathways: 
+#            mutation: ["oncogenic:hallmark"]
+#            methylation: ["oncogenic:hallmark"]
+#            mrnaseq: ["oncogenic:hallmark"]
+#            cna: ["positional"] 
+#        sim_params:
+#            configuration: ["fsard"]
+#            use_batch: ["true"]
+#            var_filter: [0.0125, 0.025, 0.05]
+#            K: [25]
+#            S_add_corruption: [0.05]
+#            S_remove_corruption: [0.05]
+#            normal_noise: [0.1]
+#            missingness: [0.1]
+#            A_density: [0.1]
+#            between_batch_std: [0.1]
+#        fit_params:
+#            configuration: ["fsard"]
+#            use_batch: ["true"]
+#            use_gpu: ["false"]
+#            var_filter: [1.0]
+#            K: [25]
+#            max_epochs: [1000]
+#            fsard_max_iter: [1]
+#            fsard_v0: [0.8]
+#    # Questions:
+#    # * How sensitive is FSARD to misspecified K?
+#    # * Does ARD-regularization "prune away" spurious factors?
+#    K_robustness_sims_cpu:
+#        n_reps: 5
+#        data_params:
+#            kept_ctypes: ["HNSC:CESC:ESCA:STAD"]
+#            heldout_ctypes: [""]
+#        pathways: 
+#            mutation: ["oncogenic:hallmark"]
+#            methylation: ["oncogenic:hallmark"]
+#            mrnaseq: ["oncogenic:hallmark"]
+#            cna: ["positional"] 
+#        sim_params:
+#            configuration: ["fsard"]
+#            use_batch: ["true"]
+#            var_filter: [0.025]
+#            K: [10, 25, 50]
+#            S_add_corruption: [0.05]
+#            S_remove_corruption: [0.05]
+#            normal_noise: [0.1]
+#            missingness: [0.1]
+#            A_density: [0.1]
+#            between_batch_std: [0.1]
+#        fit_params:
+#            configuration: ["fsard"]
+#            use_batch: ["true"]
+#            use_gpu: ["false"]
+#            var_filter: [1.0]
+#            K: [10, 25, 50]
+#            max_epochs: [1000]
+#            fsard_max_iter: [1]
+#            fsard_v0: [0.8]
+#    # Questions:
+#    #     * How robust is the model to noisy data? 
+#    noise_robustness_sims:
+#        n_reps: 5
+#        data_params:
+#            kept_ctypes: ["HNSC:CESC:ESCA:STAD"]
+#            heldout_ctypes: [""]
+#        pathways: 
+#            mutation: ["oncogenic:hallmark"]
+#            methylation: ["oncogenic:hallmark"]
+#            mrnaseq: ["oncogenic:hallmark"]
+#            cna: ["positional"] 
+#        sim_params:
+#            configuration: ["fsard"]
+#            use_batch: ["true"]
+#            var_filter: [0.025]
+#            K: [25]
+#            S_add_corruption: [0.05]
+#            S_remove_corruption: [0.05]
+#            normal_noise: [0.1, 0.25, 0.5]
+#            missingness: [0.1]
+#            A_density: [0.1]
+#            between_batch_std: [0.1]
+#        fit_params:
+#            configuration: ["fsard"]
+#            use_batch: ["true"]
+#            use_gpu: ["false"]
+#            var_filter: [1.0]
+#            K: [25]
+#            max_epochs: [1000]
+#            fsard_max_iter: [1]
+#            fsard_v0: [0.8]
+#    # Questions:
+#    #     * How robust is the model to missing data? 
     missingness_robustness_sims:
         n_reps: 5
         data_params:
@@ -160,7 +160,7 @@ matfac_simulation_study:
             S_add_corruption: [0.05]
             S_remove_corruption: [0.05]
             normal_noise: [0.1]
-            missingness: [0.1, 0.25, 0.5]
+            missingness: [0.0, 0.125, 0.25, 0.375, 0.5]
             A_density: [0.1]
             between_batch_std: [0.1]
         fit_params:
@@ -173,7 +173,6 @@ matfac_simulation_study:
             fsard_max_iter: [1]
             fsard_v0: [0.8]
     # Questions:
-    #     * Does modeling batch effect make a difference?
     #     * How well does the model estimate batch effects? 
     batch_effect_sims:
         n_reps: 5
@@ -195,77 +194,79 @@ matfac_simulation_study:
             normal_noise: [0.1]
             missingness: [0.1]
             A_density: [0.1]
-            between_batch_std: [0.1, 0.5, 1.0]
+            between_batch_std: [0.125, 0.5, 1.0]
+            within_batch_std: [0.125, 0.5, 1.0]
         fit_params:
             configuration: ["fsard"]
-            use_batch: ["true", "false"]
+            use_batch: ["true"]
             use_gpu: ["false"]
             var_filter: [1.0]
+            batch_method: ["EM","EB","LSQ"]
             K: [25]
-            max_epochs: [1000]
+            max_epochs: [10]
             fsard_max_iter: [1]
             fsard_v0: [0.8]
-    fsard_sims_cpu:
-        n_reps: 5
-        data_params:
-            kept_ctypes: ["HNSC:CESC:ESCA:STAD"]
-            heldout_ctypes: [""]
-        pathways: 
-            mutation: ["oncogenic:hallmark"]
-            methylation: ["oncogenic:hallmark"]
-            mrnaseq: ["oncogenic:hallmark"]
-            cna: ["positional"] 
-        sim_params:
-            configuration: ["fsard"]
-            use_batch: ["true"]
-            var_filter: [0.025]
-            K: [25]
-            S_add_corruption: [0.05]
-            S_remove_corruption: [0.05]
-            normal_noise: [0.1]
-            missingness: [0.1]
-            A_density: [0.1]
-            between_batch_std: [0.1]
-        fit_params:
-            configuration: ["fsard"]
-            use_batch: ["true"]
-            use_gpu: ["false"]
-            var_filter: [1.0]
-            K: [25]
-            max_epochs: [1000]
-            fsard_max_iter: [1, 2, 10]
-            fsard_v0: [0.5, 0.8, 0.95]
-            fsard_term_rtol: ["1e-12"]
-    geneset_robustness_sims_cpu:
-        n_reps: 5
-        data_params:
-            kept_ctypes: ["HNSC:CESC:ESCA:STAD"]
-            heldout_ctypes: [""]
-        pathways: 
-            mutation: ["oncogenic:hallmark"]
-            methylation: ["oncogenic:hallmark"]
-            mrnaseq: ["oncogenic:hallmark"]
-            cna: ["positional"] 
-        sim_params:
-            configuration: ["fsard"]
-            use_batch: ["true"]
-            var_filter: [0.025]
-            K: [25]
-            S_add_corruption: [0.05, 0.25, 0.5]
-            S_remove_corruption: [0.05, 0.25, 0.5]
-            normal_noise: [0.1]
-            missingness: [0.1]
-            A_density: [0.1]
-            between_batch_std: [0.1]
-        fit_params:
-            configuration: ["fsard"]
-            use_batch: ["true"]
-            use_gpu: ["false"]
-            var_filter: [1.0]
-            K: [25]
-            max_epochs: [1000]
-            fsard_max_iter: [3]
-            fsard_v0: [0.8]
+#    fsard_sims_cpu:
+#        n_reps: 5
+#        data_params:
+#            kept_ctypes: ["HNSC:CESC:ESCA:STAD"]
+#            heldout_ctypes: [""]
+#        pathways: 
+#            mutation: ["oncogenic:hallmark"]
+#            methylation: ["oncogenic:hallmark"]
+#            mrnaseq: ["oncogenic:hallmark"]
+#            cna: ["positional"] 
+#        sim_params:
+#            configuration: ["fsard"]
+#            use_batch: ["true"]
+#            var_filter: [0.025]
+#            K: [25]
+#            S_add_corruption: [0.05]
+#            S_remove_corruption: [0.05]
+#            normal_noise: [0.1]
+#            missingness: [0.1]
+#            A_density: [0.1]
+#            between_batch_std: [0.1]
+#        fit_params:
+#            configuration: ["fsard"]
+#            use_batch: ["true"]
+#            use_gpu: ["false"]
+#            var_filter: [1.0]
+#            K: [25]
+#            max_epochs: [1000]
+#            fsard_max_iter: [1, 2, 10]
+#            fsard_v0: [0.5, 0.8, 0.95]
+#            fsard_term_rtol: ["1e-12"]
+#    geneset_robustness_sims_cpu:
+#        n_reps: 5
+#        data_params:
+#            kept_ctypes: ["HNSC:CESC:ESCA:STAD"]
+#            heldout_ctypes: [""]
+#        pathways: 
+#            mutation: ["oncogenic:hallmark"]
+#            methylation: ["oncogenic:hallmark"]
+#            mrnaseq: ["oncogenic:hallmark"]
+#            cna: ["positional"] 
+#        sim_params:
+#            configuration: ["fsard"]
+#            use_batch: ["true"]
+#            var_filter: [0.025]
+#            K: [25]
+#            S_add_corruption: [0.05, 0.25, 0.5]
+#            S_remove_corruption: [0.05, 0.25, 0.5]
+#            normal_noise: [0.1]
+#            missingness: [0.1]
+#            A_density: [0.1]
+#            between_batch_std: [0.1]
+#        fit_params:
+#            configuration: ["fsard"]
+#            use_batch: ["true"]
+#            use_gpu: ["false"]
+#            var_filter: [1.0]
+#            K: [25]
+#            max_epochs: [1000]
+#            fsard_max_iter: [3]
+#            fsard_v0: [0.8]
 
 
 
@@ -551,7 +552,7 @@ supervised_tasks:
         method_params:
             matfac:
                 configuration: ["fsard"] 
-                use_batch: ["true"]
+                use_batch: ["false"]
                 omic_types: ["mutation:methylation:mrnaseq:cna"]
                 use_gpu: ["true"]
                 var_filter: [0.05]
@@ -562,40 +563,13 @@ supervised_tasks:
             pca:
                omic_types: ["mutation:methylation:mrnaseq:cna"]
                var_filter: [0.05]
+#            raw:
+#               omic_types: ["mutation:methylation:mrnaseq:cna"]
+#               var_filter: [0.05]
             mofa:
                 omic_types: ["mutation:methylation:mrnaseq:cna"]
                 var_filter: [0.05]
                 output_dim: [25]
-        targets: ["pathologic_stage", "hpv_status", "survival", "ctype"] 
-        tasks: ["reg", "cls", "surv", "cls"]
-        groupby: ["batch", "batch", "batch", "batch"]
-    multiomic_predictions_hpv_nobatch:
-        data_params:
-            kept_ctypes: ["HNSC:CESC:ESCA:STAD"]
-            heldout_ctypes: [""]
-        pathway_params:
-            mutation: ["oncogenic:hallmark"]
-            methylation: ["oncogenic:hallmark"]
-            mrnaseq: ["oncogenic:hallmark"]
-            cna: ["positional"] 
-        method_params:
-            matfac:
-                configuration: ["fsard"] 
-                use_batch: ["false"]
-                omic_types: ["mutation:methylation:mrnaseq:cna"]
-                use_gpu: ["true"]
-                var_filter: [0.05]
-                K: [20]
-                max_epochs: [1000]
-                fsard_max_iter: [1]
-                fsard_v0: [0.8]
-            pca:
-                omic_types: ["mutation:methylation:mrnaseq:cna"]
-                var_filter: [0.05]
-            mofa:
-                omic_types: ["mutation:methylation:mrnaseq:cna"]
-                var_filter: [0.05]
-                output_dim: [20]
         targets: ["pathologic_stage", "hpv_status", "survival", "ctype"] 
         tasks: ["reg", "cls", "surv", "cls"]
         groupby: ["batch", "batch", "batch", "batch"]
@@ -609,17 +583,30 @@ supervised_tasks:
             mrnaseq: ["oncogenic:hallmark:positional"]
             cna: ["positional"] 
         method_params:
-            matfac:
+            matfac_batch:
                 configuration: ["fsard"] 
                 use_batch: ["true"]
                 omic_types: ["mrnaseq"]
-                use_gpu: ["true"]
+                use_gpu: ["false"]
+                var_filter: [0.2]
+                K: [25]
+                max_epochs: [1000]
+                fsard_max_iter: [1]
+                fsard_v0: [0.8]
+            matfac_nobatch:
+                configuration: ["fsard"] 
+                use_batch: ["false"]
+                omic_types: ["mrnaseq"]
+                use_gpu: ["false"]
                 var_filter: [0.2]
                 K: [25]
                 max_epochs: [1000]
                 fsard_max_iter: [1]
                 fsard_v0: [0.8]
             pca:
+                omic_types: ["mrnaseq"]
+                var_filter: [0.2]
+            raw:
                 omic_types: ["mrnaseq"]
                 var_filter: [0.2]
             mofa:
@@ -633,36 +620,6 @@ supervised_tasks:
             gsva:
                 omic_type: ["mrnaseq"]
                 var_filter: [0.2]
-        targets: ["pathologic_stage", "hpv_status", "survival", "ctype"] 
-        tasks: ["reg", "cls", "surv", "cls"]
-        groupby: ["batch", "batch", "batch", "batch"]
-    mrnaseq_methyl_predictions_hpv:
-        data_params:
-            kept_ctypes: ["HNSC:CESC:ESCA:STAD"]
-            heldout_ctypes: [""]
-        pathway_params:
-            mutation: ["oncogenic:hallmark"]
-            methylation: ["oncogenic:hallmark"]
-            mrnaseq: ["oncogenic:hallmark"]
-            cna: ["positional"] 
-        method_params:
-            matfac:
-                configuration: ["fsard"] 
-                use_batch: ["true"]
-                omic_types: ["methylation:mrnaseq"]
-                use_gpu: ["true"]
-                var_filter: [0.1]
-                K: [25]
-                max_epochs: [1000]
-                fsard_max_iter: [1]
-                fsard_v0: [0.8]
-            pca:
-                omic_types: ["methylation:mrnaseq"]
-                var_filter: [0.1]
-            mofa:
-                omic_types: ["methylation:mrnaseq"]
-                var_filter: [0.1]
-                output_dim: [25]
         targets: ["pathologic_stage", "hpv_status", "survival", "ctype"] 
         tasks: ["reg", "cls", "surv", "cls"]
         groupby: ["batch", "batch", "batch", "batch"]
@@ -689,6 +646,9 @@ supervised_tasks:
             pca:
                 omic_types: ["mrnaseq:cna"]
                 var_filter: [0.1]
+            raw:
+                omic_types: ["mrnaseq:cna"]
+                var_filter: [0.1]
             mofa:
                 omic_types: ["mrnaseq:cna"]
                 var_filter: [0.1]
@@ -699,52 +659,5 @@ supervised_tasks:
         targets: ["pathologic_stage", "hpv_status", "survival", "ctype"] 
         tasks: ["reg", "cls", "surv", "cls"]
         groupby: ["batch", "batch", "batch", "batch"]
-    batch_effect_test_hpv:
-        data_params:
-            kept_ctypes: ["HNSC:CESC:ESCA:STAD"]
-            heldout_ctypes: [""]
-        pathway_params:
-            mutation: ["oncogenic:hallmark"]
-            methylation: ["oncogenic:hallmark"]
-            mrnaseq: ["oncogenic:hallmark"]
-            cna: ["positional"] 
-        method_params:
-            matfac:
-                configuration: ["fsard"] 
-                use_batch: ["true","false"]
-                omic_types: ["mutation:methylation:mrnaseq:cna"]
-                use_gpu: ["false"]
-                var_filter: [0.05]
-                K: [25]
-                max_epochs: [1000]
-                fsard_max_iter: [1]
-                fsard_v0: [0.8]
-        targets: ["pathologic_stage", "hpv_status", "survival", "ctype"] 
-        tasks: ["reg", "cls", "surv", "cls"]
-        groupby: ["batch", "batch", "batch", "batch"]
-    basic_test:
-        data_params:
-            kept_ctypes: ["HNSC:CESC"]
-            heldout_ctypes: [""]
-        pathway_params:
-            mutation: ["oncogenic:hallmark"]
-            methylation: ["oncogenic:hallmark"]
-            mrnaseq: ["oncogenic:hallmark"]
-            cna: ["positional"] 
-        method_params:
-            matfac:
-                configuration: ["basic", "fsard"] 
-                use_batch: ["false"]
-                omic_types: ["mutation:methylation:mrnaseq:cna"]
-                use_gpu: ["false"]
-                var_filter: [0.05]
-                K: [30]
-                max_epochs: [1000]
-                fsard_max_iter: [1]
-                fsard_v0: [0.8]
-        targets: ["hpv_status"] 
-        tasks: ["cls"]
-        groupby: ["batch"]
-    
         
  
