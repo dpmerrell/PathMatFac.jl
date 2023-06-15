@@ -298,7 +298,12 @@ end
 # Make a user-friendly DataFrame of FSARD results
 #####################################################
 
-function interpret(reg::FeatureSetARDReg)
+function interpret(reg::FeatureSetARDReg; view_names=nothing)
+
+    n_views = length(reg.A)
+    if view_names == nothing
+        view_names = collect(1:n_views)
+    end
 
     # We'll populate this dictionary and make
     # a DataFrame from it
@@ -334,7 +339,7 @@ function interpret(reg::FeatureSetARDReg)
 
                     # Check if view needs to be incremented
                     if new_view
-                        push!(entries[2], string(v))
+                        push!(entries[2], string(view_names[v]))
                         new_view = false
                     else
                         push!(entries[2], "")

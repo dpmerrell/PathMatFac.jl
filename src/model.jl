@@ -221,7 +221,7 @@ function Base.:(==)(a::T, b::T) where T <: PMTypes
     return true
 end
 
-function interpret(model::PathMatFacModel)
-    return interpret(model.matfac.Y_reg)
+function interpret(model::PathMatFacModel; view_names=nothing)
+    return interpret(model.matfac.Y_reg; view_names=view_names)
 end
 
