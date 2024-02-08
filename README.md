@@ -1,4 +1,4 @@
-# PathwayMultiomics.jl
+# PathMatFac.jl
 
 A matrix factorization model for multi-omic data and biological pathways&mdash;implemented in Julia.
 
@@ -9,7 +9,7 @@ Note: this code is under development and subject to change!
 Install in the usual Julia way:
 
 ```
-julia> using Pkg; Pkg.add(url="https://github.com/dpmerrell/PathwayMultiomics.jl")
+julia> using Pkg; Pkg.add(url="https://github.com/dpmerrell/PathMatFac.jl")
 ```
 
 ## Main Ideas

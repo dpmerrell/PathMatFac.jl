@@ -1,14 +1,14 @@
 # fit_matfac.jl
 #
 
-using PathwayMultiomics
+using PathMatFac
 using CUDA
 using JSON
 using Flux
 
 include("script_util.jl")
 
-PM = PathwayMultiomics
+PM = PathMatFac
 
 
 function prepare_featuresets(all_feature_ids, all_feature_genes, all_feature_assays,

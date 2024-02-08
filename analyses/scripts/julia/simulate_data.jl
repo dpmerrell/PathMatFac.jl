@@ -2,9 +2,9 @@
 
 include("script_util.jl")
 
-using LinearAlgebra, JSON, HDF5, PathwayMultiomics
+using LinearAlgebra, JSON, HDF5, PathMatFac
 
-PM = PathwayMultiomics
+PM = PathMatFac
 
 
 function save_sim_data(output_hdf, D, sample_ids, sample_conditions,

@@ -1,11 +1,11 @@
 
 
 using DictVis
-using PathwayMultiomics, MatFac
+using PathMatFac, MatFac
 using PlotlyJS
 using PlotlyBase
 
-PM = PathwayMultiomics
+PM = PathMatFac
 MF = MatFac
 
 import DictVis: is_plottable, leaf_trace, is_traversable
@@ -62,7 +62,7 @@ function main(args)
     in_model_hdf = args[1]
     out_html = args[2]
 
-    model = PathwayMultiomics.load_model(in_model_hdf)
+    model = PathMatFac.load_model(in_model_hdf)
     generate_html(model, out_html)
 end
 

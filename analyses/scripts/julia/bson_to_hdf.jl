@@ -3,9 +3,9 @@
 
 include("script_util.jl")
 
-using LinearAlgebra, HDF5, PathwayMultiomics
+using LinearAlgebra, HDF5, PathMatFac
 
-PM = PathwayMultiomics
+PM = PathMatFac
 
 function safe_convert(v::Vector{Any})
     return convert(Vector{String}, v)

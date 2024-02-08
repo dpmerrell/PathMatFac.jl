@@ -1,7 +1,7 @@
 
-using HDF5, StatsBase, PathwayMultiomics, JSON
+using HDF5, StatsBase, PathMatFac, JSON
 
-PM = PathwayMultiomics
+PM = PathMatFac
 
 
 DISTRIBUTION_MAP = Dict("mrnaseq" => "normal",

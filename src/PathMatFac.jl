@@ -1,5 +1,5 @@
 
-module PathwayMultiomics
+module PathMatFac
 
 using MatFac, CUDA, SparseArrays, SuiteSparse, Statistics, StatsBase, Distributions, 
       HDF5, CSV, JSON, DataFrames, BSON, ChainRules, ChainRulesCore,

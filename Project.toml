@@ -1,4 +1,4 @@
-name = "PathwayMultiomics"
+name = "PathMatFac"
 uuid = "26ae61a0-bdaa-4ab9-b40a-f117d74136e1"
 authors = ["dpmerrell <davidpmerrell@gmail.com>"]
 version = "0.1.0"

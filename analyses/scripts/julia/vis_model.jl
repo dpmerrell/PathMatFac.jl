@@ -1,10 +1,10 @@
 
 using PlotlyJS
 using PlotlyBase
-using PathwayMultiomics
+using PathMatFac
 using LinearAlgebra
 
-PM = PathwayMultiomics
+PM = PathMatFac
 
 function nice_feature_ids(feature_ids, feature_views)
     better_ids = feature_ids

@@ -1,12 +1,12 @@
 
-using PathwayMultiomics
+using PathMatFac
 using CUDA
 using JSON
 using Flux
 
 include("script_util.jl")
 
-PM = PathwayMultiomics
+PM = PathMatFac
 
 
 function load_omic_data(omic_hdf)

@@ -2,12 +2,12 @@
 # interpret_matfac.jl
 #
 
-using PathwayMultiomics
+using PathMatFac
 using CSV
 
 include("script_util.jl")
 
-PM = PathwayMultiomics
+PM = PathMatFac
 
 
 function main(args)

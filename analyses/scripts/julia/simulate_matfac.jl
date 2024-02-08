@@ -2,7 +2,7 @@
 # simulate_matfac.jl
 #
 
-using PathwayMultiomics
+using PathMatFac
 using JSON
 using Flux
 using Random
@@ -10,7 +10,7 @@ using Random
 
 include("script_util.jl")
 
-PM = PathwayMultiomics
+PM = PathMatFac
 
 
 function prepare_featuresets(all_feature_ids, all_feature_genes, all_feature_assays,
