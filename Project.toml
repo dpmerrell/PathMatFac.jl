@@ -1,7 +1,7 @@
 name = "PathMatFac"
-uuid = "26ae61a0-bdaa-4ab9-b40a-f117d74136e1"
-authors = ["dpmerrell <davidpmerrell@gmail.com>"]
-version = "0.1.0"
+uuid = "c5e61064-e45f-453d-b8d1-c6ea67b1652b"
+version = "1.0.0-DEV"
+authors = ["David Merrell <davidpmerrell@gmail.com> and contributors"]
 
 [deps]
 Adapt = "79e6a3ab-5dfb-504d-930d-738a2a938a0e"
@@ -19,11 +19,38 @@ HDF5 = "f67ccb44-e63f-5c2f-98bd-6dc0ccc4ba2f"
 JSON = "682c06a0-de6a-54ab-a142-c8b1cf79cde6"
 Krylov = "ba0b0d4f-ebba-5204-a429-3ac8c609bfb7"
 LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
-MatFac = "23734cf9-4c0e-45d4-b5ff-f416ac13e898"
-Profile = "9abbd945-dff8-562f-b5e8-e1ebf5ef1b79"
-ProfileSVG = "132c30aa-f267-4189-9183-c8a63c7e05e6"
+MatFac = "2df45c2e-1b32-4693-90e3-43d84949022c"
 SparseArrays = "2f01184e-e22b-5df5-ae63-d93ebab69eaf"
 Statistics = "10745b16-79ce-11e8-11f9-7d13ad32a3b2"
 StatsBase = "2913bbd2-ae8a-5f71-8c99-4fb6c76f3a91"
 SuiteSparse = "4607b0f0-06f3-5cda-b6b1-a6196a1729e9"
 Zygote = "e88e6eb3-aa80-5325-afca-941959d7151f"
+
+[compat]
+Adapt = "4.5.2"
+BSON = "0.3.9"
+CSV = "0.10.16"
+CUDA = "5.11.0"
+ChainRules = "1.73.0"
+ChainRulesCore = "1.26.1"
+DataFrames = "1.8.2"
+DataStructures = "0.19.4"
+Distributions = "0.25.124"
+Flux = "0.16.9"
+Functors = "0.5.2"
+HDF5 = "0.17.3"
+JSON = "1.5.0"
+Krylov = "0.10.6"
+LinearAlgebra = "1.12.0"
+MatFac = "1.0.0"
+SparseArrays = "1.12.0"
+Statistics = "1.11.1"
+StatsBase = "0.34.10"
+Zygote = "0.7.10"
+julia = "1.10.10"
+
+[extras]
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+
+[targets]
+test = ["Test"]

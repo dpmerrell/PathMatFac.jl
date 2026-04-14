@@ -1,8 +1,8 @@
 
 
-using Test, PathwayMultiomics, SparseArrays, LinearAlgebra, Zygote, Flux, StatsBase, MatFac
+using Test, PathMatFac, SparseArrays, LinearAlgebra, Zygote, Flux, StatsBase, MatFac
 
-PM = PathwayMultiomics
+PM = PathMatFac
 MF = MatFac
 
 function util_tests()

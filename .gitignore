@@ -1,17 +1,2 @@
-
-# Miscellaneous data files from PARADIGM
-*.tab
-*.list
-*.json
-
-# Large data files
-*.hdf
-*.tar.gz
-analyses/data/
-*.tsv
-*.csv
-*.txt
-
-# Output files
-*.html
-*.png
+/Manifest*.toml
+test/Manifest*.toml
